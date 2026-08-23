@@ -1,0 +1,53 @@
+# ===== Unreal Engine generated/build folders =====
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+Build/
+.vs/
+.vsconfig
+
+# Extra content directories that may be added by plugins
+*/Intermediate/
+*/Binaries/
+*/DerivedDataCache/
+
+# ===== IDE / tool folders =====
+.idea/
+.vscode/
+.vs/
+
+# ===== Rider =====
+*.sln.docstates
+
+# ===== Visual Studio =====
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.VC.opendb
+
+# ===== OS files =====
+.DS_Store
+Thumbs.db
+
+# ===== Compiled source =====
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# ===== Unreal misc =====
+*.tps
+*.opensdf
+*.sdf
+*.VC.db
+
+# ===== Local scratch/extraction artifacts =====
+docs/_extract/
+
+# ===== Local AI tool configs (machine-specific, not project source) =====
+.claude/settings.local.json
+.codex/
+.cursor/
+.gemini/
+.vscode/mcp.json
