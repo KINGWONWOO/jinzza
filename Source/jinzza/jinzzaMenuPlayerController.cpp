@@ -1,0 +1,39 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#include "jinzzaMenuPlayerController.h"
+#include "Blueprint/UserWidget.h"
+#include "jinzzaMainMenuWidget.h"
+#include "jinzza.h"
+
+void AjinzzaMenuPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	TSubclassOf<UUserWidget> WidgetClass = MainMenuWidgetClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UjinzzaMainMenuWidget::StaticClass();
+	}
+
+	MainMenuWidget = CreateWidget<UUserWidget>(this, WidgetClass);
+	if (MainMenuWidget)
+	{
+		MainMenuWidget->AddToViewport();
+		MainMenuWidget->SetIsFocusable(true);
+
+		FInputModeUIOnly InputMode;
+		InputMode.SetWidgetToFocus(MainMenuWidget->TakeWidget());
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+	}
+	else
+	{
+		UE_LOG(Logjinzza, Error, TEXT("Failed to create main menu widget."));
+	}
+}

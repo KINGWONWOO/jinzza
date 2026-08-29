@@ -21,10 +21,15 @@ public class jinzza : ModuleRules
 			"Slate"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
+		PrivateDependencyModuleNames.AddRange(new string[] {
+			"SlateCore",
+			"OnlineSubsystem",
+			"OnlineSubsystemUtils"
+		});
 
 		PublicIncludePaths.AddRange(new string[] {
 			"jinzza",
+			"jinzza/UI",
 			"jinzza/Variant_Horror",
 			"jinzza/Variant_Horror/UI",
 			"jinzza/Variant_Shooter",
@@ -33,12 +38,7 @@ public class jinzza : ModuleRules
 			"jinzza/Variant_Shooter/Weapons"
 		});
 
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
-
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
+		// OnlineSubsystemSteam is enabled via the Plugins section of jinzza.uproject
+		// (DefaultEngine.ini's [OnlineSubsystem]/[OnlineSubsystemSteam] sections configure it).
 	}
 }
