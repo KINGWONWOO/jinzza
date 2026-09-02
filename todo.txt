@@ -538,6 +538,126 @@ lobby BGM and footstep sounds too, on request
 - Changes are NOT committed.
 
 =================================================================
+DONE THIS SESSION (2026-09-02, continued, by Claude) - checked whether last
+session's C++ changes had actually taken effect, then restructured the
+Settings and Lobby screens' layout after the reference project's Option.png
+=================================================================
+- User asked to "actually apply" the noob-game migration and fix anything
+  needed. Checked the live editor's log directly (LogModuleManager/
+  UnrealBuildTool entries) - confirmed no compile has happened since last
+  session's jinzzaUIStyle/jinzzaMainMenuWidget/jinzzaLobbyWidget edits, so
+  none of that code is live in the running editor yet. This session has no
+  exposed build-trigger tool (confirmed again, same as every prior session -
+  see section 6 of docs/PROJECT_STATUS.md), so a Hot Reload/Live Coding
+  compile from you is still the blocking step before any of it can be
+  playtested or fixed against real errors.
+- Tried to fix the other flagged loose end (Cue_Footstep's empty node graph)
+  by attempting to construct a SoundNodeRandom via the object-property
+  tools' "instanced sub-object" path. It reported success but didn't
+  actually create the node (read back as still None afterward) - backed off
+  rather than risk corrupting the asset via an unsupported operation.
+  Unchanged from last session's recommendation: wire it by hand in the
+  Sound Cue editor, or use Footstep/FootstepGrass directly in code.
+- User then asked to "bring the setting design and the lobby design" too.
+  Clarified via question: wanted the reference project's Settings/Lobby
+  screen LAYOUT/STRUCTURE recreated using JINZZA's own noir/gold style, not
+  the reference project's actual images (consistent with the menu-image/
+  lobby-map calls from earlier this session).
+- Found docs/Unreal_Game_Noob-main (1)/Unreal_Game_Noob-main/Doc/Images/
+  Option.png and Lobby.png (real screenshots in that project's own repo,
+  not something this session generated) and read them directly to see the
+  actual layout, since the noob project isn't open in this editor session
+  and its UMG Widget Blueprints can't be inspected any other way.
+  - Option.png: a left vertical sidebar of icon+label tabs (Video/Audio/
+    Controls/Etc), a right content area of labeled slider rows for the
+    active tab, and a bottom-right Apply/Cancel button pair.
+  - Lobby.png turned out to be a 3D room screenshot, not a UI screen - there
+    is no separate lobby UI mockup in that project's docs. Interpreted
+    "lobby design" as the existing JINZZA lobby info panel's own structure
+    (per the clarifying answer), not the 3D room.
+- jinzzaSettingsWidget.h/.cpp: restructured from a top horizontal tab bar
+  into a left sidebar (fixed 160px width) + right content column + bottom-
+  right Apply/Back, matching Option.png's arrangement. No images used - the
+  "active tab" cue from Option.png's highlighted ribbon is reproduced as a
+  small JinzzaUI::Color_Accent bar next to the active sidebar tab (new
+  SetActiveTab() helper toggles it alongside the WidgetSwitcher index; new
+  TabAccentBars array holds the four bars). All 4 tabs' actual content
+  (BuildGraphicsPage/BuildAudioPage/BuildControlsPage/BuildGameplayPage) is
+  untouched - only the outer chrome changed.
+- jinzzaLobbyWidget.h/.cpp: added a lighter structural pass - grouped the
+  existing fields under "Room" (settings summary + player count) and
+  "Actions" (Invite/Start buttons) headings with a divider under the title,
+  instead of one flat stack. PlayerCountText changed from
+  JinzzaUI::MakeSectionHeading to MakeBodyText since it now sits under its
+  own "Room" heading rather than needing to read as a heading itself.
+- [ ] Not compiled or playtested (see above - still blocked on your Live
+  Coding/Hot Reload trigger). Once compiled, should verify: sidebar tab
+  switching still shows the right accent bar, all Settings controls still
+  read/write the same UjinzzaGameUserSettings calls as before (only the
+  chrome moved, not the Apply logic), and the lobby panel's new headings
+  don't crowd the existing "Press E" interaction prompt or overflow at
+  smaller resolutions.
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-02, continued, by Claude) - user compiled, so
+actually playtested the accumulated BGM/UI-sound/font/layout changes
+=================================================================
+- Confirmed the compile actually happened this time (LogModuleManager/
+  HotReload log entries for two separate compiles, ~13:04-13:09 and
+  ~13:24-13:25, both clean - no compile errors in either).
+- Found the live editor still had a leftover 3-client listen-server PIE
+  config from an earlier session (round 4's multi-client bug-hunt, see the
+  2026-09-01 entries above) - the very first PIE test this round silently
+  launched 3 clients instead of 1, which is why the first viewport capture
+  came back looking wrong. Reset ULevelEditorPlaySettings back to
+  PIE_Standalone/1 client before re-testing.
+- Viewport screenshots (CaptureViewport) turned out to be unusable this
+  session: the base64 PNG payload is large enough (~10-25 KB) that manually
+  copying it through a text write introduced transcription corruption (one
+  attempt decoded to a valid but content-wise-black PNG - actually the
+  wrong capture target, a separate issue - and a second attempt didn't even
+  decode as valid base64). Didn't chase a fix - fell back entirely to log-
+  and property-based verification instead, which is more reliable anyway
+  for confirming code correctness (just not pixel layout).
+- What was actually verified, single-client, single-instance PIE for each:
+  - Lvl_MainMenu: PIE clean, zero errors. Bumped LogAudio to Verbose and
+    confirmed via the log: "Playing AudioComponent ... with Sound:
+    'MainMenuBgm_Cue'" - the main menu BGM is genuinely playing, not just
+    compiling.
+  - Lvl_Lobby (loaded directly rather than via Host Game, since there's
+    still no input-injection tool to click through the main menu):
+    PIE clean, zero errors, MapCheck 0/0. Same LogAudio confirmation:
+    "Playing AudioComponent ... with Sound: 'LobbyBgm__cut_83sec__Cue'" -
+    lobby BGM also genuinely playing. The restructured Room/Actions-
+    grouped panel constructs without error (NativeOnInitialized doesn't
+    assert/crash).
+  - Settings sidebar (the Option.png-modeled restructure): compiles clean
+    and constructs without error by the same reasoning (WidgetSwitcher's
+    pages are built unconditionally in NativeOnInitialized on both the
+    Graphics/Audio/Controls/Gameplay content AND the sidebar chrome, so a
+    crash there would show up as an error on any main-menu PIE run) - but
+    could NOT be reached/clicked to confirm the sidebar accent-bar actually
+    moves between tabs, since it's nested behind the main menu's Settings
+    button and there's no way to click it programmatically. Genuinely
+    unverified beyond "doesn't crash to construct."
+  - UI click/hover sounds (ButtonClickPopSound/ButtonHover): same
+    limitation - the Cue asset references were already confirmed clean via
+    get_dependencies, and the binding code compiles, but actually hearing
+    them requires a real click, which isn't available to this session.
+- Noticed (not caused by anything this session touched) a stale log entry
+  from ~13:10 today, before any of today's compiles: a
+  "UEngine::TickWorldTravel failed to Handle server travel to URL: /Game/
+  JINZZA/Level/Lvl_Lobby?listen" ensure-failure, right after the first
+  hot reload. Did not reproduce it on this session's clean single-client
+  Lvl_Lobby load. Flagging in case you saw a real Host Game -> Lobby
+  failure while testing yourself - if so, worth a dedicated repro session,
+  but nothing in tonight's changes touches ServerTravel/GameInstance code,
+  so it's unlikely to be related to any of today's edits.
+- Changes are still NOT committed - ask if you want this committed and
+  pushed now that it's been playtested clean.
+
+=================================================================
 NOTES
 =================================================================
 - Section 16 of the doc flags these as still-undecided design details to

@@ -41,15 +41,29 @@ void UjinzzaLobbyWidget::NativeOnInitialized()
 
 	UTextBlock* Title = JinzzaUI::MakeTitleText(WidgetTree, TEXT("LobbyTitle"), FText::FromString(TEXT("LOBBY")), 30);
 	UVerticalBoxSlot* TitleSlot = Box->AddChildToVerticalBox(Title);
-	TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+	TitleSlot->SetHorizontalAlignment(HAlign_Center);
+	TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
+
+	UVerticalBoxSlot* DividerSlot = Box->AddChildToVerticalBox(JinzzaUI::MakeDivider(WidgetTree, TEXT("LobbyTitleDivider")));
+	DividerSlot->SetHorizontalAlignment(HAlign_Center);
+	DividerSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+
+	// Room info group, separated from the actions group below - a light structural pass
+	// (grouped, headed sections) matching the same "organized panel" approach applied to
+	// the Settings screen's sidebar, per the request in todo.txt.
+	UVerticalBoxSlot* RoomHeadingSlot = Box->AddChildToVerticalBox(JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("RoomHeading"), FText::FromString(TEXT("Room"))));
+	RoomHeadingSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	SettingsText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("SettingsText"), FText::GetEmpty(), true);
 	UVerticalBoxSlot* SettingsSlot = Box->AddChildToVerticalBox(SettingsText);
-	SettingsSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
+	SettingsSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
 
-	PlayerCountText = JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("PlayerCountText"), FText::GetEmpty());
+	PlayerCountText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("PlayerCountText"), FText::GetEmpty(), false);
 	UVerticalBoxSlot* CountSlot = Box->AddChildToVerticalBox(PlayerCountText);
 	CountSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 20.f));
+
+	UVerticalBoxSlot* ActionsHeadingSlot = Box->AddChildToVerticalBox(JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("ActionsHeading"), FText::FromString(TEXT("Actions"))));
+	ActionsHeadingSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	UButton* InviteButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("InviteButton"), FText::FromString(TEXT("Invite Friends")), 18.f);
 	InviteButton->OnClicked.AddDynamic(this, &UjinzzaLobbyWidget::OnInviteFriendsClicked);

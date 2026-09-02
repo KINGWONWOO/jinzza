@@ -13,6 +13,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/ComboBoxString.h"
@@ -134,32 +135,60 @@ void UjinzzaSettingsWidget::NativeOnInitialized()
 
 	UTextBlock* Title = JinzzaUI::MakeTitleText(WidgetTree, TEXT("SettingsTitle"), FText::FromString(TEXT("SETTINGS")), 34);
 	UVerticalBoxSlot* TitleSlot = Root->AddChildToVerticalBox(Title);
+	TitleSlot->SetHorizontalAlignment(HAlign_Center);
 	TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
 
-	// Tab bar
-	UHorizontalBox* TabBar = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TabBar"));
-	UVerticalBoxSlot* TabBarSlot = Root->AddChildToVerticalBox(TabBar);
-	TabBarSlot->SetHorizontalAlignment(HAlign_Center);
-	TabBarSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+	// Body: a left tab sidebar next to a right content column, rather than a top tab bar -
+	// see the class header comment for why.
+	UHorizontalBox* Body = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("SettingsBody"));
+	Root->AddChildToVerticalBox(Body);
 
-	auto AddTabButton = [&](FName Name, const FText& Label) -> UButton*
+	USizeBox* SidebarSizer = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("SidebarSizer"));
+	SidebarSizer->SetWidthOverride(160.f);
+	UHorizontalBoxSlot* SidebarSlot = Body->AddChildToHorizontalBox(SidebarSizer);
+	SidebarSlot->SetPadding(FMargin(0.f, 0.f, 20.f, 0.f));
+
+	UVerticalBox* Sidebar = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Sidebar"));
+	SidebarSizer->AddChild(Sidebar);
+
+	UVerticalBox* ContentColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("SettingsContentColumn"));
+	UHorizontalBoxSlot* ContentColumnSlot = Body->AddChildToHorizontalBox(ContentColumn);
+	ContentColumnSlot->SetSize(ESlateSizeRule::Fill);
+
+	auto AddTabButton = [&](FName Name, const FText& Label, int32 TabIndex) -> UButton*
 	{
-		UButton* TabButton = JinzzaUI::MakeSecondaryButton(WidgetTree, Name, Label, 16.f);
-		UHorizontalBoxSlot* Slot = TabBar->AddChildToHorizontalBox(TabButton);
-		Slot->SetPadding(FMargin(4.f, 0.f));
+		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), *(Name.ToString() + TEXT("_Row")));
+		UVerticalBoxSlot* RowSlot = Sidebar->AddChildToVerticalBox(Row);
+		RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
+
+		USizeBox* AccentSizer = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(Name.ToString() + TEXT("_AccentSizer")));
+		AccentSizer->SetWidthOverride(4.f);
+		AccentSizer->SetHeightOverride(28.f);
+		UBorder* Accent = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), *(Name.ToString() + TEXT("_Accent")));
+		Accent->SetBrushColor(JinzzaUI::Color_Accent);
+		Accent->SetVisibility(TabIndex == Tab_Graphics ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		AccentSizer->AddChild(Accent);
+		TabAccentBars.Add(Accent);
+		UHorizontalBoxSlot* AccentSlot = Row->AddChildToHorizontalBox(AccentSizer);
+		AccentSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+
+		UButton* TabButton = JinzzaUI::MakeSecondaryButton(WidgetTree, Name, Label, 15.f);
+		UHorizontalBoxSlot* ButtonSlot = Row->AddChildToHorizontalBox(TabButton);
+		ButtonSlot->SetSize(ESlateSizeRule::Fill);
 		return TabButton;
 	};
 	// AddDynamic stringifies its handler argument at the call site, so each binding has to be written out here
 	// rather than passed through AddTabButton as a member-function-pointer parameter.
-	AddTabButton(TEXT("TabGraphics"), FText::FromString(TEXT("Graphics")))->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabGraphicsClicked);
-	AddTabButton(TEXT("TabAudio"), FText::FromString(TEXT("Audio")))->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabAudioClicked);
-	AddTabButton(TEXT("TabControls"), FText::FromString(TEXT("Controls")))->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabControlsClicked);
-	AddTabButton(TEXT("TabGameplay"), FText::FromString(TEXT("Gameplay")))->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabGameplayClicked);
+	AddTabButton(TEXT("TabGraphics"), FText::FromString(TEXT("Graphics")), Tab_Graphics)->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabGraphicsClicked);
+	AddTabButton(TEXT("TabAudio"), FText::FromString(TEXT("Audio")), Tab_Audio)->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabAudioClicked);
+	AddTabButton(TEXT("TabControls"), FText::FromString(TEXT("Controls")), Tab_Controls)->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabControlsClicked);
+	AddTabButton(TEXT("TabGameplay"), FText::FromString(TEXT("Gameplay")), Tab_Gameplay)->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabGameplayClicked);
 
 	// Content switcher, each page wrapped in a ScrollBox in case a page overflows the panel height.
 	TabSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass(), TEXT("TabSwitcher"));
-	UVerticalBoxSlot* SwitcherSlot = Root->AddChildToVerticalBox(TabSwitcher);
+	UVerticalBoxSlot* SwitcherSlot = ContentColumn->AddChildToVerticalBox(TabSwitcher);
 	SwitcherSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
+	SwitcherSlot->SetSize(ESlateSizeRule::Fill);
 
 	auto MakePage = [&](FName Name) -> UVerticalBox*
 	{
@@ -185,9 +214,11 @@ void UjinzzaSettingsWidget::NativeOnInitialized()
 
 	TabSwitcher->SetActiveWidgetIndex(Tab_Graphics);
 
-	// Bottom buttons
+	// Bottom-right button cluster (Apply / Back), matching the reference layout's bottom-right
+	// Apply/Cancel corner rather than the previous centered row.
 	UHorizontalBox* ButtonRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("SettingsButtonRow"));
-	Root->AddChildToVerticalBox(ButtonRow);
+	UVerticalBoxSlot* ButtonRowSlot = ContentColumn->AddChildToVerticalBox(ButtonRow);
+	ButtonRowSlot->SetHorizontalAlignment(HAlign_Right);
 
 	UButton* ApplyButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("SettingsApplyButton"), FText::FromString(TEXT("Apply")));
 	ApplyButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnApplyClicked);
@@ -435,10 +466,26 @@ void UjinzzaSettingsWidget::OnRebindShootClicked() { StartRebind(TEXT("IA_Shoot"
 void UjinzzaSettingsWidget::OnRebindSwapWeaponClicked() { StartRebind(TEXT("IA_SwapWeapon")); }
 void UjinzzaSettingsWidget::OnRebindSprintClicked() { StartRebind(TEXT("IA_Sprint")); }
 
-void UjinzzaSettingsWidget::OnTabGraphicsClicked() { if (TabSwitcher) TabSwitcher->SetActiveWidgetIndex(Tab_Graphics); }
-void UjinzzaSettingsWidget::OnTabAudioClicked() { if (TabSwitcher) TabSwitcher->SetActiveWidgetIndex(Tab_Audio); }
-void UjinzzaSettingsWidget::OnTabControlsClicked() { if (TabSwitcher) TabSwitcher->SetActiveWidgetIndex(Tab_Controls); }
-void UjinzzaSettingsWidget::OnTabGameplayClicked() { if (TabSwitcher) TabSwitcher->SetActiveWidgetIndex(Tab_Gameplay); }
+void UjinzzaSettingsWidget::SetActiveTab(int32 TabIndex)
+{
+	if (TabSwitcher)
+	{
+		TabSwitcher->SetActiveWidgetIndex(TabIndex);
+	}
+
+	for (int32 Index = 0; Index < TabAccentBars.Num(); ++Index)
+	{
+		if (UWidget* Accent = TabAccentBars[Index])
+		{
+			Accent->SetVisibility(Index == TabIndex ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		}
+	}
+}
+
+void UjinzzaSettingsWidget::OnTabGraphicsClicked() { SetActiveTab(Tab_Graphics); }
+void UjinzzaSettingsWidget::OnTabAudioClicked() { SetActiveTab(Tab_Audio); }
+void UjinzzaSettingsWidget::OnTabControlsClicked() { SetActiveTab(Tab_Controls); }
+void UjinzzaSettingsWidget::OnTabGameplayClicked() { SetActiveTab(Tab_Gameplay); }
 
 void UjinzzaSettingsWidget::OnBackClicked()
 {

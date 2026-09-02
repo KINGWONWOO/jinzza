@@ -14,12 +14,18 @@ class USlider;
 class UCheckBox;
 class UButton;
 class UTextBlock;
+class UWidget;
 
 /**
  * Full settings screen: Graphics / Audio / Controls / Gameplay tabs, backed by the real
  * UjinzzaGameUserSettings (see that class for why audio uses runtime SoundClass/SoundMix
  * objects and controls use per-action key overrides rather than content-authored assets).
  * Modeled on the settings architecture Epic's Lyra sample project uses.
+ *
+ * Layout is a left icon-free tab sidebar + right content column + bottom-right Apply/Back,
+ * restructured from an earlier top-tab-bar layout to match the sidebar arrangement of the
+ * user's prior project's options screen - rebuilt with JinzzaUI's own noir/gold style
+ * rather than that project's art (see todo.txt for the request this came from).
  */
 UCLASS()
 class JINZZA_API UjinzzaSettingsWidget : public UUserWidget
@@ -70,8 +76,16 @@ private:
 	void StartRebind(FName ActionName);
 	void RefreshRebindButtonLabel(FName ActionName);
 
+	/** Switches the content page and moves the sidebar's active-tab accent bar. */
+	void SetActiveTab(int32 TabIndex);
+
 	UPROPERTY()
 	TObjectPtr<UWidgetSwitcher> TabSwitcher;
+
+	/** One accent bar per sidebar tab row, shown only next to the active tab (mirrors the
+	 * highlighted-tab ribbon in the reference layout this sidebar is modeled on). */
+	UPROPERTY()
+	TArray<TObjectPtr<UWidget>> TabAccentBars;
 
 	// Graphics
 	UPROPERTY() TObjectPtr<UComboBoxString> WindowModeCombo;
