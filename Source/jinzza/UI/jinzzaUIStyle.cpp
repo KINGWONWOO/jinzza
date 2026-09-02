@@ -8,6 +8,58 @@
 #include "Components/SizeBox.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "Styling/CoreStyle.h"
+#include "Engine/Font.h"
+#include "Sound/SoundBase.h"
+#include "Kismet/GameplayStatics.h"
+
+namespace
+{
+	UFont* LoadJinzzaUIFont()
+	{
+		static TWeakObjectPtr<UFont> Cached;
+		if (!Cached.IsValid())
+		{
+			Cached = LoadObject<UFont>(nullptr, TEXT("/Game/JINZZA/Fonts/SacheonUju-Regular_Font.SacheonUju-Regular_Font"));
+		}
+		return Cached.Get();
+	}
+
+	USoundBase* LoadButtonClickSound()
+	{
+		static TWeakObjectPtr<USoundBase> Cached;
+		if (!Cached.IsValid())
+		{
+			Cached = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/UISounds/ButtonClickPopSound_Cue.ButtonClickPopSound_Cue"));
+		}
+		return Cached.Get();
+	}
+
+	USoundBase* LoadButtonHoverSound()
+	{
+		static TWeakObjectPtr<USoundBase> Cached;
+		if (!Cached.IsValid())
+		{
+			Cached = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/UISounds/ButtonHover_Cue.ButtonHover_Cue"));
+		}
+		return Cached.Get();
+	}
+}
+
+void UJinzzaUIButtonSounds::HandleClicked()
+{
+	if (USoundBase* Sound = LoadButtonClickSound())
+	{
+		UGameplayStatics::PlaySound2D(this, Sound);
+	}
+}
+
+void UJinzzaUIButtonSounds::HandleHovered()
+{
+	if (USoundBase* Sound = LoadButtonHoverSound())
+	{
+		UGameplayStatics::PlaySound2D(this, Sound);
+	}
+}
 
 namespace JinzzaUI
 {
@@ -57,6 +109,10 @@ namespace JinzzaUI
 			ButtonText->SetJustification(ETextJustify::Center);
 			ButtonText->SetColorAndOpacity(FSlateColor(TextColor));
 
+			UJinzzaUIButtonSounds* SoundBinder = NewObject<UJinzzaUIButtonSounds>(Button);
+			Button->OnClicked.AddDynamic(SoundBinder, &UJinzzaUIButtonSounds::HandleClicked);
+			Button->OnHovered.AddDynamic(SoundBinder, &UJinzzaUIButtonSounds::HandleHovered);
+
 			Button->AddChild(ButtonText);
 			return Button;
 		}
@@ -64,16 +120,28 @@ namespace JinzzaUI
 
 	FSlateFontInfo TitleFont(int32 Size)
 	{
+		if (UFont* Font = LoadJinzzaUIFont())
+		{
+			return FSlateFontInfo(Font, Size);
+		}
 		return FCoreStyle::GetDefaultFontStyle("Bold", Size);
 	}
 
 	FSlateFontInfo HeadingFont(int32 Size)
 	{
+		if (UFont* Font = LoadJinzzaUIFont())
+		{
+			return FSlateFontInfo(Font, Size);
+		}
 		return FCoreStyle::GetDefaultFontStyle("Bold", Size);
 	}
 
 	FSlateFontInfo BodyFont(int32 Size)
 	{
+		if (UFont* Font = LoadJinzzaUIFont())
+		{
+			return FSlateFontInfo(Font, Size);
+		}
 		return FCoreStyle::GetDefaultFontStyle("Regular", Size);
 	}
 

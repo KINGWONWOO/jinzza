@@ -15,6 +15,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundBase.h"
 
 namespace
 {
@@ -114,10 +116,21 @@ void UjinzzaMainMenuWidget::NativeOnInitialized()
 	{
 		ButtonsPageRoot->SetRenderOpacity(0.f);
 	}
+
+	if (USoundBase* Bgm = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/MainMenu/MainMenuBgm_Cue.MainMenuBgm_Cue")))
+	{
+		MusicComponent = UGameplayStatics::SpawnSound2D(this, Bgm, 1.f, 1.f, 0.f, nullptr, true, false);
+	}
 }
 
 void UjinzzaMainMenuWidget::NativeDestruct()
 {
+	if (MusicComponent)
+	{
+		MusicComponent->Stop();
+		MusicComponent = nullptr;
+	}
+
 	if (UjinzzaGameInstance* GI = GetJinzzaGameInstance())
 	{
 		GI->OnSessionStatusChanged.Remove(SessionStatusHandle);

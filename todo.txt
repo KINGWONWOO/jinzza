@@ -426,6 +426,118 @@ playtest of the 3-player flow, found and fixed a real role-assignment bug
   the cheap option is a temporary UE_LOG on AssignRoles' success path.
 
 =================================================================
+DONE THIS SESSION (2026-09-02, by Claude) - migrated reusable audio/font
+assets from the user's earlier project (docs/Unreal_Game_Noob-main/) into
+JINZZA and wired them into the main menu
+=================================================================
+- The user pointed at a local checkout of their earlier project
+  (github.com/KINGWONWOO/Unreal_Game_Noob, extracted to docs/Unreal_Game_Noob-
+  main/, now gitignored - see the .gitignore commit earlier today) and asked
+  for the menu UI image, BGM, UI sound, and lobby map to be pulled into
+  JINZZA and wired into the current levels, plus a list of other things worth
+  considering.
+- Discovered the extracted folder's .uasset files are Git LFS pointer text
+  (100-200 bytes each), not real binary content - the zip download didn't
+  include LFS content. Fetched the real binary content directly from
+  GitHub's LFS media endpoint (media.githubusercontent.com/media/KINGWONWOO/
+  Unreal_Game_Noob/main/<path>) instead, for just the specific files below
+  (not a full clone - the repo's git history is large and a full clone timed
+  out at 3 minutes).
+- Brought over and wired in (now under Content/JINZZA/, matching this
+  project's content convention):
+  - Content/JINZZA/Audio/Sounds/MainMenu/MainMenuBgm(_Cue) - now plays
+    looping on the main menu (UjinzzaMainMenuWidget::NativeOnInitialized,
+    stopped in NativeDestruct via a stored UAudioComponent).
+  - Content/JINZZA/Audio/Sounds/UISounds/ButtonClickPopSound(_Cue) and
+    ButtonHover(_Cue) - now play on every button built via
+    JinzzaUI::MakeStyledButton (jinzzaUIStyle.h/.cpp's new
+    UJinzzaUIButtonSounds helper, bound to OnClicked/OnHovered), so this
+    covers the main menu, lobby, settings, room-settings-kiosk, and
+    game-end screens for free via the shared button factory.
+  - Content/JINZZA/Audio/Class/SC_Master/SC_Music/SC_SFX/SC_Voice/SCM_Noob -
+    brought along only because the Cues above reference SC_Music/SC_SFX as
+    their SoundClass; not otherwise wired to anything (this project's own
+    audio settings system creates transient SoundClass/SoundMix objects at
+    runtime instead - see docs/PROJECT_STATUS.md section 3.4).
+  - Content/JINZZA/Fonts/SacheonUju-Regular(_Font)/SacheonUjuOTF-Regular - a
+    Korean font, now used for every piece of text built through
+    JinzzaUI::TitleFont/HeadingFont/BodyFont (falls back to the engine
+    default font if the asset is ever missing), fitting the Korean title
+    "진짜를 찾아라" better than the previous default Slate font.
+- Deliberately did NOT bring over the menu UI image or the lobby map, and
+  flagged this back to the user instead of guessing:
+  - Menu UI image: the reference project's UI art (Content/UI/UIImage/
+    MainMenu/*) is all branded/themed for that project's own cat-and-dog
+    mini-game-hub identity (NoobLogo, memo/sticker paper textures, etc.) -
+    none of it fits JINZZA's dark noir/gold/crimson courtroom theme, and
+    JINZZA's UI is deliberately texture-free hand-built Slate brushes
+    (jinzzaUIStyle.h's header comment). Picking one specific image among
+    dozens of mismatched options isn't a call to make silently.
+  - Lobby map: the reference project's Content/Levels/Lobby.umap is a full
+    level for a different game (fruit/maze/quiz mini-game stalls, NPC
+    dialogue, a cat/dog customization flow) with a large, mostly-irrelevant
+    dependency tree - wholesale importing it would drag in a lot of dead
+    content rather than give JINZZA's own Lvl_Lobby anything it needs.
+- [ ] Could not compile-check this session (no build-tool invocation
+  exposed, same limitation noted in section 6 of docs/PROJECT_STATUS.md) -
+  the changes touch jinzzaUIStyle.h/.cpp (new UJinzzaUIButtonSounds UCLASS)
+  and jinzzaMainMenuWidget.h/.cpp (new MusicComponent). Do a Hot Reload/Live
+  Coding compile before relying on this.
+- [ ] Could not playtest (no input-injection tool, same limitation) - verify
+  in PIE that the main menu BGM starts/loops/stops correctly and that button
+  click/hover sounds play without being obnoxious at default volume levels.
+- [ ] One leftover, harmless stray file: Content/Audio/Sounds/MainMenu/
+  MainMenuBgm_Cue.uasset (the original 129-byte LFS-pointer copy) got stuck
+  locked by the editor's asset scanner mid-session and couldn't be deleted.
+  It's not a registered asset (nothing references it), so it's inert, but
+  restarting the editor should release the lock so it can be deleted; don't
+  git-add it in the meantime.
+- Changes are NOT committed - per usual, commits happen only when
+  explicitly requested.
+
+=================================================================
+DONE THIS SESSION (2026-09-02, continued, by Claude) - brought over the
+lobby BGM and footstep sounds too, on request
+=================================================================
+- Content/JINZZA/Audio/Sounds/Lobby/LobbyBgm__cut_83sec_(_Cue) - fetched the
+  same way as the main menu BGM (real LFS binary content pulled from
+  media.githubusercontent.com, not the broken pointer files in the local
+  checkout). Wired into UjinzzaLobbyWidget the same way as the main menu
+  (loops on NativeOnInitialized, stops on NativeDestruct via a stored
+  UAudioComponent) - so it now plays for the whole time a player is in
+  Lvl_Lobby.
+- This Cue's internal wave reference came in pointing at the old /Game/
+  Audio/... path (same LFS-content-vs-project-layout mismatch as the main
+  menu Cue last time). This time fixed it directly via the object-property
+  tools instead of the move-based workaround: walked the SoundCue's node
+  graph (FirstNode -> SoundNodeLooping_0 -> childNodes[0] =
+  SoundNodeWavePlayer_0) and patched SoundNodeWavePlayer_0.soundWaveAssetPtr
+  to point at the asset's real new path, then saved. Confirmed clean via
+  get_dependencies afterward - faster and less fragile than last session's
+  repeated move-away-and-back dance, worth using again for any future stale-
+  Cue-reference fix.
+- Content/JINZZA/Audio/Sounds/FootStep/Footstep and FootstepGrass (plain
+  SoundWave assets, no dependencies, no path issues) are in and usable
+  directly as USoundBase.
+- Content/JINZZA/Audio/Sounds/FootStep/Cue_Footstep came over but its
+  FirstNode is None - it's an empty, never-finished Cue in the source
+  project itself (not something this session broke), so it doesn't play
+  anything as-is. Left it in place rather than guessing at how to reconstruct
+  a Random-node wave-variation graph through the property tools. If you want
+  footstep audio, either use Footstep/FootstepGrass directly (e.g. pick one
+  in code, or alternate randomly) or open Cue_Footstep in the Sound Cue
+  editor and wire the two waves into a Random node by hand - a couple-minute
+  manual job, not something worth scripting.
+- Did NOT add any footstep-trigger gameplay logic (no AnimNotify or
+  movement-tick hook exists yet to play these on) - bringing the assets over
+  was the ask; wiring up when/how footsteps actually fire is a separate,
+  undecided feature (walk vs. sprint volume, distance-based vs. anim-notify-
+  based) - ask if you want that built.
+- [ ] Same as above: not compiled or playtested this session either
+  (jinzzaLobbyWidget.h/.cpp changes need a Hot Reload/Live Coding pass).
+- Changes are NOT committed.
+
+=================================================================
 NOTES
 =================================================================
 - Section 16 of the doc flags these as still-undecided design details to

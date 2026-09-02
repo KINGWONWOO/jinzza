@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Styling/SlateTypes.h"
+#include "jinzzaUIStyle.generated.h"
 
 class UButton;
 class UWidget;
@@ -11,12 +12,28 @@ class UWidgetTree;
 class UTextBlock;
 class UBorder;
 
+/** Binds click/hover sound playback to buttons built via JinzzaUI::MakeStyledButton. Not for direct use. */
+UCLASS()
+class UJinzzaUIButtonSounds : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UFUNCTION()
+	void HandleClicked();
+
+	UFUNCTION()
+	void HandleHovered();
+};
+
 /**
  * Shared visual language for JINZZA's hand-built C++ UI (no Widget Blueprint assets/UMG
  * Designer available in this project - see UjinzzaMainMenuWidget's header comment). A dark,
  * noir-interrogation-room palette (near-black panels, crimson "guilty" / gold "judge" accents)
  * fitting the game's courtroom/social-deduction theme, applied consistently across the main
  * menu, lobby, and settings screens via FSlateRoundedBoxBrush so it needs no texture assets.
+ * Text uses the SacheonUju Korean font asset (falls back to the engine default if missing);
+ * every button built here also gets a shared click/hover sound via UJinzzaUIButtonSounds.
  */
 namespace JinzzaUI
 {

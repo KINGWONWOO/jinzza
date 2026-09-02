@@ -8,6 +8,7 @@
 
 class UTextBlock;
 class UButton;
+class UAudioComponent;
 
 /**
  * Pre-match lobby UI: shows the replicated match settings, connected player count,
@@ -21,6 +22,7 @@ class JINZZA_API UjinzzaLobbyWidget : public UUserWidget
 
 public:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 	/** Shows a bottom-center interaction prompt (e.g. "Press E - Room Settings"), or hides it if PromptText is empty. */
@@ -45,4 +47,8 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> InteractPromptText;
+
+	/** Looping lobby BGM, started in NativeOnInitialized and stopped in NativeDestruct. */
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> MusicComponent;
 };

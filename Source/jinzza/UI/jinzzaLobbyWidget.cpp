@@ -15,6 +15,8 @@
 #include "GameFramework/PlayerController.h"
 #include "jinzzaLobbyGameState.h"
 #include "jinzzaGameInstance.h"
+#include "Components/AudioComponent.h"
+#include "Sound/SoundBase.h"
 
 void UjinzzaLobbyWidget::NativeOnInitialized()
 {
@@ -70,6 +72,22 @@ void UjinzzaLobbyWidget::NativeOnInitialized()
 	PromptSlot->SetAlignment(FVector2D(0.5f, 1.f));
 	PromptSlot->SetPosition(FVector2D(0.f, -60.f));
 	PromptSlot->SetAutoSize(true);
+
+	if (USoundBase* Bgm = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/Lobby/LobbyBgm__cut_83sec__Cue.LobbyBgm__cut_83sec__Cue")))
+	{
+		MusicComponent = UGameplayStatics::SpawnSound2D(this, Bgm, 1.f, 1.f, 0.f, nullptr, true, false);
+	}
+}
+
+void UjinzzaLobbyWidget::NativeDestruct()
+{
+	if (MusicComponent)
+	{
+		MusicComponent->Stop();
+		MusicComponent = nullptr;
+	}
+
+	Super::NativeDestruct();
 }
 
 void UjinzzaLobbyWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)

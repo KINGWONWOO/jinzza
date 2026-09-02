@@ -10,6 +10,7 @@
 class UTextBlock;
 class UWidgetSwitcher;
 class UjinzzaSettingsWidget;
+class UAudioComponent;
 
 /**
  * Main menu UI: a button-list page plus a Settings popup-page swapped in via a
@@ -58,6 +59,10 @@ private:
 	/** Root panel of the button-list page, faded in on open for a bit of life. */
 	UPROPERTY()
 	TObjectPtr<class UWidget> ButtonsPageRoot;
+
+	/** Looping menu BGM, started in NativeOnInitialized and stopped in NativeDestruct. */
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> MusicComponent;
 
 	float FadeInElapsed = 0.f;
 
