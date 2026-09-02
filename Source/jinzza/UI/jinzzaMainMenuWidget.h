@@ -8,12 +8,18 @@
 #include "jinzzaMainMenuWidget.generated.h"
 
 class UTextBlock;
+class UWidgetSwitcher;
+class UjinzzaSettingsWidget;
 
 /**
- * Main menu UI: title, Host/Join/Settings/Quit buttons, and a status line driven by
- * UjinzzaGameInstance's session status delegate. Built entirely in C++ (no separate
- * Widget Blueprint asset) since the tooling available in this project has no UMG
- * widget-tree authoring API.
+ * Main menu UI: a button-list page plus a Settings popup-page swapped in via a
+ * UWidgetSwitcher. Built entirely in C++ (no separate Widget Blueprint asset) since the
+ * tooling available in this project has no UMG widget-tree authoring API.
+ *
+ * Host Game creates a Steam session immediately with default match settings and travels
+ * straight to the lobby - there is no pre-create setup screen. Joining is invite-only: a
+ * player accepts a Steam overlay invite (see UjinzzaGameInstance::OnSessionUserInviteAccepted)
+ * rather than browsing a room list, so there is no Join button here.
  */
 UCLASS()
 class JINZZA_API UjinzzaMainMenuWidget : public UUserWidget
@@ -23,13 +29,11 @@ class JINZZA_API UjinzzaMainMenuWidget : public UUserWidget
 public:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 protected:
 	UFUNCTION()
 	void OnHostClicked();
-
-	UFUNCTION()
-	void OnJoinClicked();
 
 	UFUNCTION()
 	void OnSettingsClicked();
@@ -38,11 +42,24 @@ protected:
 	void OnQuitClicked();
 
 private:
+	void ShowButtonsPage();
 	void HandleSessionStatusChanged(EJinzzaSessionStatus Status, const FString& Message);
 	UjinzzaGameInstance* GetJinzzaGameInstance() const;
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> StatusText;
+
+	UPROPERTY()
+	TObjectPtr<UWidgetSwitcher> Switcher;
+
+	UPROPERTY()
+	TObjectPtr<UjinzzaSettingsWidget> SettingsWidget;
+
+	/** Root panel of the button-list page, faded in on open for a bit of life. */
+	UPROPERTY()
+	TObjectPtr<class UWidget> ButtonsPageRoot;
+
+	float FadeInElapsed = 0.f;
 
 	FDelegateHandle SessionStatusHandle;
 };

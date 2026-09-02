@@ -14,4 +14,7 @@ class JINZZA_API AjinzzaLobbyGameMode : public AGameModeBase
 
 public:
 	AjinzzaLobbyGameMode();
+
+protected:
+	virtual void InitGameState() override;
 };

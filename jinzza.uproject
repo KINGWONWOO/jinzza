@@ -36,6 +36,18 @@
 			"Enabled": true
 		},
 		{
+			"Name": "SteamSockets",
+			"Enabled": true
+		},
+		{
+			"Name": "AudioCapture",
+			"Enabled": true
+		},
+		{
+			"Name": "Synthesis",
+			"Enabled": true
+		},
+		{
 			"Name": "ModelContextProtocol",
 			"Enabled": true
 		},

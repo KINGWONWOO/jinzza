@@ -54,4 +54,12 @@ protected:
 
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
+
+	/** Duplicates Source and applies any per-player key overrides from UjinzzaGameUserSettings onto the copy,
+	 *  so rebinding a key never mutates the shared .uasset Input Mapping Context. */
+	UInputMappingContext* BuildRuntimeMappingContext(UInputMappingContext* Source);
+
+	/** Runtime copies handed to the Enhanced Input subsystem in place of DefaultMappingContexts/MobileExcludedMappingContexts. */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UInputMappingContext>> RuntimeMappingContexts;
 };

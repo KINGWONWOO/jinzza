@@ -1,0 +1,438 @@
+JINZZA (진짜를 찾아라) - Setup TODO
+Based on docs/gamestarter.docx, section 15 "제작 타임라인" Week 1, cross-checked against
+the actual project state on 2026-08-26.
+
+=================================================================
+DONE ALREADY (before this session)
+=================================================================
+- UE 5.8 project created (C++), First Person template as base
+  (jinzzaCharacter / jinzzaGameMode / jinzzaPlayerController / jinzzaCameraManager)
+- Git repo initialized with a UE-appropriate .gitignore/.gitattributes
+
+=================================================================
+DONE THIS SESSION (by Claude)
+=================================================================
+- Enabled AudioCapture + Synthesis plugins in jinzza.uproject
+  (needed later for the real-time voice pitch-shift system, section 8-2/11)
+- Added [OnlineSubsystem]/[OnlineSubsystemSteam] config block to
+  Config/DefaultEngine.ini, using Valve's public test App ID (480) as a
+  placeholder so Steam sessions work locally before you have a real App ID
+- Reorganized all Content into /Game/JINZZA/ via the live editor's asset
+  tools (proper engine-side move, not a filesystem move, so references and
+  the level's World Partition actors stayed intact):
+  FirstPerson, Variant_Horror, Variant_Shooter, Characters, Weapons,
+  LevelPrototyping and Input all now live under Content/JINZZA/.
+  EditorStartupMap/GameDefaultMap/GlobalDefaultGameMode in
+  Config/DefaultEngine.ini were repointed to match.
+  Left Collections/ and Developers/ where they were (editor-managed, not
+  real content).
+
+=================================================================
+DONE THIS SESSION (2026-08-30, by Claude) - pulls Week 11 forward early
+=================================================================
+- Main menu: Host Game now creates the Steam session immediately with
+  default FJinzzaMatchSettings and travels straight to Lvl_Lobby - no
+  pre-create Host Setup screen. Removed the Join Game button and the whole
+  room-list browse/search flow (UjinzzaJoinWidget/RoomRow, GameInstance's
+  RefreshSessionList/FindSessions/JoinSessionAtIndex) - joining is invite-
+  only now via the existing Steam overlay invite accept path.
+- Added a physical "Room Settings" kiosk (AjinzzaRoomSettingsKiosk) placed
+  in Lvl_Lobby: walk up, press E, and a panel opens showing the former
+  Host Setup fields (room name/max players/judge+vote count/phase speed/
+  role assign). Host-only editable (same HasAuthority()+local-controller
+  idiom UjinzzaLobbyWidget's Start Match button already used); writes
+  straight into AjinzzaLobbyGameState::MatchSettings, replicating live to
+  everyone already in the lobby. Proximity is polled on a 0.2s timer from
+  AjinzzaLobbyPlayerController (the lobby's ADefaultPawn has no collision
+  set up for overlap events) rather than driven by overlaps; "Interact" is
+  a classic Action Mapping (E) added to DefaultInput.ini alongside Enhanced
+  Input, which coexist fine.
+- Built a full Settings screen (Graphics/Audio/Controls/Gameplay tabs),
+  replacing the old placeholder, backed by a new UjinzzaGameUserSettings
+  (registered via GameUserSettingsClassName in DefaultEngine.ini):
+    - Graphics: window mode/resolution/vsync/frame cap + the 9 individual
+      scalability categories, all real UGameUserSettings base-class calls.
+    - Audio: Master/Music/SFX/Voice sliders. No SoundClass/SoundMix assets
+      exist in Content yet, so these are created as runtime-transient
+      USoundClass/USoundMix objects (real engine API, same runtime pattern
+      lots of shipped indie UE games use) - Master is fully audible today;
+      Music/SFX/Voice will govern any future audio content assigned to
+      those child classes.
+    - Controls: mouse sensitivity + invert-Y (wired into AjinzzaCharacter::
+      DoAim), and key rebinding for the button-press Input Actions (Jump/
+      Shoot/SwapWeapon/Sprint) via per-player overrides applied onto a
+      DuplicateObject'd runtime copy of each Input Mapping Context
+      (AjinzzaPlayerController::BuildRuntimeMappingContext) - the shared
+      .uasset IMCs are never mutated.
+    - Gameplay: subtitles toggle (flag only, no subtitle content yet),
+      colorblind mode + strength via the engine's real accessibility API
+      (UWidgetBlueprintLibrary::SetColorVisionDeficiencyType).
+  All of this mirrors the settings architecture Epic's own Lyra sample
+  project uses (UGameUserSettings + Enhanced Input mapping overrides), per
+  the user's ask to build on a real reference rather than invent one.
+- New JinzzaUI namespace (Source/jinzza/UI/jinzzaUIStyle.h/.cpp): shared
+  rounded-brush button/panel/heading styling (dark noir palette, gold/
+  crimson accents fitting the judge/vote theme) applied across the main
+  menu, lobby, room settings, settings, and game-end widgets, plus a short
+  fade-in on the main menu's button page. No texture/font assets used -
+  still fully hand-built in C++ per this project's no-UMG-designer
+  constraint (see UjinzzaMainMenuWidget's header comment).
+- NOT done: moving the actual gameplay (Week 9's map blockout etc.) - this
+  session only touched menu/lobby/settings plumbing per the user's request.
+- Fixed a real gap in the Steam session setup, found by cross-checking
+  against the user's own prior multiplayer project (github.com/KINGWONWOO/
+  Unreal_Game_Noob): our session creation (CreateSession/JoinSession) was
+  correct, but nothing told Unreal to actually route game traffic through
+  Steam's P2P relay - ServerTravel/ClientTravel were still using the
+  default raw-IP NetDriver, which only works for players who happen to be
+  reachable by direct IP (same LAN, or manually port-forwarded). Added,
+  matching that reference project's config exactly:
+    - Config/DefaultEngine.ini: [/Script/Engine.GameEngine] NetDriver
+      override to /Script/SteamSockets.SteamSocketsNetDriver (falls back
+      to IpNetDriver if unavailable; scoped to GameEngine only, so PIE
+      multiplayer testing in the editor is untouched), plus the
+      OnlineSubsystemSteam P2P-relay settings (bAllowP2PPacketRelay,
+      P2PConnectionTimeout/CleanupTimeout, bInitServerOnClient, VAC,
+      GameServerQueryPort) and bHasVoiceEnabled=true under [OnlineSubsystem]
+      (ahead of the planned voice/proximity chat feature, section 8-2).
+    - jinzza.uproject: enabled the SteamSockets plugin (a separate plugin
+      from OnlineSubsystemSteam, not enabled by default - the NetDriver
+      override does nothing without it). [ ] Needs an editor RESTART to
+      take effect - Live Coding can't hot-load a newly enabled plugin.
+    - Added steam_appid.txt (480, matching SteamDevAppId) at the project
+      root, same as the reference project - lets the Steamworks SDK
+      initialize when launched from the editor/PIE instead of via Steam
+      itself.
+- Placed the RoomSettingsKiosk actor in Lvl_Lobby (world origin, where all
+  12 PlayerStarts already face inward) via the live editor's scene tools,
+  and saved the level. Verified via PIE that the main menu boots cleanly
+  with the new styling and no runtime errors. Could not click-test the
+  Host Game -> Lobby -> kiosk -> Settings flow end-to-end since no
+  input-injection tool is exposed to this session - do a manual playtest
+  pass before considering this feature done.
+
+=================================================================
+DONE THIS SESSION (2026-09-01, by Claude) - closes remaining gaps from
+docs/steam_session_and_settings_reference.md's adaptation plan (section 7)
+=================================================================
+- Live player-count/session-data update (adaptation plan item 2): the Room
+  Settings kiosk's Apply used to only write AjinzzaLobbyGameState::
+  MatchSettings (replicated to players already in the lobby) without
+  touching the actual advertised Steam session - so a widened player cap
+  never reached Steam/friends looking at the invite. Added
+  UjinzzaGameInstance::UpdateLiveSessionSettings(), called from
+  UjinzzaRoomSettingsWidget::OnApplyClicked, which pushes NumPublicConnections
+  and the searchable match-settings keys to the live session via
+  IOnlineSession::UpdateSession (no destroy/recreate needed - Advanced
+  Sessions' plugin isn't used here, but the native OSS interface has the
+  same capability). Registered/cleared OnUpdateSessionComplete alongside
+  the create/join/destroy delegates already there.
+- Rich Presence (design doc section 8-1, adaptation plan item 5): added
+  UjinzzaGameInstance::SetRichPresenceStatus(), called with "In Lobby" after
+  a successful CreateSession or JoinSession. Confirmed OnlineSubsystemSteam
+  actually implements IOnlinePresence (FOnlinePresenceSteam::SetPresence -
+  checked the engine source directly) by calling ISteamFriends::
+  SetRichPresence under the hood, so this needed no extra plugin (the
+  reference doc's "Advanced Steam Sessions has a Set Rich Presence node"
+  pointer was for their Blueprint-only stack; the native C++ IOnlinePresence
+  interface does the same thing). Only "In Lobby" is published for now since
+  URoundPhaseSubsystem (Week 4) doesn't exist yet to supply phase names -
+  SetRichPresenceStatus is written to take a plain FString so wiring in
+  per-phase text later is a one-line call from wherever phases change.
+- Push-to-talk vs. open-mic + mic device selection (adaptation plan item 6):
+  added EJinzzaMicInputMode + MicDeviceId to UjinzzaGameUserSettings (config-
+  persisted, like the rest of that class) and a "Microphone" section to the
+  Settings screen's Audio tab - a Push to Talk/Open Mic dropdown plus a
+  device dropdown populated from UAudioCaptureBlueprintLibrary::
+  GetAvailableAudioInputDevices (added "AudioCapture" to the module's
+  PrivateDependencyModuleNames for this). Nothing consumes these yet since
+  UVoiceDisguiseComponent/UProximityVoiceComponent don't exist (Week 6,
+  still blocked on the Vivox/EOS decision below) - this just makes sure the
+  preference exists and is stored before that component needs to read it,
+  per the reference doc's explicit call-out that near-field voice needs
+  this more than a typical project would.
+- Verified (didn't need to change): typos already avoided, Find/Join-session
+  was already a deliberate no-op (invite-only by design, matches "optional
+  for a friends-only party game"), the [Voice] bEnabled=true baseline-VoIP
+  trap was already avoided (bHasVoiceEnabled under [OnlineSubsystem] is a
+  different, harmless flag - not the same section the reference project
+  warned about), and Steam config/plugins were already C++-first with no
+  Blueprint session logic to convert.
+- [ ] Could not compile-check from this session (no exposed build-tool
+  invocation) - the changes above touch GameInstance, GameUserSettings, two
+  UI widgets, and the .Build.cs; do a build before relying on this. Fix Up
+  Redirectors below still needed too.
+
+=================================================================
+DONE (by the user, 2026-09-01)
+=================================================================
+- [x] Fixed up redirectors in Content/JINZZA (the in-editor step this file
+  used to list as outstanding).
+- [x] Decided on the voice stack: Vivox. (Plugin still needs to be obtained
+  and installed - see THINGS ONLY YOU CAN DO below; the decision itself was
+  the blocker for UProximityVoiceComponent's design, not yet unblocked for
+  implementation.)
+- [x] Set up the remote: https://github.com/KINGWONWOO/jinzza (origin is
+  already configured locally).
+- [x] Confirmed solo development. Per the doc's own recommendation for a
+  solo team, this session leaned on trimming: 2-judge mode and "host picks"
+  role assignment are left as documented fallbacks-to-default rather than
+  fully built (see Week 5 below) instead of building out their undecided
+  rules now.
+
+=================================================================
+DONE THIS SESSION (2026-09-01, round 2, by Claude) - Week 4 + Week 5
+=================================================================
+Built the round-phase state machine and role/disguise assignment - the
+first slice of actual match gameplay (everything before this was menu/
+lobby/settings plumbing). New files:
+- jinzzaRoundTypes.h: EJinzzaRoundPhase (the 8 phases + RoundComplete),
+  EJinzzaPartyRole (RealOne/Imitator/Judge), EJinzzaFaceType (A/B/C),
+  EJinzzaVoiceFilter (High/Low/Robot) - shared enums used across the new
+  classes below.
+- jinzzaGameGameState.h/.cpp (AGameStateBase, now set as Lvl_Game's
+  GameStateClass): replicates CurrentPhase (RepNotify -> OnPhaseChanged
+  delegate, mirroring the AFruitGameState pattern the reference doc called
+  out) and PhaseEndServerTime (a single timestamp against
+  GetServerWorldTimeSeconds(), not a ticking countdown - the standard
+  low-bandwidth technique) plus MidEvaluationsRemaining.
+- jinzzaRoundPhaseSubsystem.h/.cpp (UGameInstanceSubsystem, matches the
+  design doc's class list section 11 exactly): server-only phase driver.
+  StartRound()/AdvancePhase() walk the 8 phases with an FTimerHandle,
+  writing each transition into AjinzzaGameGameState. Two things aren't
+  fully spec'd in the doc and needed a judgment call, both commented in the
+  code:
+    - Mid-evaluation looping for VoteCount > 1 (design doc section 17 lists
+      this as still-undecided): implemented as repeating MidEvaluation ->
+      FreeTime2 as a pair VoteCount times before Interview. VoteCount=1
+      collapses to exactly the doc's worked 6-player timing example.
+    - PhaseSpeed (Slow/Normal/Fast) multipliers aren't numbered in the doc;
+      used 1.3x/1x/0.75x, applied only to FreeTime1/FreeTime2/Interview per
+      the doc's own description of what that preset scales ("자유시간·면담
+      시간 일괄 비율 조정"). Tune from playtesting per section 17.
+  Question-time cycle count is hardcoded to the doc's default of 2 (130s)
+  - not wired to a lobby setting yet, there isn't one for it in
+  FJinzzaMatchSettings.
+- jinzzaPartyPlayerState.h/.cpp (APlayerState, set as both Lvl_Lobby's and
+  Lvl_Game's PlayerStateClass): holds bIsGhost/FaceType/VoiceFilter as
+  openly-replicated properties (they're visible/audible in-game anyway) but
+  deliberately does NOT replicate the player's Role - that's the doc's core
+  "정보 비대칭이 곧 서스펜스다" principle (the Judge must not be able to
+  infer anything from replicated data). Role only ever exists server-side;
+  see below for how each client learns their own role.
+- jinzzaDisguiseComponent.h/.cpp (UActorComponent, added to AjinzzaCharacter
+  so every character subclass gets one): applies FaceType to the
+  third-person mesh (the one other players see - GetMesh() is already
+  SetOwnerNoSee'd) via a dynamic material instance driving a "FaceIndex"
+  scalar param. No MI_Face_A/B/C content exists yet (design doc section
+  13-2), so this is a no-op until that material parameter exists - same
+  "functional once content exists, harmless until then" pattern
+  UjinzzaGameUserSettings already established for audio.
+- AjinzzaGameGameMode (jinzzaGameGameMode.h/.cpp): now sets GameStateClass/
+  PlayerStateClass to the new classes above, overrides StartPlay() to kick
+  off UjinzzaRoundPhaseSubsystem::StartRound(), and implements AssignRoles()
+  (Fisher-Yates shuffle of GameState->PlayerArray -> 1 Real One + 1 Judge +
+  the rest Imitators; Imitators clone the Real One's FaceType/VoiceFilter).
+  Also fixed DefaultPawnClass, which was still the bare ADefaultPawn from
+  initial project generation (nobody had a mesh, so disguise had nothing to
+  apply to) - now loads BP_FirstPersonCharacter. This is a real behavior
+  change for anyone testing Lvl_Game: players now spawn as the actual
+  character instead of a flying camera.
+- AjinzzaGamePlayerController: added Client_ReceiveRoleAssignment (a Client
+  Reliable RPC) + GetLocalRole()/GetKnownRealOne() - this is how role
+  knowledge actually reaches each player: AssignRoles() sends the Real One
+  "you're the Real One", each Imitator "you're an Imitator, here's who the
+  Real One is" (an APlayerState* reference), and the Judge "you're the
+  Judge" with nothing else - matching the reference doc's suggested shape
+  (client RPCs for private per-player notifications) instead of trying to
+  make replication itself conditionally hide data.
+- AjinzzaLobbyGameMode: now also sets PlayerStateClass to
+  AjinzzaPartyPlayerState, so seamless travel into Lvl_Game never has to
+  worry about the carried-over PlayerState still being the base APlayerState.
+- Deliberately NOT built (flagged as simplifications, not oversights):
+  - 2-judge mode: AssignRoles() always assigns exactly 1 judge regardless
+    of FJinzzaMatchSettings::JudgeCount. The design doc itself marks 2-judge
+    as experimental/stretch with vote/interview rules undecided (sections 9
+    and 15) - matches this session's solo-dev trim-scope conversation.
+  - RoleAssignMethod == "Host Picks": falls back to Random. No picker UI
+    exists for the host to choose who's the Real One before the round
+    starts; building that UI wasn't in this round's scope.
+  - Lobby-customization snapshot cloning (design doc's "역할 배정 시 위장
+    복제" - the fuller version of what AssignRoles() does for face/voice):
+    UCharacterCustomizationComponent (class list section 11) doesn't exist
+    - there's no lobby appearance system yet for a Real One's look to be
+    captured from. AssignRoles() only clones FaceType/VoiceFilter.
+  - Voice filter isn't consumed anywhere yet - UVoiceDisguiseComponent/
+    UProximityVoiceComponent (Week 6) don't exist. VoiceFilter is stored on
+    AjinzzaPartyPlayerState and ready to be read once they do.
+- [ ] Could not compile-check (still no exposed build-tool invocation this
+  session either) or playtest (no input-injection tool exposed to drive PIE
+  through an actual match) - do both before relying on this. In particular
+  verify AjinzzaGameGameMode::StartPlay() actually runs after every
+  seamlessly-traveled player's pawn/controller exists, since AssignRoles()
+  depends on that.
+
+=================================================================
+ONE THING TO DO IN-EDITOR (5 minutes)
+=================================================================
+(Nothing outstanding - the redirector fixup above is done.)
+
+=================================================================
+THINGS ONLY YOU CAN DO (accounts, external tools, purchases)
+=================================================================
+[ ] Register a Steamworks partner account + create the App ID for this game
+    (steamworks partner site) - replace SteamDevAppId=480 in
+    Config/DefaultEngine.ini with the real one once issued.
+[ ] Get access to Vivox (decision made - see DONE above) and install its
+    plugin into the engine, then re-enable/configure it in jinzza.uproject:
+    Vivox is NOT bundled with this UE 5.8 install (checked Engine/Plugins/
+    Online - no Vivox plugin present). Get the standalone Vivox Unreal
+    SDK/plugin directly from Vivox (or, if that path proves difficult,
+    Epic Online Services' built-in Vivox-backed EOS Voice Chat is the
+    fallback - needs an EOS Product/Client on the Epic Dev Portal instead).
+    This unblocks UVoiceDisguiseComponent/UProximityVoiceComponent (Week 6,
+    class list section 11).
+
+=================================================================
+UPCOMING BUILD WORK (can be done with Claude Code, later sessions -
+listed in doc order, not urgent right now)
+=================================================================
+Week 2 - Movement & networking:
+[ ] First/third-person movement+camera polish, listen-server replication test
+    (partially covered as a side effect of Week 5's DefaultPawnClass fix -
+    still needs an actual polish/test pass)
+
+Week 3 - Lobby skeleton:
+[ ] USteamLobbySubsystem, variable player-count slots, WBP_Lobby draft
+    (functionally covered already by UjinzzaGameInstance + AjinzzaLobbyGameState
+    + AjinzzaRoomSettingsKiosk from the first session, just under different
+    class names than the doc's - not revisited this round)
+
+Week 4 - Round state machine: DONE this round (see above).
+
+Week 5 - Roles & disguise: DONE this round (see above), except 2-judge mode
+and lobby-customization-snapshot cloning (deliberately deferred, see above).
+
+Week 6 - Voice system:
+[ ] UVoiceDisguiseComponent (pitch shift), UProximityVoiceComponent (depends
+    on the Vivox/EOS decision above)
+
+Week 7 - Question time & voting:
+[ ] UQuestionTimeSubsystem (simultaneous submit + reveal), AVoteManager,
+    WBP_VoteUI
+
+Week 8 - 1:1 interview & ghost state:
+[ ] Interview-target assignment, isolated voice channel, ghost-state
+    transition logic
+
+Week 9 - Map blockout:
+[ ] Block out the 6 zones (Lobby / Self-Intro / Question / Free-Time /
+    Interview / Evaluation) in L_GameMap_Default, teleport triggers
+    (incl. Free-Time <-> Interview)
+
+Week 10 - Emotes & props:
+[ ] 4 emotes (F-you/thumbs-up/thumbs-down/peace) + radial menu, 8 noise
+    props
+
+Week 11 - Lobby options & scaling:
+[ ] Full pre-lobby settings UI, auto mid-evaluation-count scaling by
+    player count
+
+Week 12+ - Sound/art pass, playtesting, Steam store page, QA
+    (see doc sections 15-16 for full detail)
+
+=================================================================
+DONE THIS SESSION (2026-09-01, round 3, by Claude) - editor restart unlocked
+compile-check + playtest, closing the two [ ] items round 2 left open
+=================================================================
+- User restarted the Unreal Editor, which brought up a live Unreal MCP
+  connection (in-process editor control - PIE start/stop, log reading,
+  actor queries) that wasn't available to previous sessions. Used it to
+  verify round 2's C++-only changes for the first time instead of just
+  reading the diff.
+- Compile-check: confirmed clean. No LogCompile/LogBlueprint errors on
+  editor load, MapCheck 0 Errors/0 Warnings on both Lvl_MainMenu and
+  Lvl_Game. The new files from round 2 (jinzzaRoundPhaseSubsystem,
+  jinzzaGameGameState, jinzzaPartyPlayerState, jinzzaDisguiseComponent,
+  jinzzaGameGameMode/PlayerController changes) all built.
+- Playtest (single PIE instance only - this MCP toolset has no multi-client/
+  multi-process PIE control, so this does NOT cover the actual lobby ->
+  game seamless-travel-with-3-real-players path):
+  - Lvl_MainMenu: PIE'd clean, zero Logjinzza warnings/errors.
+  - Lvl_Game: PIE'd clean. Confirmed AjinzzaGameGameMode::StartPlay() does
+    run and does call AssignRoles() (logged "AssignRoles: need at least 3
+    players, got 1 - skipping role assignment" - the designed bail-out path,
+    not a crash). Confirmed the DefaultPawnClass fix works: the PIE pawn is
+    actually BP_FirstPersonCharacter_C (queried via find_actors), not the
+    old bare ADefaultPawn.
+- Still NOT verified (needs a real multi-player pass, either multi-process
+  PIE with "Number of Players" > 1 in editor Play settings, or an actual
+  Steam session with a second machine/account): the 3-player AssignRoles()
+  shuffle+RPC path, Client_ReceiveRoleAssignment actually reaching each
+  client, and whether AjinzzaGameGameMode::StartPlay() firing after every
+  seamlessly-traveled player's pawn/controller exists holds up with real
+  seamless travel from Lvl_Lobby (round 2's original concern) - single-PIE
+  can't seamless-travel multiple real connections.
+
+=================================================================
+DONE THIS SESSION (2026-09-01, round 4, by Claude) - multi-instance PIE
+playtest of the 3-player flow, found and fixed a real role-assignment bug
+=================================================================
+- Set up 3-client PIE via ObjectTools.set_properties on the
+  ULevelEditorPlaySettings CDO (playNetMode=PIE_ListenServer,
+  playNumberOfClients=3, runUnderOneProcess=true) - the StartPIE MCP tool
+  itself has no multi-client option, but it reads these same editor
+  play-settings, so this is the same mechanism the editor's own "Number of
+  Players" dropdown drives.
+- Bug found: PIE'd directly into Lvl_Game with 3 clients. After all 3
+  jinzzaPartyPlayerState actors existed in GameState->PlayerArray (checked
+  via find_actors/get_properties), Logjinzza still showed "AssignRoles:
+  need at least 3 players, got 1 - skipping role assignment" - logged
+  earlier, before the other two clients had finished connecting.
+  AjinzzaGameGameMode::StartPlay() called RoundPhase->StartRound()
+  synchronously, which enters RoleAssignment and calls AssignRoles()
+  immediately - racing every remote client's connection, not just a
+  seamless-travel corner case. In every real match this would silently
+  leave 2 of 3+ players with no role (this was exactly round 2's flagged-
+  but-unverified concern - now confirmed real).
+- Fix applied (jinzzaGameGameMode.h/.cpp): moved the StartRound() trigger
+  out of StartPlay() (which now only binds OnServerPhaseEntered) and into
+  a new PostLogin() override that (re)starts a 1.5s debounce timer
+  (TryStartRound(), guarded by bRoundStarted) on every login - so the round
+  starts once no new player has joined for a beat, rather than on a fixed
+  head count that could hang forever if someone disconnects mid-travel.
+  Didn't thread an "expected player count" from the lobby through
+  GameInstance instead, since that's an extra cross-level plumbing path for
+  a number (MaxPlayers is the room's configured *cap*, not who actually
+  shows up) that a debounce achieves more simply and more robustly.
+- [x] Re-verified after the user compiled (via Hot Reload, not Live Coding -
+  LogModuleManager showed UnrealEditor-jinzza-3762.dll reloaded, UBT log
+  showed jinzzaGameGameMode.cpp recompiled, "Result: Succeeded"). Re-ran the
+  identical 3-client listen-server PIE test on Lvl_Game: confirmed all 3
+  jinzzaPartyPlayerState actors present, and - unlike the pre-fix run at the
+  same point in the same test - no "AssignRoles: need at least 3 players"
+  warning was logged at all this time, on either PIE start or through the
+  full 6s warmup. No new errors/asserts/fatals either. Couldn't get a
+  positive "AssignRoles succeeded with 3 players" log line as direct
+  confirmation, since the fields that would prove it (ServerRole - not even
+  a UPROPERTY; FaceType/VoiceFilter/CurrentPhase/LocalRole - private
+  UPROPERTYs or plain members) aren't readable through this session's
+  object-introspection tool (it only reads *public* reflected properties -
+  confirmed by cross-checking against AGameStateBase::PlayerArray, which
+  read fine because it's public upstream). The negative result (no
+  premature warning where one reliably fired before, across two separate
+  pre-fix runs) plus the debounce logic itself being straightforward on
+  inspection is good confidence, but if you want a hard positive signal,
+  the cheap option is a temporary UE_LOG on AssignRoles' success path.
+
+=================================================================
+NOTES
+=================================================================
+- Section 16 of the doc flags these as still-undecided design details to
+  nail down before or during their respective build weeks:
+  - Emote radial menu UI concept art
+  - Noise-prop balance (radius/cooldown/judge-attention impact) - deferred
+    to in-game playtesting rather than spec'd up front
+  - 2-judge mode's vote/interview rules
+  - "Candidate vote" mode for choosing who is the Real One - full flow
+    (who votes when, how it stays hidden from the judge)

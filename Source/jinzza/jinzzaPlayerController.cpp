@@ -5,7 +5,9 @@
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
+#include "InputAction.h"
 #include "jinzzaCameraManager.h"
+#include "jinzzaGameUserSettings.h"
 #include "Blueprint/UserWidget.h"
 #include "jinzza.h"
 #include "Widgets/Input/SVirtualJoystick.h"
@@ -53,7 +55,7 @@ void AjinzzaPlayerController::SetupInputComponent()
 		{
 			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
 			{
-				Subsystem->AddMappingContext(CurrentContext, 0);
+				Subsystem->AddMappingContext(BuildRuntimeMappingContext(CurrentContext), 0);
 			}
 
 			// only add these IMCs if we're not using mobile touch input
@@ -61,7 +63,7 @@ void AjinzzaPlayerController::SetupInputComponent()
 			{
 				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
 				{
-					Subsystem->AddMappingContext(CurrentContext, 0);
+					Subsystem->AddMappingContext(BuildRuntimeMappingContext(CurrentContext), 0);
 				}
 			}
 		}
@@ -73,4 +75,40 @@ bool AjinzzaPlayerController::ShouldUseTouchControls() const
 {
 	// are we on a mobile platform? Should we force touch?
 	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
+}
+
+UInputMappingContext* AjinzzaPlayerController::BuildRuntimeMappingContext(UInputMappingContext* Source)
+{
+	if (!Source)
+	{
+		return nullptr;
+	}
+
+	UInputMappingContext* Runtime = DuplicateObject<UInputMappingContext>(Source, this);
+	RuntimeMappingContexts.Add(Runtime);
+
+	const UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get();
+	if (!Settings)
+	{
+		return Runtime;
+	}
+
+	// Iterate the mappings as they existed on Source (Runtime starts as an identical copy), applying any
+	// per-player key override on top of the duplicate so the shared .uasset is never mutated.
+	for (const FEnhancedActionKeyMapping& Mapping : Source->GetMappings())
+	{
+		if (!Mapping.Action)
+		{
+			continue;
+		}
+
+		const FKey Rebind = Settings->GetKeyRebind(Mapping.Action->GetFName());
+		if (Rebind.IsValid())
+		{
+			Runtime->UnmapKey(Mapping.Action, Mapping.Key);
+			Runtime->MapKey(Mapping.Action, Rebind);
+		}
+	}
+
+	return Runtime;
 }

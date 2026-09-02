@@ -24,7 +24,8 @@ public class jinzza : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"SlateCore",
 			"OnlineSubsystem",
-			"OnlineSubsystemUtils"
+			"OnlineSubsystemUtils",
+			"AudioCapture"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {

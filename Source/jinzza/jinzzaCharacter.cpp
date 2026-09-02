@@ -8,6 +8,8 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "jinzzaGameUserSettings.h"
+#include "jinzzaDisguiseComponent.h"
 #include "jinzza.h"
 
 AjinzzaCharacter::AjinzzaCharacter()
@@ -42,6 +44,8 @@ AjinzzaCharacter::AjinzzaCharacter()
 	// Configure character movement
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 	GetCharacterMovement()->AirControl = 0.5f;
+
+	DisguiseComponent = CreateDefaultSubobject<UjinzzaDisguiseComponent>(TEXT("DisguiseComponent"));
 }
 
 void AjinzzaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -91,9 +95,17 @@ void AjinzzaCharacter::DoAim(float Yaw, float Pitch)
 {
 	if (GetController())
 	{
+		float SensitizedYaw = Yaw;
+		float SensitizedPitch = Pitch;
+		if (const UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get())
+		{
+			SensitizedYaw *= Settings->GetMouseSensitivity();
+			SensitizedPitch *= Settings->GetMouseSensitivity() * (Settings->GetInvertYAxis() ? -1.f : 1.f);
+		}
+
 		// pass the rotation inputs
-		AddControllerYawInput(Yaw);
-		AddControllerPitchInput(Pitch);
+		AddControllerYawInput(SensitizedYaw);
+		AddControllerPitchInput(SensitizedPitch);
 	}
 }
 
