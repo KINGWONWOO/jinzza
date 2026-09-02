@@ -44,6 +44,7 @@ Thumbs.db
 
 # ===== Local scratch/extraction artifacts =====
 docs/_extract/
+docs/Unreal_Game_Noob-main*/
 
 # ===== Local AI tool configs (machine-specific, not project source) =====
 .claude/settings.local.json
