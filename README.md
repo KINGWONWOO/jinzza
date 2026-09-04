@@ -21,6 +21,11 @@ Dated, chronological session history. `todo.txt` is the full detailed log this i
 - **2026-09-01, round 3** — Editor restart unlocked a live Unreal MCP connection for compile-checking and PIE playtesting. Verified round 2's changes compiled clean and ran without errors in single-instance PIE.
 - **2026-09-01, round 4** — Set up 3-client listen-server PIE and found a real bug: role assignment ran synchronously on `StartPlay()`, racing remote player connections, so only whichever player connected first ever got a role. Fixed with a `PostLogin()` + 1.5s debounce (`TryStartRound`) instead of a fixed head-count. Verified fixed after the user's Hot Reload compile.
 - **2026-09-02** — Committed and pushed the full accumulated working tree (865 files: all of the above source, the moved/added `Content/JINZZA/` assets, and docs) to `origin/main` for the first time since the initial scaffold commit.
+- **2026-09-04, round 1** — Week 10 (emotes & props): a radial emote wheel (hold E, steer with the mouse, release to play one of 4 gestures), generalized prop stealing (F on a prop someone else is already holding) and throwing (RMB) onto the shared prop base class, and a Basketball + Hoop pair (cosmetic dribble bounce, server-authoritative scoring trigger).
+- **2026-09-04, round 2** — On-screen interaction prompts (a small "[F] Pick Up" popup above whatever prop you're looking at) and a bottom-right HUD panel explaining how to use whatever's currently held. Found every prop had no mesh or collision at all until now — gave each one a placeholder Engine-primitive mesh. Built out `Lvl_test`, a numbered "display case" level exercising every feature to date; adding a new zone here for each new testable feature going forward is now the standing convention.
+- **2026-09-04, round 3** — Main menu: a live character-preview render (a temporary mannequin captured into a texture), a shared Customization screen (Head/Hair Color/Top/Eyebrows/Eyes, temporary placeholder items) reachable from both the main menu and a new in-lobby Wardrobe kiosk — both read/write the same underlying settings, so a choice made in either place shows up in the other — and a real local mic-loopback voice-test panel (live pitch shift; the Robot filter is a placeholder pending Week 6).
+- **2026-09-04, round 4** — A stun gun prop with a real, replicated immobilize effect (blocks movement/jump input for a few seconds). The "victim's voice sounds mechanical" half is intentionally deferred and documented, pending the Week 6 voice system.
+- **2026-09-04, round 5** — Investigated the Week 6 voice-system blocker directly against the UE 5.8 engine source: confirmed EOS Voice Chat (Vivox-backed, already bundled with the engine) supports everything the design needs — positional/proximity channels and real per-sample audio hooks for pitch-shift/robot voice modulation. Updates the voice-system plan from "obtain the standalone Vivox plugin" to "set up an EOS Product/Client" — see `docs/PROJECT_STATUS.md` §8 for the full writeup.
 
 ## What's being built next
 
@@ -31,17 +36,17 @@ Roadmap by the design doc's week numbering (see `docs/PROJECT_STATUS.md` §9 for
 | 1–3 | Scaffold, movement/networking polish, lobby skeleton | Done / functionally covered |
 | 4 | Round state machine | Done |
 | 5 | Roles & disguise | Done, except 2-judge mode and lobby-customization-snapshot cloning (deliberately deferred — undecided in the design doc) |
-| 6 | Voice system | **Blocked** — needs the Vivox plugin obtained/installed (decision made: Vivox) |
+| 6 | Voice system | Blocked, but de-risked — plan changed from the standalone Vivox plugin to EOS Voice Chat (bundled, confirmed API support); now blocked only on an EOS Product/Client setup |
 | 7 | Question time & voting | Not started |
 | 8 | 1:1 interview & ghost state | Not started |
 | 9 | Map blockout (6 zones) | Not started |
-| 10 | Emotes & noise props | Not started |
+| 10 | Emotes & noise props | Done — emote wheel, Bat/Boombox/Megaphone/Basketball+Hoop/Stun Gun, interaction prompts + usage HUD. UMG layout (widget visuals/placement) is still outstanding for all of these — no tool exists yet to author that visually, so it's manual Designer work |
 | 11 | Lobby options & scaling | Partially done (kiosk settings UI); auto mid-eval scaling by player count not done |
 | 12+ | Sound/art pass, playtesting, Steam store page, QA | Not started |
 
 **Things only the user can do:**
 - Register a Steamworks partner account and issue a real App ID (replace the placeholder `SteamDevAppId=480` in `Config/DefaultEngine.ini`).
-- Obtain and install the Vivox plugin (or fall back to EOS Voice Chat) to unblock the Week 6 voice system.
+- Set up an Epic Games Dev Portal org → Product → Client and add the EOS credentials to `Config/DefaultEngine.ini` to unblock the Week 6 voice system (EOS Voice Chat, not standalone Vivox — see `docs/PROJECT_STATUS.md` §8).
 
 **Still-undecided design details** (design doc §16, to be settled before/during their build weeks): emote radial menu concept art, noise-prop balance (deferred to playtesting), 2-judge mode's vote/interview rules, and the full "candidate vote" flow for choosing the Real One.
 
