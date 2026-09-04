@@ -13,6 +13,7 @@
 #include "jinzzaDisguiseComponent.h"
 #include "jinzzaInteractableProp.h"
 #include "jinzzaEmoteWheelWidget.h"
+#include "jinzzaPropUsageWidget.h"
 #include "jinzza.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -55,6 +56,40 @@ AjinzzaCharacter::AjinzzaCharacter()
 	if (EmoteWheelWidgetBPClass.Succeeded())
 	{
 		EmoteWheelWidgetClass = EmoteWheelWidgetBPClass.Class;
+	}
+
+	static ConstructorHelpers::FClassFinder<UjinzzaPropUsageWidget> PropUsageWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_PropUsageHUD"));
+	if (PropUsageWidgetBPClass.Succeeded())
+	{
+		PropUsageWidgetClass = PropUsageWidgetBPClass.Class;
+	}
+}
+
+void AjinzzaCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (IsLocallyControlled() && PropUsageWidgetClass)
+	{
+		if (APlayerController* PC = Cast<APlayerController>(GetController()))
+		{
+			PropUsageWidget = CreateWidget<UjinzzaPropUsageWidget>(PC, PropUsageWidgetClass);
+			if (PropUsageWidget)
+			{
+				PropUsageWidget->AddToViewport(50);
+				PropUsageWidget->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		}
+	}
+}
+
+void AjinzzaCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (IsLocallyControlled())
+	{
+		UpdateInteractionFocus();
 	}
 }
 
@@ -159,9 +194,17 @@ void AjinzzaCharacter::DoJumpEnd()
 
 void AjinzzaCharacter::DoInteract()
 {
+	if (AjinzzaInteractableProp* Prop = TraceForInteractableProp())
+	{
+		Server_InteractWithProp(Prop);
+	}
+}
+
+AjinzzaInteractableProp* AjinzzaCharacter::TraceForInteractableProp() const
+{
 	if (!FirstPersonCameraComponent)
 	{
-		return;
+		return nullptr;
 	}
 
 	const FVector TraceStart = FirstPersonCameraComponent->GetComponentLocation();
@@ -173,11 +216,60 @@ void AjinzzaCharacter::DoInteract()
 
 	if (GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
 	{
-		if (AjinzzaInteractableProp* Prop = Cast<AjinzzaInteractableProp>(Hit.GetActor()))
-		{
-			Server_InteractWithProp(Prop);
-		}
+		return Cast<AjinzzaInteractableProp>(Hit.GetActor());
 	}
+	return nullptr;
+}
+
+void AjinzzaCharacter::UpdateInteractionFocus()
+{
+	AjinzzaInteractableProp* NewFocus = bEmoteWheelOpen ? nullptr : TraceForInteractableProp();
+
+	// Don't prompt to interact with whatever you're already holding (it's still in the trace's way).
+	if (NewFocus && NewFocus->IsHeldBy(this))
+	{
+		NewFocus = nullptr;
+	}
+
+	if (NewFocus == FocusedInteractProp.Get())
+	{
+		return;
+	}
+
+	if (AjinzzaInteractableProp* OldFocus = FocusedInteractProp.Get())
+	{
+		OldFocus->HideInteractionPrompt();
+	}
+
+	FocusedInteractProp = NewFocus;
+
+	if (NewFocus)
+	{
+		NewFocus->ShowInteractionPrompt();
+	}
+}
+
+void AjinzzaCharacter::ShowPropUsageHUD(AjinzzaInteractableProp* Prop)
+{
+	if (!Prop || !PropUsageWidget)
+	{
+		return;
+	}
+
+	PropUsageWidget->SetPropInfo(Prop->GetUsageIcon(), Prop->GetUsageDescription());
+	PropUsageWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	HUDDisplayedProp = Prop;
+}
+
+void AjinzzaCharacter::HidePropUsageHUD(AjinzzaInteractableProp* Prop)
+{
+	if (!PropUsageWidget || HUDDisplayedProp.Get() != Prop)
+	{
+		return;
+	}
+
+	PropUsageWidget->SetVisibility(ESlateVisibility::Collapsed);
+	HUDDisplayedProp = nullptr;
 }
 
 void AjinzzaCharacter::DoUseHeldProp()

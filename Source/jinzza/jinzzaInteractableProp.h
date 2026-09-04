@@ -8,6 +8,9 @@
 
 class UStaticMeshComponent;
 class USoundBase;
+class UTexture2D;
+class UWidgetComponent;
+class UjinzzaInteractionPromptWidget;
 
 /**
  * Free-time noise/comedy prop behavior (design doc section 6/11/13): no info-clue props, just
@@ -64,6 +67,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Prop")
 	EJinzzaPropInteractionType GetInteractionType() const { return InteractionType; }
 
+	/** For the bottom-right HUD panel explaining how to use whatever's currently held - see UjinzzaPropUsageWidget. */
+	UFUNCTION(BlueprintPure, Category = "Prop")
+	UTexture2D* GetUsageIcon() const { return UsageIcon; }
+
+	UFUNCTION(BlueprintPure, Category = "Prop")
+	FText GetUsageDescription() const { return UsageDescription; }
+
+	/** Client-local cosmetic only - shows/hides the "[F] Pick Up"-style prompt above this prop.
+	 * Driven by AjinzzaCharacter::UpdateInteractionFocus tracing what the local player is looking
+	 * at; never touches replicated state, so every client can call this independently. */
+	void ShowInteractionPrompt();
+	void HideInteractionPrompt();
+
 protected:
 	/** Server-only. Who's currently holding this prop, if Handheld and picked up - for subclasses like Bat that need to know where to swing from. */
 	APawn* GetHoldingPawn() const { return HoldingPawn; }
@@ -71,6 +87,7 @@ protected:
 	/** For subclasses that need to move/animate the mesh directly (e.g. a basketball's dribble bounce). */
 	UStaticMeshComponent* GetMesh() const { return Mesh; }
 
+	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/** Server-only hook for gameplay-affecting behavior (e.g. Bat's knockback impulse). Runs once, authoritatively. */
@@ -82,12 +99,41 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Prop", meta = (DisplayName = "On Play Use Effects"))
 	void BP_OnPlayUseEffects();
 
+	/** Takes the previous holder as a param (engine convention: an OnRep function with one
+	 * parameter matching the property's type receives the pre-replication value) so this can
+	 * tell whichever locally-controlled character just lost the prop to hide its usage HUD -
+	 * see AjinzzaCharacter::ShowPropUsageHUD/HidePropUsageHUD. Manual call sites below
+	 * (AttachToHolder/DropFromHolder/ThrowFromHolder) pass the old value explicitly since the
+	 * engine only auto-supplies it for real replication, not direct C++ calls. */
 	UFUNCTION()
-	void OnRep_HoldingPawn();
+	void OnRep_HoldingPawn(APawn* OldHoldingPawn);
 
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	/** Screen-space "[F] Pick Up" prompt shown above this prop while the local player looks at
+	 * it - see ShowInteractionPrompt/HideInteractionPrompt and UjinzzaInteractionPromptWidget. */
+	UPROPERTY(VisibleAnywhere, Category = "Components")
+	TObjectPtr<UWidgetComponent> InteractionPromptComponent;
+
+	/** Widget class for InteractionPromptComponent. Left unset until a Widget Blueprint (e.g.
+	 * WBP_InteractionPrompt) exists - the prompt component simply never shows anything until
+	 * one is assigned, same "wire content later" pattern as UseSound/ScoreEffect elsewhere. */
+	UPROPERTY(EditAnywhere, Category = "Prop")
+	TSubclassOf<UjinzzaInteractionPromptWidget> InteractionPromptWidgetClass;
+
+	/** Label shown in the interaction prompt (e.g. "Pick Up" for Handheld, "Use" for Placed). */
+	UPROPERTY(EditAnywhere, Category = "Prop")
+	FText InteractPromptText = FText::FromString(TEXT("Interact"));
+
+	/** Icon + description for the bottom-right "how to use this" HUD panel while held - see
+	 * GetUsageIcon/GetUsageDescription and UjinzzaPropUsageWidget. Left unset by default. */
+	UPROPERTY(EditAnywhere, Category = "Prop")
+	TObjectPtr<UTexture2D> UsageIcon;
+
+	UPROPERTY(EditAnywhere, Category = "Prop")
+	FText UsageDescription;
 
 	/** Handheld vs Placed (design doc's two shared interaction montages). */
 	UPROPERTY(EditAnywhere, Category = "Prop")

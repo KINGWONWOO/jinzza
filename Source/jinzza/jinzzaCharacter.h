@@ -15,6 +15,7 @@ class UInputAction;
 class UAnimMontage;
 class UjinzzaDisguiseComponent;
 class UjinzzaEmoteWheelWidget;
+class UjinzzaPropUsageWidget;
 class AjinzzaInteractableProp;
 struct FInputActionValue;
 
@@ -112,10 +113,39 @@ protected:
 	UPROPERTY()
 	TObjectPtr<UjinzzaEmoteWheelWidget> EmoteWheelWidget;
 
+	/** Bottom-right HUD panel explaining how to use whatever's currently held. Defaults to
+	 * WBP_PropUsageHUD if it exists, else the raw C++ class. */
+	UPROPERTY(EditAnywhere, Category = "UI")
+	TSubclassOf<UjinzzaPropUsageWidget> PropUsageWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UjinzzaPropUsageWidget> PropUsageWidget;
+
+	/** Which prop's info the HUD is currently showing, if any - lets HidePropUsageHUD ignore a
+	 * stale call for a prop that isn't the one on screen anymore. */
+	TWeakObjectPtr<AjinzzaInteractableProp> HUDDisplayedProp;
+
+	/** Whichever interactable prop the local player is currently looking at, if any - see
+	 * UpdateInteractionFocus. Never set on remote proxies (only the locally-controlled
+	 * character traces for this). */
+	TWeakObjectPtr<AjinzzaInteractableProp> FocusedInteractProp;
+
 public:
 	AjinzzaCharacter();
 
+	/** Client-local: shows this character's prop usage HUD for Prop. Called by
+	 * AjinzzaInteractableProp::OnRep_HoldingPawn when Prop starts being held by this character
+	 * specifically - harmless to call on a non-locally-controlled character (PropUsageWidget is
+	 * only ever created for the local player in BeginPlay, so it's just null there). */
+	void ShowPropUsageHUD(AjinzzaInteractableProp* Prop);
+
+	/** Client-local: hides the prop usage HUD, but only if it's currently showing Prop (guards
+	 * against a stale Hide arriving after a different prop has already replaced it on screen). */
+	void HidePropUsageHUD(AjinzzaInteractableProp* Prop);
+
 protected:
+	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
 
 	/** Called from Input Actions for movement input */
 	void MoveInput(const FInputActionValue& Value);
@@ -141,6 +171,12 @@ protected:
 
 	/** Traces from the camera for a prop and requests the server pick it up (Handheld) or activate it in place (Placed) */
 	void DoInteract();
+
+	/** Shared trace logic for both DoInteract (on F press) and UpdateInteractionFocus (every tick, for the prompt). */
+	AjinzzaInteractableProp* TraceForInteractableProp() const;
+
+	/** Every tick, shows/hides the interaction prompt on whichever prop the local player is currently looking at. */
+	void UpdateInteractionFocus();
 
 	/** Requests the server activate whatever prop this character is currently holding */
 	void DoUseHeldProp();
