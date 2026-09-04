@@ -8,10 +8,13 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "jinzzaGameUserSettings.h"
 #include "jinzzaDisguiseComponent.h"
 #include "jinzzaInteractableProp.h"
+#include "jinzzaEmoteWheelWidget.h"
 #include "jinzza.h"
+#include "UObject/ConstructorHelpers.h"
 
 AjinzzaCharacter::AjinzzaCharacter()
 {
@@ -47,6 +50,12 @@ AjinzzaCharacter::AjinzzaCharacter()
 	GetCharacterMovement()->AirControl = 0.5f;
 
 	DisguiseComponent = CreateDefaultSubobject<UjinzzaDisguiseComponent>(TEXT("DisguiseComponent"));
+
+	static ConstructorHelpers::FClassFinder<UjinzzaEmoteWheelWidget> EmoteWheelWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_EmoteWheel"));
+	if (EmoteWheelWidgetBPClass.Succeeded())
+	{
+		EmoteWheelWidgetClass = EmoteWheelWidgetBPClass.Class;
+	}
 }
 
 void AjinzzaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -65,10 +74,15 @@ void AjinzzaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AjinzzaCharacter::LookInput);
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AjinzzaCharacter::LookInput);
 
-		// Free-time props: F to pick up / activate, left click to use what's held, Q to drop it
+		// Free-time props: F to pick up / activate / steal, left click to use what's held, Q to drop it, right click to throw it
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoInteract);
 		EnhancedInputComponent->BindAction(UseHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoUseHeldProp);
 		EnhancedInputComponent->BindAction(DropHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoDropHeldProp);
+		EnhancedInputComponent->BindAction(ThrowHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoThrowHeldProp);
+
+		// Emote wheel: hold E to open and steer with the mouse, release to play whatever's hovered
+		EnhancedInputComponent->BindAction(EmoteWheelAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoOpenEmoteWheel);
+		EnhancedInputComponent->BindAction(EmoteWheelAction, ETriggerEvent::Completed, this, &AjinzzaCharacter::DoCloseEmoteWheel);
 	}
 	else
 	{
@@ -99,6 +113,12 @@ void AjinzzaCharacter::LookInput(const FInputActionValue& Value)
 
 void AjinzzaCharacter::DoAim(float Yaw, float Pitch)
 {
+	// While the emote wheel is open, mouse movement steers it instead of the camera.
+	if (bEmoteWheelOpen)
+	{
+		return;
+	}
+
 	if (GetController())
 	{
 		float SensitizedYaw = Yaw;
@@ -170,6 +190,11 @@ void AjinzzaCharacter::DoDropHeldProp()
 	Server_DropHeldProp();
 }
 
+void AjinzzaCharacter::DoThrowHeldProp()
+{
+	Server_ThrowHeldProp();
+}
+
 void AjinzzaCharacter::Server_InteractWithProp_Implementation(AjinzzaInteractableProp* Prop)
 {
 	if (!Prop)
@@ -179,7 +204,8 @@ void AjinzzaCharacter::Server_InteractWithProp_Implementation(AjinzzaInteractabl
 
 	if (Prop->GetInteractionType() == EJinzzaPropInteractionType::Handheld)
 	{
-		if (!Prop->IsHeld())
+		// Also true when Prop is held by someone else - pressing F snatches it, same as any pickup.
+		if (!Prop->IsHeldBy(this))
 		{
 			Prop->AttachToHolder(this);
 			HeldProp = Prop;
@@ -188,6 +214,14 @@ void AjinzzaCharacter::Server_InteractWithProp_Implementation(AjinzzaInteractabl
 	else
 	{
 		Prop->Activate();
+	}
+}
+
+void AjinzzaCharacter::ClearHeldPropIfMatches(const AjinzzaInteractableProp* Prop)
+{
+	if (HeldProp == Prop)
+	{
+		HeldProp = nullptr;
 	}
 }
 
@@ -205,5 +239,107 @@ void AjinzzaCharacter::Server_DropHeldProp_Implementation()
 	{
 		HeldProp->DropFromHolder();
 		HeldProp = nullptr;
+	}
+}
+
+void AjinzzaCharacter::Server_ThrowHeldProp_Implementation()
+{
+	if (HeldProp)
+	{
+		const FVector LaunchVelocity = GetControlRotation().Vector() * ThrowSpeed;
+		HeldProp->ThrowFromHolder(LaunchVelocity);
+		HeldProp = nullptr;
+	}
+}
+
+void AjinzzaCharacter::DoOpenEmoteWheel()
+{
+	if (bEmoteWheelOpen || !EmoteWheelWidgetClass)
+	{
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC || !PC->IsLocalController())
+	{
+		return;
+	}
+
+	EmoteWheelWidget = CreateWidget<UjinzzaEmoteWheelWidget>(PC, EmoteWheelWidgetClass);
+	if (!EmoteWheelWidget)
+	{
+		return;
+	}
+
+	EmoteWheelWidget->AddToViewport(100);
+	bEmoteWheelOpen = true;
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(EmoteWheelWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	PC->SetInputMode(InputMode);
+	PC->bShowMouseCursor = true;
+}
+
+void AjinzzaCharacter::DoCloseEmoteWheel()
+{
+	if (!bEmoteWheelOpen)
+	{
+		return;
+	}
+	bEmoteWheelOpen = false;
+
+	const EJinzzaEmoteType SelectedEmote = EmoteWheelWidget ? EmoteWheelWidget->GetHoveredEmote() : EJinzzaEmoteType::None;
+
+	if (EmoteWheelWidget)
+	{
+		EmoteWheelWidget->RemoveFromParent();
+		EmoteWheelWidget = nullptr;
+	}
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+		PC->bShowMouseCursor = false;
+	}
+
+	if (SelectedEmote != EJinzzaEmoteType::None)
+	{
+		Server_PlayEmote(SelectedEmote);
+	}
+}
+
+void AjinzzaCharacter::Server_PlayEmote_Implementation(EJinzzaEmoteType EmoteType)
+{
+	Multicast_PlayEmote(EmoteType);
+}
+
+void AjinzzaCharacter::Multicast_PlayEmote_Implementation(EJinzzaEmoteType EmoteType)
+{
+	UAnimMontage* Montage = GetMontageForEmote(EmoteType);
+	if (!Montage)
+	{
+		return;
+	}
+
+	// FirstPersonMesh is attached to and shares GetMesh()'s skeleton/pose, so playing the montage
+	// here animates both the owner's first-person arms and everyone else's third-person view of it.
+	if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+	{
+		AnimInstance->Montage_Play(Montage);
+	}
+}
+
+UAnimMontage* AjinzzaCharacter::GetMontageForEmote(EJinzzaEmoteType EmoteType) const
+{
+	switch (EmoteType)
+	{
+	case EJinzzaEmoteType::ThumbsUp:     return ThumbsUpMontage;
+	case EJinzzaEmoteType::ThumbsDown:   return ThumbsDownMontage;
+	case EJinzzaEmoteType::MiddleFinger: return MiddleFingerMontage;
+	case EJinzzaEmoteType::Point:        return PointMontage;
+	default:                             return nullptr;
 	}
 }

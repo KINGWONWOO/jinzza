@@ -5,13 +5,16 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "jinzzaEmoteTypes.h"
 #include "jinzzaCharacter.generated.h"
 
 class UInputComponent;
 class USkeletalMeshComponent;
 class UCameraComponent;
 class UInputAction;
+class UAnimMontage;
 class UjinzzaDisguiseComponent;
+class UjinzzaEmoteWheelWidget;
 class AjinzzaInteractableProp;
 struct FInputActionValue;
 
@@ -67,12 +70,47 @@ protected:
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* DropHeldPropAction;
 
+	/** Open the radial emote menu Input Action (E, held) */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* EmoteWheelAction;
+
+	/** Throw the currently held prop Input Action (Right Mouse Button) */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* ThrowHeldPropAction;
+
+	/** Launch speed (cm/s) applied to a thrown prop, along wherever the camera is currently aiming. */
+	UPROPERTY(EditAnywhere, Category ="Input", meta = (ClampMin = 0, Units = "cm/s"))
+	float ThrowSpeed = 1500.f;
+
 	/** How far (cm) the F-key trace reaches when looking for a prop to interact with. */
 	UPROPERTY(EditAnywhere, Category ="Input", meta = (ClampMin = 0, Units = "cm"))
 	float InteractTraceDistance = 300.f;
 
 	/** Server-only. The prop currently attached to this character, if any - never needs to be known by clients (they just ask the server to use it). */
 	TObjectPtr<AjinzzaInteractableProp> HeldProp;
+
+	/** Widget class for the radial emote menu. Defaults to WBP_EmoteWheel if it exists, else the raw C++ class. */
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TSubclassOf<UjinzzaEmoteWheelWidget> EmoteWheelWidgetClass;
+
+	/** Montages for each emote-wheel direction. Leave unassigned to no-op that emote harmlessly until animation content exists. */
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TObjectPtr<UAnimMontage> ThumbsUpMontage;
+
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TObjectPtr<UAnimMontage> ThumbsDownMontage;
+
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TObjectPtr<UAnimMontage> MiddleFingerMontage;
+
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TObjectPtr<UAnimMontage> PointMontage;
+
+	/** True while the radial emote menu is open - suppresses camera look so mouse movement steers the wheel instead. */
+	bool bEmoteWheelOpen = false;
+
+	UPROPERTY()
+	TObjectPtr<UjinzzaEmoteWheelWidget> EmoteWheelWidget;
 
 public:
 	AjinzzaCharacter();
@@ -110,6 +148,15 @@ protected:
 	/** Requests the server drop whatever prop this character is currently holding */
 	void DoDropHeldProp();
 
+	/** Requests the server throw whatever prop this character is currently holding, launched along the current aim direction */
+	void DoThrowHeldProp();
+
+	/** Opens the radial emote menu locally and frees the mouse cursor to steer it (E pressed) */
+	void DoOpenEmoteWheel();
+
+	/** Closes the radial emote menu, restores normal camera look, and requests the server play whichever emote was hovered (E released) */
+	void DoCloseEmoteWheel();
+
 protected:
 
 	/** Set up input action bindings */
@@ -127,6 +174,21 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void Server_DropHeldProp();
 
+	/** Server-only. Throws HeldProp, if any, along the current aim direction, and clears it. */
+	UFUNCTION(Server, Reliable)
+	void Server_ThrowHeldProp();
+
+	/** Server-only. Broadcasts EmoteType to every client via Multicast_PlayEmote. */
+	UFUNCTION(Server, Reliable)
+	void Server_PlayEmote(EJinzzaEmoteType EmoteType);
+
+	/** Plays EmoteType's montage on this character's mesh for every client, including whoever triggered it. */
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PlayEmote(EJinzzaEmoteType EmoteType);
+
+private:
+	UAnimMontage* GetMontageForEmote(EJinzzaEmoteType EmoteType) const;
+
 public:
 
 	/** Returns the first person mesh **/
@@ -138,6 +200,9 @@ public:
 	/** Returns the prop currently attached to this character, if any (e.g. for a future voice component to query a held Megaphone). */
 	UFUNCTION(BlueprintPure, Category = "Prop")
 	AjinzzaInteractableProp* GetHeldProp() const { return HeldProp; }
+
+	/** Server-only. Clears HeldProp if it currently points at Prop - called by AjinzzaInteractableProp::AttachToHolder when this character's held prop is snatched away by someone else pressing F on it. */
+	void ClearHeldPropIfMatches(const AjinzzaInteractableProp* Prop);
 
 };
 

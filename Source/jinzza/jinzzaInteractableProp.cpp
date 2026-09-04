@@ -5,6 +5,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Character.h"
+#include "jinzzaCharacter.h"
 
 AjinzzaInteractableProp::AjinzzaInteractableProp()
 {
@@ -23,9 +24,16 @@ void AjinzzaInteractableProp::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 
 void AjinzzaInteractableProp::AttachToHolder(APawn* NewHolder)
 {
-	if (!HasAuthority() || !NewHolder || InteractionType != EJinzzaPropInteractionType::Handheld || IsHeld())
+	if (!HasAuthority() || !NewHolder || InteractionType != EJinzzaPropInteractionType::Handheld || HoldingPawn == NewHolder)
 	{
 		return;
+	}
+
+	// Snatching: whoever holds this already (if anyone) loses it - tell them to forget it before
+	// reassigning, so their own HeldProp pointer doesn't go stale.
+	if (AjinzzaCharacter* PreviousHolder = Cast<AjinzzaCharacter>(HoldingPawn))
+	{
+		PreviousHolder->ClearHeldPropIfMatches(this);
 	}
 
 	// Physics must be off before attaching, or the attachment transform and physics sim fight each frame.
@@ -44,6 +52,19 @@ void AjinzzaInteractableProp::DropFromHolder()
 	HoldingPawn = nullptr;
 	OnRep_HoldingPawn(); // detaches (keeping current world transform) and re-enables collision
 	Mesh->SetSimulatePhysics(true); // let it fall/settle from the hand position it was dropped at
+}
+
+void AjinzzaInteractableProp::ThrowFromHolder(const FVector& LaunchVelocity)
+{
+	if (!HasAuthority() || !IsHeld())
+	{
+		return;
+	}
+
+	HoldingPawn = nullptr;
+	OnRep_HoldingPawn(); // detaches (keeping current world transform) and re-enables collision
+	Mesh->SetSimulatePhysics(true);
+	Mesh->SetPhysicsLinearVelocity(LaunchVelocity);
 }
 
 void AjinzzaInteractableProp::OnRep_HoldingPawn()

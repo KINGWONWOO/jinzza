@@ -48,11 +48,18 @@ public:
 	/** Server-only. Detaches a held (Handheld) prop and lets physics settle it where it's dropped. No-op if not currently held. */
 	void DropFromHolder();
 
+	/** Server-only. Like DropFromHolder, but launches the prop along LaunchVelocity (cm/s) instead of just letting it fall in place. No-op if not currently held. */
+	void ThrowFromHolder(const FVector& LaunchVelocity);
+
 	/** Server-only. Plays this prop's use effects. Called directly for Placed props, or via the holder for Handheld ones. */
 	void Activate();
 
 	UFUNCTION(BlueprintPure, Category = "Prop")
 	bool IsHeld() const { return HoldingPawn != nullptr; }
+
+	/** True if Holder currently holds this prop (always false for Placed props, or if held by someone else). */
+	UFUNCTION(BlueprintPure, Category = "Prop")
+	bool IsHeldBy(const APawn* Holder) const { return HoldingPawn == Holder; }
 
 	UFUNCTION(BlueprintPure, Category = "Prop")
 	EJinzzaPropInteractionType GetInteractionType() const { return InteractionType; }
@@ -60,6 +67,9 @@ public:
 protected:
 	/** Server-only. Who's currently holding this prop, if Handheld and picked up - for subclasses like Bat that need to know where to swing from. */
 	APawn* GetHoldingPawn() const { return HoldingPawn; }
+
+	/** For subclasses that need to move/animate the mesh directly (e.g. a basketball's dribble bounce). */
+	UStaticMeshComponent* GetMesh() const { return Mesh; }
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
