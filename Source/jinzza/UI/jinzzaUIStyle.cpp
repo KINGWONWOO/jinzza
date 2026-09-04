@@ -8,7 +8,9 @@
 #include "Components/SizeBox.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "Styling/CoreStyle.h"
+#include "Styling/SlateBrush.h"
 #include "Engine/Font.h"
+#include "Engine/Texture2D.h"
 #include "Sound/SoundBase.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -22,6 +24,44 @@ namespace
 			Cached = LoadObject<UFont>(nullptr, TEXT("/Game/JINZZA/Fonts/SacheonUju-Regular_Font.SacheonUju-Regular_Font"));
 		}
 		return Cached.Get();
+	}
+
+	/** Pill-shaped button base (source: noob-game's OptionButtonImage.png, re-tinted per style). */
+	UTexture2D* LoadButtonPillTexture()
+	{
+		static TWeakObjectPtr<UTexture2D> Cached;
+		if (!Cached.IsValid())
+		{
+			Cached = LoadObject<UTexture2D>(nullptr, TEXT("/Game/JINZZA/UI/Textures/T_ButtonPill.T_ButtonPill"));
+		}
+		return Cached.Get();
+	}
+
+	/** Pinned-note-card base (source: noob-game's MemoYellow.png, re-tinted to parchment). */
+	UTexture2D* LoadNotePanelTexture()
+	{
+		static TWeakObjectPtr<UTexture2D> Cached;
+		if (!Cached.IsValid())
+		{
+			Cached = LoadObject<UTexture2D>(nullptr, TEXT("/Game/JINZZA/UI/Textures/T_NotePanel.T_NotePanel"));
+		}
+		return Cached.Get();
+	}
+
+	/** 9-slice brush from a texture, tinted. Margins are fractions of the source image sized to
+	 * protect each texture's own baked border/detail from stretch distortion. */
+	FSlateBrush MakeNineSliceBrush(UTexture2D* Texture, const FMargin& Margin, const FLinearColor& Tint)
+	{
+		FSlateBrush Brush;
+		if (Texture)
+		{
+			Brush.SetResourceObject(Texture);
+			Brush.ImageSize = FVector2D(Texture->GetSizeX(), Texture->GetSizeY());
+			Brush.DrawAs = ESlateBrushDrawType::Box;
+			Brush.Margin = Margin;
+			Brush.TintColor = FSlateColor(Tint);
+		}
+		return Brush;
 	}
 
 	USoundBase* LoadButtonClickSound()
@@ -88,10 +128,24 @@ namespace JinzzaUI
 			constexpr float OutlineWidth = 1.5f;
 
 			FButtonStyle Style;
-			Style.Normal = FSlateRoundedBoxBrush(NormalColor, CornerRadius, BorderColor, OutlineWidth);
-			Style.Hovered = FSlateRoundedBoxBrush(HoveredColor, CornerRadius, BorderColor, OutlineWidth);
-			Style.Pressed = FSlateRoundedBoxBrush(PressedColor, CornerRadius, BorderColor, OutlineWidth);
-			Style.Disabled = FSlateRoundedBoxBrush(Color_ButtonDisabled, CornerRadius, FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f);
+			if (UTexture2D* Pill = LoadButtonPillTexture())
+			{
+				// T_ButtonPill is 835x312 with its own baked outline/shine; the rounded caps eat
+				// ~19% of the width, the outline stroke ~8% of the height - BorderColor isn't used
+				// here since the outline is baked into the art, not drawn separately.
+				const FMargin PillMargin(0.19f, 0.08f, 0.19f, 0.08f);
+				Style.Normal = MakeNineSliceBrush(Pill, PillMargin, NormalColor);
+				Style.Hovered = MakeNineSliceBrush(Pill, PillMargin, HoveredColor);
+				Style.Pressed = MakeNineSliceBrush(Pill, PillMargin, PressedColor);
+				Style.Disabled = MakeNineSliceBrush(Pill, PillMargin, Color_ButtonDisabled);
+			}
+			else
+			{
+				Style.Normal = FSlateRoundedBoxBrush(NormalColor, CornerRadius, BorderColor, OutlineWidth);
+				Style.Hovered = FSlateRoundedBoxBrush(HoveredColor, CornerRadius, BorderColor, OutlineWidth);
+				Style.Pressed = FSlateRoundedBoxBrush(PressedColor, CornerRadius, BorderColor, OutlineWidth);
+				Style.Disabled = FSlateRoundedBoxBrush(Color_ButtonDisabled, CornerRadius, FLinearColor(0.f, 0.f, 0.f, 0.f), 0.f);
+			}
 			Style.NormalPadding = FMargin(16.f, 10.f);
 			Style.PressedPadding = FMargin(16.f, 11.f, 16.f, 9.f);
 			return Style;
@@ -172,6 +226,26 @@ namespace JinzzaUI
 		UBorder* Panel = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), Name);
 		FSlateBrush Brush = FSlateRoundedBoxBrush(Color_Panel, 10.f, Color_PanelBorder, 1.5f);
 		Panel->SetBrush(Brush);
+		return Panel;
+	}
+
+	UBorder* MakeNoteBackground(UWidgetTree* Tree, FName Name)
+	{
+		UBorder* Panel = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), Name);
+		if (UTexture2D* Note = LoadNotePanelTexture())
+		{
+			// T_NotePanel is 1088x960: a folded corner (bottom-right) and washi tape overlapping the
+			// top edge, so the margins are asymmetric to keep both un-stretched.
+			const FMargin NoteMargin(0.22f, 0.30f, 0.22f, 0.22f);
+			// Warm parchment tint, close to the source art's own cream rather than a heavy recolor -
+			// the aged-note look already reads as "evidence/case file" against the dark noir panels.
+			const FLinearColor NoteTint(0.90f, 0.82f, 0.60f, 0.97f);
+			Panel->SetBrush(MakeNineSliceBrush(Note, NoteMargin, NoteTint));
+		}
+		else
+		{
+			Panel->SetBrush(FSlateRoundedBoxBrush(Color_Panel, 10.f, Color_PanelBorder, 1.5f));
+		}
 		return Panel;
 	}
 
