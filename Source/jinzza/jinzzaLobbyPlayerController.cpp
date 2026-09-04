@@ -6,10 +6,20 @@
 #include "jinzzaRoomSettingsKiosk.h"
 #include "EngineUtils.h"
 #include "Components/InputComponent.h"
+#include "UObject/ConstructorHelpers.h"
 
 namespace
 {
 	constexpr float KioskCheckInterval = 0.2f;
+}
+
+AjinzzaLobbyPlayerController::AjinzzaLobbyPlayerController()
+{
+	static ConstructorHelpers::FClassFinder<UUserWidget> LobbyWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_Lobby"));
+	if (LobbyWidgetBPClass.Succeeded())
+	{
+		LobbyWidgetClass = LobbyWidgetBPClass.Class;
+	}
 }
 
 void AjinzzaLobbyPlayerController::BeginPlay()

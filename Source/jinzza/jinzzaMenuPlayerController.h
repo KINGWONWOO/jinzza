@@ -15,7 +15,9 @@ class JINZZA_API AjinzzaMenuPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
-	/** Widget class to show. Defaults to UjinzzaMainMenuWidget if left unset. */
+	AjinzzaMenuPlayerController();
+
+	/** Widget class to show. Defaults to UjinzzaMainMenuWidget if left unset (WBP_MainMenu if it exists, else the raw C++ class). */
 	UPROPERTY(EditDefaultsOnly, Category = "Menu")
 	TSubclassOf<UUserWidget> MainMenuWidgetClass;
 

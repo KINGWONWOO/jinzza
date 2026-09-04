@@ -34,7 +34,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	float InteractionRadius = 220.f;
 
-	/** Widget class to show. Defaults to UjinzzaRoomSettingsWidget if left unset. */
+	/** Widget class to show. Defaults to UjinzzaRoomSettingsWidget if left unset (WBP_RoomSettings if it exists, else the raw C++ class). */
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	TSubclassOf<UjinzzaRoomSettingsWidget> RoomSettingsWidgetClass;
 

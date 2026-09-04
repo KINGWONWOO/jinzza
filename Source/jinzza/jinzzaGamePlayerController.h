@@ -20,6 +20,8 @@ class JINZZA_API AjinzzaGamePlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
+	AjinzzaGamePlayerController();
+
 	/**
 	 * Server-only: tells this player their role and, for Imitators, who the Real One is (nullptr
 	 * for every other role). Not replicated further - each client only ever learns what the
@@ -38,7 +40,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Party")
 	APlayerState* GetKnownRealOne() const { return KnownRealOne; }
 
-	/** Widget class to show. Defaults to UjinzzaGameEndWidget if left unset. */
+	/** Widget class to show. Defaults to UjinzzaGameEndWidget if left unset (WBP_GameEnd if it exists, else the raw C++ class). */
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> GameEndWidgetClass;
 

@@ -4,6 +4,16 @@
 #include "Blueprint/UserWidget.h"
 #include "jinzzaMainMenuWidget.h"
 #include "jinzza.h"
+#include "UObject/ConstructorHelpers.h"
+
+AjinzzaMenuPlayerController::AjinzzaMenuPlayerController()
+{
+	static ConstructorHelpers::FClassFinder<UUserWidget> MainMenuWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_MainMenu"));
+	if (MainMenuWidgetBPClass.Succeeded())
+	{
+		MainMenuWidgetClass = MainMenuWidgetBPClass.Class;
+	}
+}
 
 void AjinzzaMenuPlayerController::BeginPlay()
 {

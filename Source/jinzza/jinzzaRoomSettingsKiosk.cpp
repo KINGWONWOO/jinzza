@@ -40,6 +40,12 @@ AjinzzaRoomSettingsKiosk::AjinzzaRoomSettingsKiosk()
 	Label->SetWorldSize(28.f);
 	Label->SetText(FText::FromString(TEXT("ROOM SETTINGS")));
 	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
+
+	static ConstructorHelpers::FClassFinder<UjinzzaRoomSettingsWidget> RoomSettingsWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_RoomSettings"));
+	if (RoomSettingsWidgetBPClass.Succeeded())
+	{
+		RoomSettingsWidgetClass = RoomSettingsWidgetBPClass.Class;
+	}
 }
 
 void AjinzzaRoomSettingsKiosk::Interact(APlayerController* Interactor)

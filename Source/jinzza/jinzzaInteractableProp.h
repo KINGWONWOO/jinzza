@@ -45,6 +45,9 @@ public:
 	/** Server-only. Handheld: attaches to NewHolder's hand socket. Placed: no-op (use Activate instead). */
 	void AttachToHolder(APawn* NewHolder);
 
+	/** Server-only. Detaches a held (Handheld) prop and lets physics settle it where it's dropped. No-op if not currently held. */
+	void DropFromHolder();
+
 	/** Server-only. Plays this prop's use effects. Called directly for Placed props, or via the holder for Handheld ones. */
 	void Activate();
 

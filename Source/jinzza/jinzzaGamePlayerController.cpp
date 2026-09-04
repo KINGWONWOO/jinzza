@@ -3,6 +3,16 @@
 #include "jinzzaGamePlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "jinzzaGameEndWidget.h"
+#include "UObject/ConstructorHelpers.h"
+
+AjinzzaGamePlayerController::AjinzzaGamePlayerController()
+{
+	static ConstructorHelpers::FClassFinder<UUserWidget> GameEndWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_GameEnd"));
+	if (GameEndWidgetBPClass.Succeeded())
+	{
+		GameEndWidgetClass = GameEndWidgetBPClass.Class;
+	}
+}
 
 void AjinzzaGamePlayerController::Client_ReceiveRoleAssignment_Implementation(EJinzzaPartyRole InRole, APlayerState* InRealOne)
 {

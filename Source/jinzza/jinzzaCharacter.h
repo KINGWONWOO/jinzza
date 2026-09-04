@@ -63,6 +63,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* UseHeldPropAction;
 
+	/** Drop the currently held prop Input Action (Q) */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* DropHeldPropAction;
+
 	/** How far (cm) the F-key trace reaches when looking for a prop to interact with. */
 	UPROPERTY(EditAnywhere, Category ="Input", meta = (ClampMin = 0, Units = "cm"))
 	float InteractTraceDistance = 300.f;
@@ -103,6 +107,9 @@ protected:
 	/** Requests the server activate whatever prop this character is currently holding */
 	void DoUseHeldProp();
 
+	/** Requests the server drop whatever prop this character is currently holding */
+	void DoDropHeldProp();
+
 protected:
 
 	/** Set up input action bindings */
@@ -115,6 +122,10 @@ protected:
 	/** Server-only. Activates HeldProp, if any. */
 	UFUNCTION(Server, Reliable)
 	void Server_UseHeldProp();
+
+	/** Server-only. Drops HeldProp, if any, and clears it. */
+	UFUNCTION(Server, Reliable)
+	void Server_DropHeldProp();
 
 public:
 

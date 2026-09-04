@@ -19,7 +19,9 @@ class JINZZA_API AjinzzaLobbyPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
-	/** Widget class to show. Defaults to UjinzzaLobbyWidget if left unset. */
+	AjinzzaLobbyPlayerController();
+
+	/** Widget class to show. Defaults to UjinzzaLobbyWidget if left unset (WBP_Lobby if it exists, else the raw C++ class). */
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> LobbyWidgetClass;
 

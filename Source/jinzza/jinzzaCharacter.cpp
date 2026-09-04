@@ -65,9 +65,10 @@ void AjinzzaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AjinzzaCharacter::LookInput);
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AjinzzaCharacter::LookInput);
 
-		// Free-time props: F to pick up / activate, left click to use what's held
+		// Free-time props: F to pick up / activate, left click to use what's held, Q to drop it
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoInteract);
 		EnhancedInputComponent->BindAction(UseHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoUseHeldProp);
+		EnhancedInputComponent->BindAction(DropHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoDropHeldProp);
 	}
 	else
 	{
@@ -164,6 +165,11 @@ void AjinzzaCharacter::DoUseHeldProp()
 	Server_UseHeldProp();
 }
 
+void AjinzzaCharacter::DoDropHeldProp()
+{
+	Server_DropHeldProp();
+}
+
 void AjinzzaCharacter::Server_InteractWithProp_Implementation(AjinzzaInteractableProp* Prop)
 {
 	if (!Prop)
@@ -190,5 +196,14 @@ void AjinzzaCharacter::Server_UseHeldProp_Implementation()
 	if (HeldProp)
 	{
 		HeldProp->Activate();
+	}
+}
+
+void AjinzzaCharacter::Server_DropHeldProp_Implementation()
+{
+	if (HeldProp)
+	{
+		HeldProp->DropFromHolder();
+		HeldProp = nullptr;
 	}
 }

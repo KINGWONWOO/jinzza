@@ -28,8 +28,22 @@ void AjinzzaInteractableProp::AttachToHolder(APawn* NewHolder)
 		return;
 	}
 
+	// Physics must be off before attaching, or the attachment transform and physics sim fight each frame.
+	Mesh->SetSimulatePhysics(false);
 	HoldingPawn = NewHolder;
 	OnRep_HoldingPawn();
+}
+
+void AjinzzaInteractableProp::DropFromHolder()
+{
+	if (!HasAuthority() || !IsHeld())
+	{
+		return;
+	}
+
+	HoldingPawn = nullptr;
+	OnRep_HoldingPawn(); // detaches (keeping current world transform) and re-enables collision
+	Mesh->SetSimulatePhysics(true); // let it fall/settle from the hand position it was dropped at
 }
 
 void AjinzzaInteractableProp::OnRep_HoldingPawn()
