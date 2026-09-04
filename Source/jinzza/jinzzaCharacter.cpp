@@ -10,6 +10,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "jinzzaGameUserSettings.h"
 #include "jinzzaDisguiseComponent.h"
+#include "jinzzaInteractableProp.h"
 #include "jinzza.h"
 
 AjinzzaCharacter::AjinzzaCharacter()
@@ -63,6 +64,10 @@ void AjinzzaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		// Looking/Aiming
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AjinzzaCharacter::LookInput);
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AjinzzaCharacter::LookInput);
+
+		// Free-time props: F to pick up / activate, left click to use what's held
+		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoInteract);
+		EnhancedInputComponent->BindAction(UseHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoUseHeldProp);
 	}
 	else
 	{
@@ -129,4 +134,61 @@ void AjinzzaCharacter::DoJumpEnd()
 {
 	// pass StopJumping to the character
 	StopJumping();
+}
+
+void AjinzzaCharacter::DoInteract()
+{
+	if (!FirstPersonCameraComponent)
+	{
+		return;
+	}
+
+	const FVector TraceStart = FirstPersonCameraComponent->GetComponentLocation();
+	const FVector TraceEnd = TraceStart + (FirstPersonCameraComponent->GetForwardVector() * InteractTraceDistance);
+
+	FHitResult Hit;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+
+	if (GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, ECC_Visibility, QueryParams))
+	{
+		if (AjinzzaInteractableProp* Prop = Cast<AjinzzaInteractableProp>(Hit.GetActor()))
+		{
+			Server_InteractWithProp(Prop);
+		}
+	}
+}
+
+void AjinzzaCharacter::DoUseHeldProp()
+{
+	Server_UseHeldProp();
+}
+
+void AjinzzaCharacter::Server_InteractWithProp_Implementation(AjinzzaInteractableProp* Prop)
+{
+	if (!Prop)
+	{
+		return;
+	}
+
+	if (Prop->GetInteractionType() == EJinzzaPropInteractionType::Handheld)
+	{
+		if (!Prop->IsHeld())
+		{
+			Prop->AttachToHolder(this);
+			HeldProp = Prop;
+		}
+	}
+	else
+	{
+		Prop->Activate();
+	}
+}
+
+void AjinzzaCharacter::Server_UseHeldProp_Implementation()
+{
+	if (HeldProp)
+	{
+		HeldProp->Activate();
+	}
 }

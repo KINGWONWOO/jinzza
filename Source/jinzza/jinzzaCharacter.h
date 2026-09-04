@@ -12,6 +12,7 @@ class USkeletalMeshComponent;
 class UCameraComponent;
 class UInputAction;
 class UjinzzaDisguiseComponent;
+class AjinzzaInteractableProp;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -53,7 +54,22 @@ protected:
 	/** Mouse Look Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	class UInputAction* MouseLookAction;
-	
+
+	/** Pick up / activate a placed prop Input Action (F) */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* InteractAction;
+
+	/** Use the currently held prop Input Action (Left Mouse Button) */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* UseHeldPropAction;
+
+	/** How far (cm) the F-key trace reaches when looking for a prop to interact with. */
+	UPROPERTY(EditAnywhere, Category ="Input", meta = (ClampMin = 0, Units = "cm"))
+	float InteractTraceDistance = 300.f;
+
+	/** Server-only. The prop currently attached to this character, if any - never needs to be known by clients (they just ask the server to use it). */
+	TObjectPtr<AjinzzaInteractableProp> HeldProp;
+
 public:
 	AjinzzaCharacter();
 
@@ -81,11 +97,24 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
 
+	/** Traces from the camera for a prop and requests the server pick it up (Handheld) or activate it in place (Placed) */
+	void DoInteract();
+
+	/** Requests the server activate whatever prop this character is currently holding */
+	void DoUseHeldProp();
+
 protected:
 
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
-	
+
+	/** Server-only. Attaches Prop (Handheld) or activates it immediately (Placed). */
+	UFUNCTION(Server, Reliable)
+	void Server_InteractWithProp(AjinzzaInteractableProp* Prop);
+
+	/** Server-only. Activates HeldProp, if any. */
+	UFUNCTION(Server, Reliable)
+	void Server_UseHeldProp();
 
 public:
 
@@ -94,6 +123,10 @@ public:
 
 	/** Returns first person camera component **/
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+
+	/** Returns the prop currently attached to this character, if any (e.g. for a future voice component to query a held Megaphone). */
+	UFUNCTION(BlueprintPure, Category = "Prop")
+	AjinzzaInteractableProp* GetHeldProp() const { return HeldProp; }
 
 };
 
