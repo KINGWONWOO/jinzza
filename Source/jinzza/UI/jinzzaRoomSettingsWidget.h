@@ -20,6 +20,11 @@ class UButton;
  * client instance when editable, so no RPC is needed - matches the HasAuthority() +
  * IsLocalController() host-check idiom already used by UjinzzaLobbyWidget's Start Match
  * button). Non-host players see the same values read-only.
+ *
+ * UMG-authored: every property below must exist in this class's Widget Blueprint (e.g.
+ * WBP_RoomSettings), named exactly as below, for BindWidget to find it. Row labels are
+ * purely decorative and don't need to be bound - just placed next to each control in the
+ * Designer.
  */
 UCLASS()
 class JINZZA_API UjinzzaRoomSettingsWidget : public UUserWidget
@@ -39,27 +44,30 @@ protected:
 private:
 	bool bEditable = false;
 
-	UPROPERTY()
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> HeaderNote;
 
-	UPROPERTY()
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UEditableTextBox> RoomNameBox;
 
-	UPROPERTY()
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<USpinBox> MaxPlayersSpinBox;
 
-	UPROPERTY()
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<USpinBox> JudgeCountSpinBox;
 
-	UPROPERTY()
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<USpinBox> VoteCountSpinBox;
 
-	UPROPERTY()
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UComboBoxString> PhaseSpeedCombo;
 
-	UPROPERTY()
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UComboBoxString> RoleAssignCombo;
 
-	UPROPERTY()
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> ApplyButton;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> CloseButton;
 };

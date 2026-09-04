@@ -19,7 +19,13 @@ void AjinzzaGamePlayerController::BeginPlay()
 		return;
 	}
 
-	GameEndWidget = CreateWidget<UUserWidget>(this, UjinzzaGameEndWidget::StaticClass());
+	TSubclassOf<UUserWidget> WidgetClass = GameEndWidgetClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UjinzzaGameEndWidget::StaticClass();
+	}
+
+	GameEndWidget = CreateWidget<UUserWidget>(this, WidgetClass);
 	if (GameEndWidget)
 	{
 		GameEndWidget->AddToViewport();

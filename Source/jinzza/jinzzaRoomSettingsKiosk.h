@@ -9,6 +9,7 @@
 class UStaticMeshComponent;
 class UTextRenderComponent;
 class UUserWidget;
+class UjinzzaRoomSettingsWidget;
 
 /**
  * A physical, walk-up-to prop placed in Lvl_Lobby that opens the room settings panel
@@ -32,6 +33,10 @@ public:
 	/** How close a pawn needs to be (in cm) for AjinzzaLobbyPlayerController to consider this kiosk "nearby". */
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	float InteractionRadius = 220.f;
+
+	/** Widget class to show. Defaults to UjinzzaRoomSettingsWidget if left unset. */
+	UPROPERTY(EditAnywhere, Category = "Interaction")
+	TSubclassOf<UjinzzaRoomSettingsWidget> RoomSettingsWidgetClass;
 
 	FText GetInteractionPrompt() const { return FText::FromString(TEXT("Press E - Room Settings")); }
 

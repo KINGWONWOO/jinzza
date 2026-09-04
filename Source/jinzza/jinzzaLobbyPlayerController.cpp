@@ -21,7 +21,13 @@ void AjinzzaLobbyPlayerController::BeginPlay()
 		return;
 	}
 
-	LobbyWidget = CreateWidget<UUserWidget>(this, UjinzzaLobbyWidget::StaticClass());
+	TSubclassOf<UUserWidget> WidgetClass = LobbyWidgetClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UjinzzaLobbyWidget::StaticClass();
+	}
+
+	LobbyWidget = CreateWidget<UUserWidget>(this, WidgetClass);
 	if (LobbyWidget)
 	{
 		LobbyWidget->AddToViewport();

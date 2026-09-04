@@ -54,7 +54,13 @@ void AjinzzaRoomSettingsKiosk::Interact(APlayerController* Interactor)
 		return;
 	}
 
-	ActiveWidget = CreateWidget<UjinzzaRoomSettingsWidget>(Interactor, UjinzzaRoomSettingsWidget::StaticClass());
+	TSubclassOf<UjinzzaRoomSettingsWidget> WidgetClass = RoomSettingsWidgetClass;
+	if (!WidgetClass)
+	{
+		WidgetClass = UjinzzaRoomSettingsWidget::StaticClass();
+	}
+
+	ActiveWidget = CreateWidget<UjinzzaRoomSettingsWidget>(Interactor, WidgetClass);
 	if (ActiveWidget)
 	{
 		ActiveWidget->AddToViewport(10);

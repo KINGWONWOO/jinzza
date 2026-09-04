@@ -18,6 +18,11 @@ class JINZZA_API AjinzzaLobbyPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
+public:
+	/** Widget class to show. Defaults to UjinzzaLobbyWidget if left unset. */
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> LobbyWidgetClass;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;

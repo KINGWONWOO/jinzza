@@ -38,6 +38,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Party")
 	APlayerState* GetKnownRealOne() const { return KnownRealOne; }
 
+	/** Widget class to show. Defaults to UjinzzaGameEndWidget if left unset. */
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> GameEndWidgetClass;
+
 protected:
 	virtual void BeginPlay() override;
 

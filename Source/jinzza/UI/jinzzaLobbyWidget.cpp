@@ -1,13 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaLobbyWidget.h"
-#include "jinzzaUIStyle.h"
-#include "Blueprint/WidgetTree.h"
-#include "Components/CanvasPanel.h"
-#include "Components/CanvasPanelSlot.h"
-#include "Components/Border.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Kismet/GameplayStatics.h"
@@ -22,70 +15,23 @@ void UjinzzaLobbyWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 
-	UCanvasPanel* RootCanvas = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("RootCanvas"));
-	WidgetTree->RootWidget = RootCanvas;
+	if (InviteButton)
+	{
+		InviteButton->OnClicked.AddDynamic(this, &UjinzzaLobbyWidget::OnInviteFriendsClicked);
+	}
 
-	UBorder* Panel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("Panel"));
-	Panel->SetHorizontalAlignment(HAlign_Right);
-	Panel->SetVerticalAlignment(VAlign_Top);
-	Panel->SetPadding(FMargin(24.f));
+	if (StartButton)
+	{
+		StartButton->OnClicked.AddDynamic(this, &UjinzzaLobbyWidget::OnStartMatchClicked);
 
-	UCanvasPanelSlot* PanelSlot = RootCanvas->AddChildToCanvas(Panel);
-	PanelSlot->SetAnchors(FAnchors(1.f, 0.f, 1.f, 0.f));
-	PanelSlot->SetAlignment(FVector2D(1.f, 0.f));
-	PanelSlot->SetPosition(FVector2D(-24.f, 24.f));
-	PanelSlot->SetAutoSize(true);
+		const APlayerController* PC = GetOwningPlayer();
+		StartButton->SetVisibility(PC && PC->HasAuthority() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
 
-	UVerticalBox* Box = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("LobbyBox"));
-	Panel->SetContent(Box);
-
-	UTextBlock* Title = JinzzaUI::MakeTitleText(WidgetTree, TEXT("LobbyTitle"), FText::FromString(TEXT("LOBBY")), 30);
-	UVerticalBoxSlot* TitleSlot = Box->AddChildToVerticalBox(Title);
-	TitleSlot->SetHorizontalAlignment(HAlign_Center);
-	TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 4.f));
-
-	UVerticalBoxSlot* DividerSlot = Box->AddChildToVerticalBox(JinzzaUI::MakeDivider(WidgetTree, TEXT("LobbyTitleDivider")));
-	DividerSlot->SetHorizontalAlignment(HAlign_Center);
-	DividerSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 14.f));
-
-	// Room info group, separated from the actions group below - a light structural pass
-	// (grouped, headed sections) matching the same "organized panel" approach applied to
-	// the Settings screen's sidebar, per the request in todo.txt.
-	UVerticalBoxSlot* RoomHeadingSlot = Box->AddChildToVerticalBox(JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("RoomHeading"), FText::FromString(TEXT("Room"))));
-	RoomHeadingSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-
-	SettingsText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("SettingsText"), FText::GetEmpty(), true);
-	UVerticalBoxSlot* SettingsSlot = Box->AddChildToVerticalBox(SettingsText);
-	SettingsSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
-
-	PlayerCountText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("PlayerCountText"), FText::GetEmpty(), false);
-	UVerticalBoxSlot* CountSlot = Box->AddChildToVerticalBox(PlayerCountText);
-	CountSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 20.f));
-
-	UVerticalBoxSlot* ActionsHeadingSlot = Box->AddChildToVerticalBox(JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("ActionsHeading"), FText::FromString(TEXT("Actions"))));
-	ActionsHeadingSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
-
-	UButton* InviteButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("InviteButton"), FText::FromString(TEXT("Invite Friends")), 18.f);
-	InviteButton->OnClicked.AddDynamic(this, &UjinzzaLobbyWidget::OnInviteFriendsClicked);
-	UVerticalBoxSlot* InviteSlot = Box->AddChildToVerticalBox(InviteButton);
-	InviteSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-
-	StartButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("StartButton"), FText::FromString(TEXT("Start Match")), 18.f);
-	StartButton->OnClicked.AddDynamic(this, &UjinzzaLobbyWidget::OnStartMatchClicked);
-	Box->AddChildToVerticalBox(StartButton);
-
-	const APlayerController* PC = GetOwningPlayer();
-	StartButton->SetVisibility(PC && PC->HasAuthority() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-
-	// Bottom-center interaction prompt, hidden until a kiosk is nearby.
-	InteractPromptText = JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("InteractPromptText"), FText::GetEmpty());
-	InteractPromptText->SetJustification(ETextJustify::Center);
-	InteractPromptText->SetVisibility(ESlateVisibility::Collapsed);
-	UCanvasPanelSlot* PromptSlot = RootCanvas->AddChildToCanvas(InteractPromptText);
-	PromptSlot->SetAnchors(FAnchors(0.5f, 1.f, 0.5f, 1.f));
-	PromptSlot->SetAlignment(FVector2D(0.5f, 1.f));
-	PromptSlot->SetPosition(FVector2D(0.f, -60.f));
-	PromptSlot->SetAutoSize(true);
+	if (InteractPromptText)
+	{
+		InteractPromptText->SetVisibility(ESlateVisibility::Collapsed);
+	}
 
 	if (USoundBase* Bgm = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/Lobby/LobbyBgm__cut_83sec__Cue.LobbyBgm__cut_83sec__Cue")))
 	{
