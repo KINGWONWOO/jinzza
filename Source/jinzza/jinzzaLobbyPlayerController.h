@@ -7,11 +7,12 @@
 #include "jinzzaLobbyPlayerController.generated.h"
 
 class UUserWidget;
-class AjinzzaRoomSettingsKiosk;
+class AjinzzaInteractableKiosk;
 
 /**
  * Spawns and displays the lobby widget (player count + host-only Start Match), and polls for
- * a nearby AjinzzaRoomSettingsKiosk so the player can press E to open the room settings panel.
+ * a nearby AjinzzaInteractableKiosk (AjinzzaRoomSettingsKiosk, AjinzzaWardrobeKiosk, ...) so the
+ * player can press E to open it.
  */
 UCLASS()
 class JINZZA_API AjinzzaLobbyPlayerController : public APlayerController
@@ -37,7 +38,7 @@ private:
 	TObjectPtr<UUserWidget> LobbyWidget;
 
 	UPROPERTY()
-	TObjectPtr<AjinzzaRoomSettingsKiosk> NearbyKiosk;
+	TObjectPtr<AjinzzaInteractableKiosk> NearbyKiosk;
 
 	FTimerHandle KioskCheckTimerHandle;
 };

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "InputCoreTypes.h"
 #include "GameFramework/GameUserSettings.h"
+#include "jinzzaCustomizationTypes.h"
 #include "jinzzaGameUserSettings.generated.h"
 
 class USoundClass;
@@ -99,6 +100,34 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Settings|Audio")
 	void SetMicDeviceId(const FString& NewDeviceId);
 
+	// --- Customization (temporary placeholder items - see jinzzaCustomizationTypes.h) ---
+	// Single source of truth for both the main menu's Customization screen and the lobby's
+	// AjinzzaWardrobeKiosk, so picking an item in either place shows up in the other.
+	UFUNCTION(BlueprintPure, Category = "Settings|Customization")
+	EJinzzaCustomizationStyle GetHeadStyle() const;
+	UFUNCTION(BlueprintCallable, Category = "Settings|Customization")
+	void SetHeadStyle(EJinzzaCustomizationStyle NewValue);
+
+	UFUNCTION(BlueprintPure, Category = "Settings|Customization")
+	EJinzzaHairColor GetHairColor() const;
+	UFUNCTION(BlueprintCallable, Category = "Settings|Customization")
+	void SetHairColor(EJinzzaHairColor NewValue);
+
+	UFUNCTION(BlueprintPure, Category = "Settings|Customization")
+	EJinzzaCustomizationStyle GetTopStyle() const;
+	UFUNCTION(BlueprintCallable, Category = "Settings|Customization")
+	void SetTopStyle(EJinzzaCustomizationStyle NewValue);
+
+	UFUNCTION(BlueprintPure, Category = "Settings|Customization")
+	EJinzzaCustomizationStyle GetEyebrowsStyle() const;
+	UFUNCTION(BlueprintCallable, Category = "Settings|Customization")
+	void SetEyebrowsStyle(EJinzzaCustomizationStyle NewValue);
+
+	UFUNCTION(BlueprintPure, Category = "Settings|Customization")
+	EJinzzaCustomizationStyle GetEyesStyle() const;
+	UFUNCTION(BlueprintCallable, Category = "Settings|Customization")
+	void SetEyesStyle(EJinzzaCustomizationStyle NewValue);
+
 	// --- Gameplay / accessibility ---
 	UFUNCTION(BlueprintPure, Category = "Settings|Gameplay")
 	bool GetSubtitlesEnabled() const;
@@ -158,6 +187,21 @@ private:
 
 	UPROPERTY(config)
 	FString MicDeviceId;
+
+	UPROPERTY(config)
+	EJinzzaCustomizationStyle HeadStyle = EJinzzaCustomizationStyle::StyleA;
+
+	UPROPERTY(config)
+	EJinzzaHairColor HairColor = EJinzzaHairColor::Black;
+
+	UPROPERTY(config)
+	EJinzzaCustomizationStyle TopStyle = EJinzzaCustomizationStyle::StyleA;
+
+	UPROPERTY(config)
+	EJinzzaCustomizationStyle EyebrowsStyle = EJinzzaCustomizationStyle::StyleA;
+
+	UPROPERTY(config)
+	EJinzzaCustomizationStyle EyesStyle = EJinzzaCustomizationStyle::StyleA;
 
 	UPROPERTY(config)
 	bool bSubtitlesEnabled = false;

@@ -3,7 +3,7 @@
 #include "jinzzaLobbyPlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "jinzzaLobbyWidget.h"
-#include "jinzzaRoomSettingsKiosk.h"
+#include "jinzzaInteractableKiosk.h"
 #include "EngineUtils.h"
 #include "Components/InputComponent.h"
 #include "UObject/ConstructorHelpers.h"
@@ -78,12 +78,12 @@ void AjinzzaLobbyPlayerController::CheckForNearbyKiosk()
 
 	const FVector MyLocation = MyPawn->GetActorLocation();
 
-	AjinzzaRoomSettingsKiosk* Closest = nullptr;
+	AjinzzaInteractableKiosk* Closest = nullptr;
 	float ClosestDistSq = TNumericLimits<float>::Max();
 
-	for (TActorIterator<AjinzzaRoomSettingsKiosk> It(GetWorld()); It; ++It)
+	for (TActorIterator<AjinzzaInteractableKiosk> It(GetWorld()); It; ++It)
 	{
-		AjinzzaRoomSettingsKiosk* Kiosk = *It;
+		AjinzzaInteractableKiosk* Kiosk = *It;
 		const float DistSq = FVector::DistSquared(MyLocation, Kiosk->GetActorLocation());
 		if (DistSq <= FMath::Square(Kiosk->InteractionRadius) && DistSq < ClosestDistSq)
 		{

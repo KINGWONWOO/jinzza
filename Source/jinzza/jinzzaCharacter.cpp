@@ -11,6 +11,7 @@
 #include "GameFramework/PlayerController.h"
 #include "jinzzaGameUserSettings.h"
 #include "jinzzaDisguiseComponent.h"
+#include "jinzzaCharacterCustomizationComponent.h"
 #include "jinzzaInteractableProp.h"
 #include "jinzzaEmoteWheelWidget.h"
 #include "jinzzaPropUsageWidget.h"
@@ -51,6 +52,7 @@ AjinzzaCharacter::AjinzzaCharacter()
 	GetCharacterMovement()->AirControl = 0.5f;
 
 	DisguiseComponent = CreateDefaultSubobject<UjinzzaDisguiseComponent>(TEXT("DisguiseComponent"));
+	CustomizationComponent = CreateDefaultSubobject<UjinzzaCharacterCustomizationComponent>(TEXT("CustomizationComponent"));
 
 	static ConstructorHelpers::FClassFinder<UjinzzaEmoteWheelWidget> EmoteWheelWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_EmoteWheel"));
 	if (EmoteWheelWidgetBPClass.Succeeded())

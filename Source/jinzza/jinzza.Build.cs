@@ -25,7 +25,11 @@ public class jinzza : ModuleRules
 			"SlateCore",
 			"OnlineSubsystem",
 			"OnlineSubsystemUtils",
-			"AudioCapture"
+			"AudioCapture",
+			// USynthComponent::Start/Stop/CreateAudioComponent/GetAudioComponent (used by
+			// UjinzzaVoiceTestWidget) are AUDIOMIXER_API - AudioCapture only re-exposes the
+			// headers transitively, jinzza still needs AudioMixer directly to link against them.
+			"AudioMixer"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {

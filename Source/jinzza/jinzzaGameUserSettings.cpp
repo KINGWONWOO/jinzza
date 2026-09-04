@@ -51,6 +51,11 @@ void UjinzzaGameUserSettings::SetToDefaults()
 	MouseSensitivity = 1.f;
 	bInvertYAxis = false;
 	KeyRebinds.Empty();
+	HeadStyle = EJinzzaCustomizationStyle::StyleA;
+	HairColor = EJinzzaHairColor::Black;
+	TopStyle = EJinzzaCustomizationStyle::StyleA;
+	EyebrowsStyle = EJinzzaCustomizationStyle::StyleA;
+	EyesStyle = EJinzzaCustomizationStyle::StyleA;
 }
 
 void UjinzzaGameUserSettings::ApplySettings(bool bCheckForCommandLineOverrides)
@@ -84,6 +89,21 @@ void UjinzzaGameUserSettings::SetMicInputMode(EJinzzaMicInputMode NewValue) { Mi
 
 FString UjinzzaGameUserSettings::GetMicDeviceId() const { return MicDeviceId; }
 void UjinzzaGameUserSettings::SetMicDeviceId(const FString& NewDeviceId) { MicDeviceId = NewDeviceId; }
+
+EJinzzaCustomizationStyle UjinzzaGameUserSettings::GetHeadStyle() const { return HeadStyle; }
+void UjinzzaGameUserSettings::SetHeadStyle(EJinzzaCustomizationStyle NewValue) { HeadStyle = NewValue; }
+
+EJinzzaHairColor UjinzzaGameUserSettings::GetHairColor() const { return HairColor; }
+void UjinzzaGameUserSettings::SetHairColor(EJinzzaHairColor NewValue) { HairColor = NewValue; }
+
+EJinzzaCustomizationStyle UjinzzaGameUserSettings::GetTopStyle() const { return TopStyle; }
+void UjinzzaGameUserSettings::SetTopStyle(EJinzzaCustomizationStyle NewValue) { TopStyle = NewValue; }
+
+EJinzzaCustomizationStyle UjinzzaGameUserSettings::GetEyebrowsStyle() const { return EyebrowsStyle; }
+void UjinzzaGameUserSettings::SetEyebrowsStyle(EJinzzaCustomizationStyle NewValue) { EyebrowsStyle = NewValue; }
+
+EJinzzaCustomizationStyle UjinzzaGameUserSettings::GetEyesStyle() const { return EyesStyle; }
+void UjinzzaGameUserSettings::SetEyesStyle(EJinzzaCustomizationStyle NewValue) { EyesStyle = NewValue; }
 
 bool UjinzzaGameUserSettings::GetSubtitlesEnabled() const { return bSubtitlesEnabled; }
 void UjinzzaGameUserSettings::SetSubtitlesEnabled(bool bNewValue) { bSubtitlesEnabled = bNewValue; }

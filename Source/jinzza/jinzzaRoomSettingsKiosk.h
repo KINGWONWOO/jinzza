@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Actor.h"
+#include "jinzzaInteractableKiosk.h"
 #include "jinzzaRoomSettingsKiosk.generated.h"
 
 class UStaticMeshComponent;
@@ -23,25 +23,21 @@ class UjinzzaRoomSettingsWidget;
  * touching the pawn's collision presets.
  */
 UCLASS()
-class JINZZA_API AjinzzaRoomSettingsKiosk : public AActor
+class JINZZA_API AjinzzaRoomSettingsKiosk : public AjinzzaInteractableKiosk
 {
 	GENERATED_BODY()
 
 public:
 	AjinzzaRoomSettingsKiosk();
 
-	/** How close a pawn needs to be (in cm) for AjinzzaLobbyPlayerController to consider this kiosk "nearby". */
-	UPROPERTY(EditAnywhere, Category = "Interaction")
-	float InteractionRadius = 220.f;
-
 	/** Widget class to show. Defaults to UjinzzaRoomSettingsWidget if left unset (WBP_RoomSettings if it exists, else the raw C++ class). */
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	TSubclassOf<UjinzzaRoomSettingsWidget> RoomSettingsWidgetClass;
 
-	FText GetInteractionPrompt() const { return FText::FromString(TEXT("Press E - Room Settings")); }
+	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Press E - Room Settings")); }
 
 	/** Opens the room settings panel locally for Interactor (a no-op for anything but the interactor's own client). */
-	void Interact(APlayerController* Interactor);
+	virtual void Interact(APlayerController* Interactor) override;
 
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Interaction")

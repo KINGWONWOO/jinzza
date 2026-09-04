@@ -14,6 +14,7 @@ class UCameraComponent;
 class UInputAction;
 class UAnimMontage;
 class UjinzzaDisguiseComponent;
+class UjinzzaCharacterCustomizationComponent;
 class UjinzzaEmoteWheelWidget;
 class UjinzzaPropUsageWidget;
 class AjinzzaInteractableProp;
@@ -40,6 +41,10 @@ class AjinzzaCharacter : public ACharacter
 	/** Applies this player's round disguise (face material) to the third-person mesh other players see. No-op outside Lvl_Game (AjinzzaPartyPlayerState won't be the active PlayerState class there). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UjinzzaDisguiseComponent> DisguiseComponent;
+
+	/** Applies the local player's saved appearance (head/hair/top/eyebrows/eyes) - see UjinzzaCharacterCustomizationComponent. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UjinzzaCharacterCustomizationComponent> CustomizationComponent;
 
 protected:
 
