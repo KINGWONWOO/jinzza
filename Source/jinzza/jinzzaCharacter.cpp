@@ -17,6 +17,7 @@
 #include "jinzzaPropUsageWidget.h"
 #include "jinzza.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Net/UnrealNetwork.h"
 
 AjinzzaCharacter::AjinzzaCharacter()
 {
@@ -174,6 +175,11 @@ void AjinzzaCharacter::DoAim(float Yaw, float Pitch)
 
 void AjinzzaCharacter::DoMove(float Right, float Forward)
 {
+	if (bStunned)
+	{
+		return;
+	}
+
 	if (GetController())
 	{
 		// pass the move inputs
@@ -184,6 +190,11 @@ void AjinzzaCharacter::DoMove(float Right, float Forward)
 
 void AjinzzaCharacter::DoJumpStart()
 {
+	if (bStunned)
+	{
+		return;
+	}
+
 	// pass Jump to the character
 	Jump();
 }
@@ -316,6 +327,46 @@ void AjinzzaCharacter::ClearHeldPropIfMatches(const AjinzzaInteractableProp* Pro
 	if (HeldProp == Prop)
 	{
 		HeldProp = nullptr;
+	}
+}
+
+void AjinzzaCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AjinzzaCharacter, bStunned);
+}
+
+void AjinzzaCharacter::Stun(float Duration)
+{
+	if (!HasAuthority() || Duration <= 0.f)
+	{
+		return;
+	}
+
+	bStunned = true;
+	OnRep_Stunned(); // server doesn't get its own RepNotify - apply locally too, matching AjinzzaInteractableProp::OnRep_HoldingPawn's pattern
+
+	GetWorldTimerManager().SetTimer(StunTimerHandle, this, &AjinzzaCharacter::ClearStun, Duration, false);
+}
+
+void AjinzzaCharacter::ClearStun()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	bStunned = false;
+	OnRep_Stunned();
+}
+
+void AjinzzaCharacter::OnRep_Stunned()
+{
+	if (bStunned)
+	{
+		// Kill existing momentum so "immobilized" reads immediately rather than sliding to a stop.
+		GetCharacterMovement()->StopMovementImmediately();
 	}
 }
 

@@ -21,6 +21,12 @@ Zones (in order, spaced ~460 units apart along +X):
   6. Steal & Throw   - A spare Boombox to test throwing distance solo, and a reminder that
                        stealing (pressing F on a prop someone else is already holding) needs
                        a second player/client to actually test.
+  7. Stun Gun        - F to pick up, Left Click zaps whoever's in front (a real, working
+                       immobilize - AjinzzaCharacter::Stun blocks their movement/jump input
+                       for ~3s), Right Click to throw. The "victim's voice sounds mechanical"
+                       half of this feature is NOT implemented - see BP_StunGun/
+                       AjinzzaStunGunProp's class comment: it needs the proximity voice
+                       system (Vivox/EOS, Week 6), which doesn't exist yet.
 
 Also present everywhere in this level (not zone-specific):
   - Interaction prompts: look at any prop and a small on-screen prompt appears above it

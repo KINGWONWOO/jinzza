@@ -203,6 +203,8 @@ protected:
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
 	/** Server-only. Attaches Prop (Handheld) or activates it immediately (Placed). */
 	UFUNCTION(Server, Reliable)
 	void Server_InteractWithProp(AjinzzaInteractableProp* Prop);
@@ -244,6 +246,31 @@ public:
 
 	/** Server-only. Clears HeldProp if it currently points at Prop - called by AjinzzaInteractableProp::AttachToHolder when this character's held prop is snatched away by someone else pressing F on it. */
 	void ClearHeldPropIfMatches(const AjinzzaInteractableProp* Prop);
+
+	/** True while immobilized (e.g. hit by AjinzzaStunGunProp) - movement/jump input is ignored until the stun timer clears it. Replicated so it reaches the owning client's own input handlers too. */
+	UFUNCTION(BlueprintPure, Category = "Prop")
+	bool IsStunned() const { return bStunned; }
+
+	/** Server-only. Immobilizes this character for Duration seconds (movement/jump input ignored - see DoMove/DoJumpStart). Called by props like AjinzzaStunGunProp.
+	 *
+	 * NOT YET IMPLEMENTED (deferred - see AjinzzaStunGunProp's class comment): making the
+	 * stunned character's voice sound mechanical. That needs the proximity voice system
+	 * (Vivox/EOS, design doc section 11, Week 6), which doesn't exist yet - same gap
+	 * EJinzzaVoiceFilter::Robot already has everywhere else in the project. */
+	void Stun(float Duration);
+
+private:
+	UFUNCTION()
+	void OnRep_Stunned();
+
+	UFUNCTION()
+	void ClearStun();
+
+	/** Server-only. */
+	UPROPERTY(ReplicatedUsing = OnRep_Stunned)
+	bool bStunned = false;
+
+	FTimerHandle StunTimerHandle;
 
 };
 
