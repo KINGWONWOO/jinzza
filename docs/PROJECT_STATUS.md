@@ -194,7 +194,13 @@ Prior sessions (see `todo.txt`, rounds before 2026-09-01's third) had **no way t
 ## 8. Things only the user can do
 
 - [ ] Register a Steamworks partner account and create a real App ID for this game (Steamworks partner site) — replace the placeholder `SteamDevAppId=480` in `Config/DefaultEngine.ini` once issued.
-- [ ] Obtain and install the Vivox plugin (voice stack decision: **Vivox**, confirmed 2026-09-01). It is **not** bundled with this UE 5.8 install (checked `Engine/Plugins/Online` directly — absent). Get it directly from Vivox, or fall back to Epic Online Services' built-in Vivox-backed EOS Voice Chat (needs an EOS Product/Client on the Epic Dev Portal instead). This unblocks `UVoiceDisguiseComponent`/`UProximityVoiceComponent` (Week 6).
+- [ ] Set up an Epic Games Dev Portal org → Product → Client and drop the EOS credentials (ProductId/SandboxId/DeploymentId/ClientId/ClientSecret) into `DefaultEngine.ini`'s EOS config section. This unblocks `UVoiceDisguiseComponent`/`UProximityVoiceComponent` (Week 6) — see the update below, this **replaces** the earlier "obtain the Vivox plugin" task, not just a fallback for it.
+
+**Update (2026-09-04)**: the voice-stack plan changed from "get the standalone Vivox plugin" to "use EOS Voice Chat" — confirmed by reading the engine source directly, not assumed:
+- `OnlineSubsystemEOS` and `EOSVoiceChat` are **already bundled and prebuilt** in this UE 5.8 install (`Engine/Plugins/Online/VoiceChat/EOSVoiceChat/`) — no separate download, unlike standalone Vivox (which genuinely is absent, per the original 2026-09-01 check below). `EOSVoiceChat` is itself Vivox-backed under the hood (Epic licenses Vivox's tech and exposes it via EOS's own SDK/auth), so this doesn't trade away Vivox's tech, just its separate-account/SDK-download friction.
+- The engine-generic `IVoiceChatUser` interface (`Engine/Plugins/Online/VoiceChat/VoiceChat/Source/Public/VoiceChat.h`) it implements covers everything Week 6 needs: `JoinChannel(..., EVoiceChatChannelType::Positional, ..., FVoiceChatChannel3dProperties{AttenuationModel, MinDistance, MaxDistance, Rolloff})` + `Set3DPosition(ChannelName, Position)` for the design doc's near-field proximity (no hand-rolled distance/attenuation logic needed), and per-channel `JoinChannel`/`LeaveChannel` + `SetAudioInputDeviceMuted`/`SetPlayerMuted` cover the interview zone's isolated 2-person channel and the ghost-state forced mute.
+- **The design doc's "핵심 기술 리스크" (core technical risk) — real-time voice modulation — is more de-risked than previously assumed.** `IVoiceChatUser` exposes real, *mutable*, per-sample PCM hooks: `RegisterOnVoiceChatAfterCaptureAudioReadDelegate` gives a mutable `TArrayView<int16>` of your own captured mic audio *before* it's encoded/sent (apply pitch-shift/robot DSP here so everyone else genuinely hears it modulated), and `RegisterOnVoiceChatBeforeRecvUnmixedAudioRenderedDelegate` gives the same, per-incoming-speaker, before playback. This means `UVoiceDisguiseComponent`'s pitch-shift and `UProximityVoiceComponent`'s Vivox/EOS wrapper (the design doc treats these as two separate pipelines/classes, §11) can actually be **one** real pipeline: hook the after-capture delegate and run DSP over the raw samples in place — no longer purely speculative.
+- Still a real, non-zero setup cost (the EOS Dev Portal Product/Client above) — this isn't "no voice backend work needed," just meaningfully less than the standalone-Vivox path, and now backed by verified API surface rather than a hopeful fallback note.
 
 ---
 
@@ -207,7 +213,7 @@ Prior sessions (see `todo.txt`, rounds before 2026-09-01's third) had **no way t
 | 3 | Lobby skeleton | Functionally covered by `UjinzzaGameInstance` + `AjinzzaLobbyGameState` + `AjinzzaRoomSettingsKiosk`, under different class names than the doc's |
 | 4 | Round state machine | **Done** (§3.5) |
 | 5 | Roles & disguise | **Done** (§3.6), except 2-judge mode and lobby-customization-snapshot cloning (deliberately deferred, §3.6/§5) |
-| 6 | Voice system | Blocked on Vivox plugin acquisition (§8) |
+| 6 | Voice system | Blocked, but de-risked (2026-09-04) — plan changed from acquiring the standalone Vivox plugin to EOS Voice Chat, already bundled with confirmed API support for proximity channels and real per-sample voice modulation; now blocked only on EOS Product/Client setup (§8) |
 | 7 | Question time & voting | Not started — `UQuestionTimeSubsystem`, `AVoteManager`, `WBP_VoteUI` |
 | 8 | 1:1 interview & ghost state | Not started |
 | 9 | Map blockout | Not started — 6 zones (Lobby/Self-Intro/Question/Free-Time/Interview/Evaluation) |
