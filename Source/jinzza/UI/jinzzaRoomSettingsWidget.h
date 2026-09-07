@@ -21,10 +21,11 @@ class UButton;
  * IsLocalController() host-check idiom already used by UjinzzaLobbyWidget's Start Match
  * button). Non-host players see the same values read-only.
  *
- * UMG-authored: every property below must exist in this class's Widget Blueprint (e.g.
- * WBP_RoomSettings), named exactly as below, for BindWidget to find it. Row labels are
- * purely decorative and don't need to be bound - just placed next to each control in the
- * Designer.
+ * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
+ * BuildWidgetTree() instead of relying on a Designer-authored WBP_RoomSettings layout, so PIE
+ * isn't blocked while the visual design pass hasn't happened yet. When that pass happens,
+ * delete BuildWidgetTree(), restore `meta = (BindWidget)` on every property below, and lay them
+ * out for real in WBP_RoomSettings's Designer per the guide.
  */
 UCLASS()
 class JINZZA_API UjinzzaRoomSettingsWidget : public UUserWidget
@@ -42,32 +43,34 @@ protected:
 	void OnCloseClicked();
 
 private:
+	void BuildWidgetTree();
+
 	bool bEditable = false;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UTextBlock> HeaderNote;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UEditableTextBox> RoomNameBox;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<USpinBox> MaxPlayersSpinBox;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<USpinBox> JudgeCountSpinBox;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<USpinBox> VoteCountSpinBox;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UComboBoxString> PhaseSpeedCombo;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UComboBoxString> RoleAssignCombo;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UButton> ApplyButton;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UButton> CloseButton;
 };

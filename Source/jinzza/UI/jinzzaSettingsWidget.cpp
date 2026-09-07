@@ -2,6 +2,7 @@
 
 #include "jinzzaSettingsWidget.h"
 #include "jinzzaGameUserSettings.h"
+#include "jinzzaUIStyle.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/ComboBoxString.h"
@@ -10,6 +11,16 @@
 #include "Components/CheckBox.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/Widget.h"
+#include "Components/Border.h"
+#include "Components/Overlay.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/SizeBox.h"
+#include "Components/ScrollBox.h"
+#include "Blueprint/WidgetTree.h"
+#include "Brushes/SlateColorBrush.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "InputCoreTypes.h"
 #include "AudioCaptureBlueprintLibrary.h"
@@ -28,11 +39,232 @@ namespace
 	{
 		return FString::Printf(TEXT("%d x %d"), Res.X, Res.Y);
 	}
+
+	struct FTabRowWidgets
+	{
+		UButton* Button = nullptr;
+		UWidget* Accent = nullptr;
+		UWidget* Row = nullptr;
+	};
+
+	/** Thin sidebar row: a 4px accent bar (toggled by SetActiveTab) + a fill-width tab button. */
+	FTabRowWidgets MakeTabRow(UWidgetTree* Tree, FName Name, const FText& Label)
+	{
+		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), *(Name.ToString() + TEXT("Row")));
+
+		USizeBox* AccentBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(Name.ToString() + TEXT("AccentBox")));
+		AccentBox->SetWidthOverride(4.f);
+		UBorder* Accent = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), *(Name.ToString() + TEXT("Accent")));
+		Accent->SetBrush(FSlateColorBrush(JinzzaUI::Color_Accent));
+		AccentBox->AddChild(Accent);
+
+		if (UHorizontalBoxSlot* AccentSlot = Row->AddChildToHorizontalBox(AccentBox))
+		{
+			AccentSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		}
+
+		UButton* Button = JinzzaUI::MakeSecondaryButton(Tree, *(Name.ToString() + TEXT("Button")), Label, 16.f);
+		if (UHorizontalBoxSlot* ButtonSlot = Row->AddChildToHorizontalBox(Button))
+		{
+			ButtonSlot->SetSize(ESlateSizeRule::Fill);
+		}
+
+		FTabRowWidgets Result;
+		Result.Button = Button;
+		Result.Accent = Accent;
+		Result.Row = Row;
+		return Result;
+	}
+
+	/** Side-by-side rebind button + current-key label, wrapped so it can sit as one control in a labeled row. */
+	UWidget* MakeRebindControl(UWidgetTree* Tree, UButton* Button, UTextBlock* Label)
+	{
+		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), *(Button->GetFName().ToString() + TEXT("_Wrap")));
+		if (UHorizontalBoxSlot* ButtonSlot = Row->AddChildToHorizontalBox(Button))
+		{
+			ButtonSlot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+			ButtonSlot->SetVerticalAlignment(VAlign_Center);
+		}
+		if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(Label))
+		{
+			LabelSlot->SetVerticalAlignment(VAlign_Center);
+		}
+		return Row;
+	}
+}
+
+void UjinzzaSettingsWidget::BuildWidgetTree()
+{
+	if (!WidgetTree || WidgetTree->RootWidget)
+	{
+		return;
+	}
+
+	UBorder* Background = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Background"));
+	Background->SetBrush(FSlateColorBrush(JinzzaUI::Color_Background));
+	Background->SetHorizontalAlignment(HAlign_Fill);
+	Background->SetVerticalAlignment(VAlign_Fill);
+	WidgetTree->RootWidget = Background;
+
+	UHorizontalBox* MainRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("MainRow"));
+	Background->SetContent(MainRow);
+
+	// --- Sidebar ---
+	USizeBox* SidebarBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("SidebarBox"));
+	SidebarBox->SetWidthOverride(160.f);
+	MainRow->AddChildToHorizontalBox(SidebarBox);
+
+	UVerticalBox* Sidebar = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Sidebar"));
+	SidebarBox->AddChild(Sidebar);
+
+	auto AddTabRow = [&](FName Name, const FText& Label, TObjectPtr<UButton>& OutButton, TObjectPtr<UWidget>& OutAccent)
+	{
+		const FTabRowWidgets Widgets = MakeTabRow(WidgetTree, Name, Label);
+		OutButton = Widgets.Button;
+		OutAccent = Widgets.Accent;
+		if (UVerticalBoxSlot* Slot = Sidebar->AddChildToVerticalBox(Widgets.Row))
+		{
+			Slot->SetPadding(FMargin(0.f, 4.f));
+		}
+	};
+
+	AddTabRow(TEXT("Graphics"), FText::FromString(TEXT("Graphics")), GraphicsTabButton, GraphicsTabAccent);
+	AddTabRow(TEXT("Audio"), FText::FromString(TEXT("Audio")), AudioTabButton, AudioTabAccent);
+	AddTabRow(TEXT("Controls"), FText::FromString(TEXT("Controls")), ControlsTabButton, ControlsTabAccent);
+	AddTabRow(TEXT("Gameplay"), FText::FromString(TEXT("Gameplay")), GameplayTabButton, GameplayTabAccent);
+
+	// --- Content column ---
+	UVerticalBox* ContentColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ContentColumn"));
+	if (UHorizontalBoxSlot* ContentSlot = MainRow->AddChildToHorizontalBox(ContentColumn))
+	{
+		ContentSlot->SetSize(ESlateSizeRule::Fill);
+		ContentSlot->SetPadding(FMargin(20.f));
+	}
+
+	TabSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass(), TEXT("TabSwitcher"));
+	if (UVerticalBoxSlot* SwitcherSlot = ContentColumn->AddChildToVerticalBox(TabSwitcher))
+	{
+		SwitcherSlot->SetSize(ESlateSizeRule::Fill);
+	}
+
+	auto MakePage = [&](FName Name) -> UVerticalBox*
+	{
+		UScrollBox* Scroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), Name);
+		UVerticalBox* Content = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), *(Name.ToString() + TEXT("_Content")));
+		Scroll->AddChild(Content);
+		TabSwitcher->AddChild(Scroll);
+		return Content;
+	};
+
+	auto AddRow = [&](UVerticalBox* Page, FName BaseName, const FText& Label, UWidget* Control)
+	{
+		if (UVerticalBoxSlot* Slot = Page->AddChildToVerticalBox(JinzzaUI::MakeLabeledRow(WidgetTree, *(BaseName.ToString() + TEXT("_Row")), Label, Control)))
+		{
+			Slot->SetPadding(FMargin(0.f, 0.f, 0.f, 10.f));
+		}
+	};
+
+	// --- Graphics page (TabSwitcher index 0) ---
+	UVerticalBox* GraphicsPage = MakePage(TEXT("GraphicsPage"));
+	WindowModeCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("WindowModeCombo"));
+	AddRow(GraphicsPage, TEXT("WindowMode"), FText::FromString(TEXT("Window Mode")), WindowModeCombo);
+	ResolutionCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("ResolutionCombo"));
+	AddRow(GraphicsPage, TEXT("Resolution"), FText::FromString(TEXT("Resolution")), ResolutionCombo);
+	VSyncCheckBox = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("VSyncCheckBox"));
+	AddRow(GraphicsPage, TEXT("VSync"), FText::FromString(TEXT("VSync")), VSyncCheckBox);
+	FrameRateLimitSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("FrameRateLimitSpinBox"));
+	AddRow(GraphicsPage, TEXT("FrameRateLimit"), FText::FromString(TEXT("Frame Rate Limit")), FrameRateLimitSpinBox);
+	OverallQualityCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("OverallQualityCombo"));
+	AddRow(GraphicsPage, TEXT("OverallQuality"), FText::FromString(TEXT("Overall Quality")), OverallQualityCombo);
+	ViewDistanceSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("ViewDistanceSpinBox"));
+	AddRow(GraphicsPage, TEXT("ViewDistance"), FText::FromString(TEXT("View Distance")), ViewDistanceSpinBox);
+	ShadowSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("ShadowSpinBox"));
+	AddRow(GraphicsPage, TEXT("Shadow"), FText::FromString(TEXT("Shadows")), ShadowSpinBox);
+	GlobalIlluminationSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("GlobalIlluminationSpinBox"));
+	AddRow(GraphicsPage, TEXT("GlobalIllumination"), FText::FromString(TEXT("Global Illumination")), GlobalIlluminationSpinBox);
+	ReflectionSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("ReflectionSpinBox"));
+	AddRow(GraphicsPage, TEXT("Reflection"), FText::FromString(TEXT("Reflections")), ReflectionSpinBox);
+	AntiAliasingSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("AntiAliasingSpinBox"));
+	AddRow(GraphicsPage, TEXT("AntiAliasing"), FText::FromString(TEXT("Anti-Aliasing")), AntiAliasingSpinBox);
+	TextureSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("TextureSpinBox"));
+	AddRow(GraphicsPage, TEXT("Texture"), FText::FromString(TEXT("Textures")), TextureSpinBox);
+	EffectsSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("EffectsSpinBox"));
+	AddRow(GraphicsPage, TEXT("Effects"), FText::FromString(TEXT("Effects")), EffectsSpinBox);
+	FoliageSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("FoliageSpinBox"));
+	AddRow(GraphicsPage, TEXT("Foliage"), FText::FromString(TEXT("Foliage")), FoliageSpinBox);
+	ShadingSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("ShadingSpinBox"));
+	AddRow(GraphicsPage, TEXT("Shading"), FText::FromString(TEXT("Shading")), ShadingSpinBox);
+
+	// --- Audio page (index 1) ---
+	UVerticalBox* AudioPage = MakePage(TEXT("AudioPage"));
+	MasterVolumeSlider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), TEXT("MasterVolumeSlider"));
+	AddRow(AudioPage, TEXT("MasterVolume"), FText::FromString(TEXT("Master Volume")), MasterVolumeSlider);
+	MusicVolumeSlider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), TEXT("MusicVolumeSlider"));
+	AddRow(AudioPage, TEXT("MusicVolume"), FText::FromString(TEXT("Music Volume")), MusicVolumeSlider);
+	SFXVolumeSlider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), TEXT("SFXVolumeSlider"));
+	AddRow(AudioPage, TEXT("SFXVolume"), FText::FromString(TEXT("SFX Volume")), SFXVolumeSlider);
+	VoiceVolumeSlider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), TEXT("VoiceVolumeSlider"));
+	AddRow(AudioPage, TEXT("VoiceVolume"), FText::FromString(TEXT("Voice Volume")), VoiceVolumeSlider);
+	MicInputModeCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("MicInputModeCombo"));
+	AddRow(AudioPage, TEXT("MicInputMode"), FText::FromString(TEXT("Mic Input Mode")), MicInputModeCombo);
+	MicDeviceCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("MicDeviceCombo"));
+	AddRow(AudioPage, TEXT("MicDevice"), FText::FromString(TEXT("Mic Device")), MicDeviceCombo);
+
+	// --- Controls page (index 2) ---
+	UVerticalBox* ControlsPage = MakePage(TEXT("ControlsPage"));
+	MouseSensitivitySlider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), TEXT("MouseSensitivitySlider"));
+	AddRow(ControlsPage, TEXT("MouseSensitivity"), FText::FromString(TEXT("Mouse Sensitivity")), MouseSensitivitySlider);
+	InvertYCheckBox = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("InvertYCheckBox"));
+	AddRow(ControlsPage, TEXT("InvertY"), FText::FromString(TEXT("Invert Y")), InvertYCheckBox);
+
+	JumpRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("JumpRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
+	JumpRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("JumpRebindLabel"), FText::FromString(TEXT("Default")));
+	AddRow(ControlsPage, TEXT("Jump"), FText::FromString(TEXT("Jump")), MakeRebindControl(WidgetTree, JumpRebindButton, JumpRebindLabel));
+
+	ShootRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("ShootRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
+	ShootRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("ShootRebindLabel"), FText::FromString(TEXT("Default")));
+	AddRow(ControlsPage, TEXT("Shoot"), FText::FromString(TEXT("Shoot")), MakeRebindControl(WidgetTree, ShootRebindButton, ShootRebindLabel));
+
+	SwapWeaponRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("SwapWeaponRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
+	SwapWeaponRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("SwapWeaponRebindLabel"), FText::FromString(TEXT("Default")));
+	AddRow(ControlsPage, TEXT("SwapWeapon"), FText::FromString(TEXT("Swap Weapon")), MakeRebindControl(WidgetTree, SwapWeaponRebindButton, SwapWeaponRebindLabel));
+
+	SprintRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("SprintRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
+	SprintRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("SprintRebindLabel"), FText::FromString(TEXT("Default")));
+	AddRow(ControlsPage, TEXT("Sprint"), FText::FromString(TEXT("Sprint")), MakeRebindControl(WidgetTree, SprintRebindButton, SprintRebindLabel));
+
+	// --- Gameplay page (index 3) ---
+	UVerticalBox* GameplayPage = MakePage(TEXT("GameplayPage"));
+	SubtitlesCheckBox = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("SubtitlesCheckBox"));
+	AddRow(GameplayPage, TEXT("Subtitles"), FText::FromString(TEXT("Subtitles")), SubtitlesCheckBox);
+	ColorblindModeCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("ColorblindModeCombo"));
+	AddRow(GameplayPage, TEXT("ColorblindMode"), FText::FromString(TEXT("Colorblind Mode")), ColorblindModeCombo);
+	ColorblindStrengthSlider = WidgetTree->ConstructWidget<USlider>(USlider::StaticClass(), TEXT("ColorblindStrengthSlider"));
+	AddRow(GameplayPage, TEXT("ColorblindStrength"), FText::FromString(TEXT("Colorblind Strength")), ColorblindStrengthSlider);
+
+	// --- Bottom-right Apply/Back row ---
+	UHorizontalBox* ButtonRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("ButtonRow"));
+	if (UVerticalBoxSlot* ButtonRowSlot = ContentColumn->AddChildToVerticalBox(ButtonRow))
+	{
+		ButtonRowSlot->SetHorizontalAlignment(HAlign_Right);
+		ButtonRowSlot->SetPadding(FMargin(0.f, 12.f, 0.f, 0.f));
+	}
+
+	BackButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("BackButton"), FText::FromString(TEXT("Back")));
+	if (UHorizontalBoxSlot* BackSlot = ButtonRow->AddChildToHorizontalBox(BackButton))
+	{
+		BackSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	}
+
+	ApplyButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("ApplyButton"), FText::FromString(TEXT("Apply")));
+	ButtonRow->AddChildToHorizontalBox(ApplyButton);
 }
 
 void UjinzzaSettingsWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
+
+	BuildWidgetTree();
 
 	if (GraphicsTabButton) GraphicsTabButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabGraphicsClicked);
 	if (AudioTabButton) AudioTabButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnTabAudioClicked);

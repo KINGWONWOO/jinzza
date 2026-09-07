@@ -6,6 +6,8 @@
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
 #include "Components/SizeBox.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateBrush.h"
@@ -288,5 +290,31 @@ namespace JinzzaUI
 		Body->SetFont(BodyFont(15));
 		Body->SetColorAndOpacity(FSlateColor(bMuted ? Color_TextMuted : Color_TextPrimary));
 		return Body;
+	}
+
+	UWidget* MakeLabeledRow(UWidgetTree* Tree, FName Name, const FText& LabelText, UWidget* Control, float LabelWidth)
+	{
+		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), Name);
+
+		USizeBox* LabelBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(Name.ToString() + TEXT("_LabelBox")));
+		LabelBox->SetWidthOverride(LabelWidth);
+		LabelBox->AddChild(MakeBodyText(Tree, *(Name.ToString() + TEXT("_Label")), LabelText, true));
+
+		if (UHorizontalBoxSlot* LabelSlot = Row->AddChildToHorizontalBox(LabelBox))
+		{
+			LabelSlot->SetVerticalAlignment(VAlign_Center);
+			LabelSlot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+		}
+
+		if (Control)
+		{
+			if (UHorizontalBoxSlot* ControlSlot = Row->AddChildToHorizontalBox(Control))
+			{
+				ControlSlot->SetVerticalAlignment(VAlign_Center);
+				ControlSlot->SetSize(ESlateSizeRule::Fill);
+			}
+		}
+
+		return Row;
 	}
 }

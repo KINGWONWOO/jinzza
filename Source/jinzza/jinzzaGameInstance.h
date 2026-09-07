@@ -23,6 +23,26 @@ enum class EJinzzaSessionStatus : uint8
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnJinzzaSessionStatusChanged, EJinzzaSessionStatus /*Status*/, const FString& /*Message*/);
 
+/** One row of the Steam friends list shown by UjinzzaFriendInviteWidget. */
+USTRUCT(BlueprintType)
+struct FJinzzaFriendInfo
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly)
+	FString DisplayName;
+
+	/** Opaque string form of the friend's FUniqueNetId - round-tripped back into
+	 * UjinzzaGameInstance::InviteFriendToSession, never parsed/displayed directly. */
+	UPROPERTY(BlueprintReadOnly)
+	FString NetIdString;
+
+	UPROPERTY(BlueprintReadOnly)
+	bool bIsOnline = false;
+};
+
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnJinzzaFriendsListReceived, const TArray<FJinzzaFriendInfo>& /*Friends*/);
+
 /**
  * GameInstance that owns the Steam online session lifecycle: hosting with default match
  * settings, accepting Steam overlay invites, and destroying sessions. Bound to by the main
@@ -58,6 +78,17 @@ public:
 	/** Opens the native Steam overlay invite dialog for the current session. */
 	void InviteFriends();
 
+	/** Async-fetches the local player's Steam friends list; OnFriendsListReceived fires (with an
+	 * empty array on failure/no online subsystem) once the platform responds. */
+	void RequestFriendsList();
+
+	/** Sends a direct session invite to one friend (NetIdString from a previously-received
+	 * FJinzzaFriendInfo) for the current session, without going through the Steam overlay. */
+	void InviteFriendToSession(const FString& NetIdString);
+
+	/** Fired once per RequestFriendsList() call, with the resulting friends list (possibly empty). */
+	FOnJinzzaFriendsListReceived OnFriendsListReceived;
+
 	/**
 	 * Publishes StatusText as the local player's Steam friends-list rich presence (shows up as
 	 * e.g. "In Lobby" on a friend's friends list). No-ops cleanly if there's no presence-capable
@@ -91,6 +122,8 @@ private:
 	void OnDestroySessionComplete(FName InSessionName, bool bWasSuccessful);
 	void OnUpdateSessionComplete(FName InSessionName, bool bWasSuccessful);
 	void OnSessionUserInviteAccepted(const bool bWasSuccessful, const int32 ControllerId, FUniqueNetIdPtr UserId, const FOnlineSessionSearchResult& InviteResult);
+
+	void OnReadFriendsListComplete(int32 LocalUserNum, bool bWasSuccessful, const FString& ListName, const FString& ErrorStr);
 
 	void TravelToConnectedSession();
 

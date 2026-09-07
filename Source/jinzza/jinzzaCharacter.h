@@ -64,6 +64,14 @@ protected:
 	UPROPERTY(EditAnywhere, Category ="Input")
 	class UInputAction* MouseLookAction;
 
+	/** Sprint Input Action (held) */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* SprintInputAction;
+
+	/** Multiplier applied to the character's walk speed (captured at BeginPlay) while sprinting. */
+	UPROPERTY(EditAnywhere, Category ="Input", meta = (ClampMin = "1.0"))
+	float SprintSpeedMultiplier = 1.6f;
+
 	/** Pick up / activate a placed prop Input Action (F) */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* InteractAction;
@@ -174,6 +182,14 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
 
+	/** Handles sprint start inputs from either controls or UI interfaces */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoSprintStart();
+
+	/** Handles sprint end inputs from either controls or UI interfaces */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoSprintEnd();
+
 	/** Traces from the camera for a prop and requests the server pick it up (Handheld) or activate it in place (Placed) */
 	void DoInteract();
 
@@ -225,6 +241,10 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void Server_PlayEmote(EJinzzaEmoteType EmoteType);
 
+	/** Tells the server to authoritatively set bIsSprinting (and this character's MaxWalkSpeed), which then replicates to every client. Called from DoSprintStart/DoSprintEnd on non-authority machines, after they've already applied the change locally for immediate feedback. */
+	UFUNCTION(Server, Reliable)
+	void Server_SetSprinting(bool bNewSprinting);
+
 	/** Plays EmoteType's montage on this character's mesh for every client, including whoever triggered it. */
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayEmote(EJinzzaEmoteType EmoteType);
@@ -247,6 +267,19 @@ public:
 	/** Server-only. Clears HeldProp if it currently points at Prop - called by AjinzzaInteractableProp::AttachToHolder when this character's held prop is snatched away by someone else pressing F on it. */
 	void ClearHeldPropIfMatches(const AjinzzaInteractableProp* Prop);
 
+	/** Server-only. Drops HeldProp, if any - same effect as Server_DropHeldProp, but callable
+	 * directly server-side (no RPC round-trip needed) since this is also used to force a prop out
+	 * of a player's hands the instant they become a ghost (AjinzzaPartyPlayerState::ServerSetGhost),
+	 * not just in response to their own Q-press. */
+	void ServerForceDropHeldProp();
+
+	/** True once this character's AjinzzaPartyPlayerState says they've been eliminated to ghost
+	 * status (design doc section 6: mid-evaluation elimination). Movement/look/jump/sprint/emotes
+	 * stay available - only prop interaction is blocked, see DoInteract/DoUseHeldProp/etc. Always
+	 * false outside Lvl_Game or before a PlayerState exists yet. */
+	UFUNCTION(BlueprintPure, Category = "Party")
+	bool IsGhost() const;
+
 	/** True while immobilized (e.g. hit by AjinzzaStunGunProp) - movement/jump input is ignored until the stun timer clears it. Replicated so it reaches the owning client's own input handlers too. */
 	UFUNCTION(BlueprintPure, Category = "Prop")
 	bool IsStunned() const { return bStunned; }
@@ -266,11 +299,31 @@ private:
 	UFUNCTION()
 	void ClearStun();
 
+	/** Applies bNewSprinting to bIsSprinting and MaxWalkSpeed immediately (for local prediction on
+	 * whichever machine calls it - server or client), then, if this machine isn't authoritative,
+	 * asks the server to do the same via Server_SetSprinting so it becomes the replicated truth. */
+	void SetSprinting(bool bNewSprinting);
+
+	/** Applies bIsSprinting's replicated value to MaxWalkSpeed - fires on every client (including
+	 * the one that predicted it) whenever the server's copy of bIsSprinting changes. */
+	UFUNCTION()
+	void OnRep_IsSprinting();
+
 	/** Server-only. */
 	UPROPERTY(ReplicatedUsing = OnRep_Stunned)
 	bool bStunned = false;
 
 	FTimerHandle StunTimerHandle;
+
+	/** GetCharacterMovement()->MaxWalkSpeed as configured on this character (captured once in
+	 * BeginPlay), so DoSprintStart/DoSprintEnd can scale relative to it and restore it exactly,
+	 * whatever value the Blueprint has it set to. */
+	float BaseWalkSpeed = 0.f;
+
+	/** True while sprinting. Replicated so remote clients see the correct speed too, not just
+	 * whichever machine pressed the key - see SetSprinting/Server_SetSprinting. */
+	UPROPERTY(ReplicatedUsing = OnRep_IsSprinting)
+	bool bIsSprinting = false;
 
 };
 

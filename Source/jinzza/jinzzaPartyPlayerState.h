@@ -30,7 +30,13 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Party")
 	bool IsGhost() const { return bIsGhost; }
-	/** Server-only. */
+	/** Server-only. Transitioning to true (design doc section 6: mid-evaluation elimination) also
+	 * clears FaceType/VoiceFilter ("위장 해제" - disguise fully removed, not just visually ignored)
+	 * and force-drops whatever prop the owning AjinzzaCharacter was holding, since a ghost can no
+	 * longer pick up or use props (see AjinzzaCharacter::IsGhost). Movement/emotes stay available -
+	 * "탈락은 처벌이 아니라 전환" (elimination is a transition, not a punishment). Voice force-mute
+	 * (design doc section 8-2) isn't implemented here - it needs a real voice backend
+	 * (UVoiceDisguiseComponent/UProximityVoiceComponent, Week 6), which doesn't exist yet. */
 	void ServerSetGhost(bool bNewGhost);
 
 	UFUNCTION(BlueprintPure, Category = "Party")

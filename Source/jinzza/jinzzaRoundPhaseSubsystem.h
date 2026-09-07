@@ -39,6 +39,19 @@ public:
 	EJinzzaRoundPhase GetCurrentPhase() const { return CurrentPhase; }
 
 	/**
+	 * Server-only. Ends Phase immediately and advances to the next one, as if its timer had just
+	 * expired - lets a gameplay system end a phase early once its own completion condition is
+	 * satisfied (e.g. "everyone's submitted", "everyone's voted") instead of always waiting out the
+	 * full duration. No-op if Phase doesn't match CurrentPhase (a stale call from a phase that's
+	 * already moved on) or if this instance isn't authoritative. No real caller wires into this yet
+	 * (Week 7's Question/Vote systems don't exist) - same "functional once a consumer needs it,
+	 * harmless until then" pattern as UjinzzaDisguiseComponent/UjinzzaGameUserSettings elsewhere in
+	 * this project.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Round")
+	void NotifyPhaseConditionMet(EJinzzaRoundPhase Phase);
+
+	/**
 	 * Server-side hook for gameplay systems (role assignment, future vote/interview managers) to
 	 * react to phase entry. Not replicated - only ever fires where StartRound() actually runs.
 	 * Clients should read AjinzzaGameGameState::OnPhaseChanged instead.

@@ -28,6 +28,16 @@ AjinzzaGameGameMode::AjinzzaGameGameMode()
 	}
 }
 
+void AjinzzaGameGameMode::EliminateToGhost(AjinzzaPartyPlayerState* Target)
+{
+	if (!HasAuthority() || !Target || Target->IsGhost())
+	{
+		return;
+	}
+
+	Target->ServerSetGhost(true);
+}
+
 void AjinzzaGameGameMode::StartPlay()
 {
 	Super::StartPlay();

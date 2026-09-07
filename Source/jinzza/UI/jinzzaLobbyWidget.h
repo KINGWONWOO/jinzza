@@ -7,16 +7,24 @@
 #include "jinzzaLobbyWidget.generated.h"
 
 class UTextBlock;
-class UButton;
 class UAudioComponent;
 
 /**
- * Pre-match lobby UI: shows the replicated match settings, connected player count,
- * an Invite Friends button, and a host-only "Start Match" button that server-travels
- * everyone to Lvl_Game.
+ * Pre-match lobby UI: a pure display HUD showing the replicated match settings and connected
+ * player count, plus the bottom-center "Press E" interaction prompt for whichever kiosk the
+ * player is standing near.
  *
- * UMG-authored: every property below must exist in this class's Widget Blueprint (e.g.
- * WBP_Lobby), named exactly as below, for BindWidget to find it.
+ * No buttons live here anymore - Invite Friends and Start Match both moved to walk-up-to kiosks
+ * (AjinzzaFriendInviteKiosk / AjinzzaStartMatchKiosk) specifically so the lobby can default to
+ * hidden-cursor/Game-only input (WASD look/move work immediately) instead of needing an
+ * always-visible, always-clickable cursor just to reach two buttons - see
+ * AjinzzaLobbyPlayerController::BeginPlay.
+ *
+ * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
+ * BuildWidgetTree() instead of relying on a Designer-authored WBP_Lobby layout, so PIE isn't
+ * blocked while the visual design pass hasn't happened yet. When that pass happens, delete
+ * BuildWidgetTree(), restore `meta = (BindWidget)` on every property below, and lay them out
+ * for real in WBP_Lobby's Designer per the guide.
  */
 UCLASS()
 class JINZZA_API UjinzzaLobbyWidget : public UUserWidget
@@ -31,27 +39,16 @@ public:
 	/** Shows a bottom-center interaction prompt (e.g. "Press E - Room Settings"), or hides it if PromptText is empty. */
 	void SetInteractionPrompt(const FText& PromptText);
 
-protected:
-	UFUNCTION()
-	void OnStartMatchClicked();
-
-	UFUNCTION()
-	void OnInviteFriendsClicked();
-
 private:
-	UPROPERTY(meta = (BindWidget))
+	void BuildWidgetTree();
+
+	UPROPERTY()
 	TObjectPtr<UTextBlock> SettingsText;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UTextBlock> PlayerCountText;
 
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UButton> InviteButton;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UButton> StartButton;
-
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UTextBlock> InteractPromptText;
 
 	/** Looping lobby BGM, started in NativeOnInitialized and stopped in NativeDestruct. */

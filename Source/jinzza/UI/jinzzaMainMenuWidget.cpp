@@ -4,11 +4,19 @@
 #include "jinzzaSettingsWidget.h"
 #include "jinzzaCustomizationWidget.h"
 #include "jinzzaCharacterPreviewCapture.h"
+#include "jinzzaUIStyle.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/Widget.h"
 #include "Components/Image.h"
 #include "Components/WidgetSwitcher.h"
+#include "Components/Border.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
+#include "Components/SizeBox.h"
+#include "Blueprint/WidgetTree.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "GameFramework/PlayerController.h"
@@ -16,6 +24,7 @@
 #include "Sound/SoundBase.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Styling/SlateBrush.h"
+#include "Brushes/SlateColorBrush.h"
 #include "EngineUtils.h"
 
 namespace
@@ -30,9 +39,75 @@ namespace
 	constexpr float FadeInDuration = 0.35f;
 }
 
+void UjinzzaMainMenuWidget::BuildWidgetTree()
+{
+	if (!WidgetTree || WidgetTree->RootWidget)
+	{
+		return;
+	}
+
+	UBorder* Background = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Background"));
+	Background->SetBrush(FSlateColorBrush(JinzzaUI::Color_Background));
+	Background->SetHorizontalAlignment(HAlign_Fill);
+	Background->SetVerticalAlignment(VAlign_Fill);
+	WidgetTree->RootWidget = Background;
+
+	Switcher = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass(), TEXT("Switcher"));
+	Background->SetContent(Switcher);
+
+	// Page 0: the button-list page. ButtonsPageRoot is the whole page (fade target); its content
+	// is centered in a fixed-width column via a Size Box.
+	UOverlay* ButtonsPage = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("ButtonsPageRoot"));
+	ButtonsPageRoot = ButtonsPage;
+
+	USizeBox* CenterBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ButtonsCenterBox"));
+	CenterBox->SetWidthOverride(420.f);
+	if (UOverlaySlot* CenterSlot = ButtonsPage->AddChildToOverlay(CenterBox))
+	{
+		CenterSlot->SetHorizontalAlignment(HAlign_Center);
+		CenterSlot->SetVerticalAlignment(VAlign_Center);
+	}
+
+	UVerticalBox* ButtonsStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ButtonsStack"));
+	CenterBox->AddChild(ButtonsStack);
+
+	auto AddSpaced = [ButtonsStack](UWidget* Child, float TopPadding = 12.f)
+	{
+		if (UVerticalBoxSlot* Slot = ButtonsStack->AddChildToVerticalBox(Child))
+		{
+			Slot->SetHorizontalAlignment(HAlign_Fill);
+			Slot->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
+		}
+	};
+
+	AddSpaced(JinzzaUI::MakeTitleText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("JINZZA")), 48), 0.f);
+	AddSpaced(JinzzaUI::MakeDivider(WidgetTree, TEXT("TitleDivider")));
+
+	StatusText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("StatusText"), FText::GetEmpty(), true);
+	AddSpaced(StatusText, 10.f);
+
+	HostButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("HostButton"), FText::FromString(TEXT("Host Game")));
+	AddSpaced(HostButton, 24.f);
+
+	SettingsButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("SettingsButton"), FText::FromString(TEXT("Settings")));
+	AddSpaced(SettingsButton);
+
+	QuitButton = JinzzaUI::MakeWarningButton(WidgetTree, TEXT("QuitButton"), FText::FromString(TEXT("Quit")));
+	AddSpaced(QuitButton);
+
+	Switcher->AddChild(ButtonsPage);
+
+	// Page 1: Settings, built directly as a nested UjinzzaSettingsWidget (which builds its own
+	// tree the same way) rather than loading a WBP_Settings Blueprint class.
+	SettingsWidget = WidgetTree->ConstructWidget<UjinzzaSettingsWidget>(UjinzzaSettingsWidget::StaticClass(), TEXT("SettingsWidget"));
+	Switcher->AddChild(SettingsWidget);
+}
+
 void UjinzzaMainMenuWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
+
+	BuildWidgetTree();
 
 	if (HostButton)
 	{

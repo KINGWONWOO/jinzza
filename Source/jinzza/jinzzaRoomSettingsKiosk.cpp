@@ -72,13 +72,15 @@ void AjinzzaRoomSettingsKiosk::Interact(APlayerController* Interactor)
 		ActiveWidget->AddToViewport(10);
 
 		TWeakObjectPtr<AjinzzaRoomSettingsKiosk> WeakThis(this);
-		ActiveWidget->OnNativeDestruct.AddLambda([WeakThis](UUserWidget*)
+		TWeakObjectPtr<APlayerController> WeakInteractor(Interactor);
+		ActiveWidget->OnNativeDestruct.AddLambda([WeakThis, WeakInteractor](UUserWidget*)
 		{
 			if (AjinzzaRoomSettingsKiosk* Kiosk = WeakThis.Get())
 			{
 				Kiosk->ActiveWidget = nullptr;
 			}
+			AjinzzaRoomSettingsKiosk::ExitKioskUIMode(WeakInteractor.Get());
 		});
-		Interactor->bShowMouseCursor = true;
+		AjinzzaRoomSettingsKiosk::EnterKioskUIMode(Interactor, ActiveWidget);
 	}
 }

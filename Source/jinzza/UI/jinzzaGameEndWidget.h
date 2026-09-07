@@ -12,9 +12,11 @@ class UButton;
  * Minimal in-round overlay: a host-only "End Game" button that returns everyone to
  * Lvl_Lobby. Stands in for a real win-condition trigger, which isn't implemented yet.
  *
- * UMG-authored: this class only wires up logic onto widgets built in a Widget Blueprint
- * (e.g. WBP_GameEnd) that subclasses this. EndGameButton must exist in that Blueprint's
- * widget tree, named exactly as below, for BindWidget to find it.
+ * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
+ * BuildWidgetTree() instead of relying on a Designer-authored WBP_GameEnd layout, so PIE isn't
+ * blocked while the visual design pass hasn't happened yet. When that pass happens, delete
+ * BuildWidgetTree(), restore `meta = (BindWidget)` on EndGameButton, and lay it out for real in
+ * WBP_GameEnd's Designer per the guide.
  */
 UCLASS()
 class JINZZA_API UjinzzaGameEndWidget : public UUserWidget
@@ -29,6 +31,8 @@ protected:
 	void OnEndGameClicked();
 
 private:
-	UPROPERTY(meta = (BindWidget))
+	void BuildWidgetTree();
+
+	UPROPERTY()
 	TObjectPtr<UButton> EndGameButton;
 };

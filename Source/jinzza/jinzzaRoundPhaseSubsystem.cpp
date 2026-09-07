@@ -51,6 +51,26 @@ void UjinzzaRoundPhaseSubsystem::EnterPhase(EJinzzaRoundPhase NewPhase)
 	World->GetTimerManager().SetTimer(PhaseTimerHandle, this, &UjinzzaRoundPhaseSubsystem::AdvancePhase, FMath::Max(0.1f, Duration), false);
 }
 
+void UjinzzaRoundPhaseSubsystem::NotifyPhaseConditionMet(EJinzzaRoundPhase Phase)
+{
+	const UWorld* World = GetWorld();
+	if (!World || !World->GetAuthGameMode())
+	{
+		// Not the server - only the server drives phase transitions.
+		return;
+	}
+
+	if (Phase != CurrentPhase || CurrentPhase == EJinzzaRoundPhase::RoundComplete)
+	{
+		// Stale call from a phase that's already moved on, or the round's already over - ignore.
+		return;
+	}
+
+	// AdvancePhase -> EnterPhase calls SetTimer again on PhaseTimerHandle, which clears the
+	// still-pending timer for this phase before starting the next one's - no manual ClearTimer needed.
+	AdvancePhase();
+}
+
 void UjinzzaRoundPhaseSubsystem::AdvancePhase()
 {
 	EJinzzaRoundPhase NextPhase = EJinzzaRoundPhase::RoundComplete;

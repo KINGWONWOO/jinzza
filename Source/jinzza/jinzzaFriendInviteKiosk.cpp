@@ -1,15 +1,15 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
-#include "jinzzaWardrobeKiosk.h"
+#include "jinzzaFriendInviteKiosk.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
-#include "jinzzaCustomizationWidget.h"
+#include "jinzzaFriendInviteWidget.h"
 #include "jinzzaUIStyle.h"
 #include "GameFramework/PlayerController.h"
 #include "UObject/ConstructorHelpers.h"
 
-AjinzzaWardrobeKiosk::AjinzzaWardrobeKiosk()
+AjinzzaFriendInviteKiosk::AjinzzaFriendInviteKiosk()
 {
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
@@ -34,17 +34,17 @@ AjinzzaWardrobeKiosk::AjinzzaWardrobeKiosk()
 	Label->SetHorizontalAlignment(EHTA_Center);
 	Label->SetVerticalAlignment(EVRTA_TextCenter);
 	Label->SetWorldSize(28.f);
-	Label->SetText(FText::FromString(TEXT("WARDROBE")));
+	Label->SetText(FText::FromString(TEXT("INVITE FRIENDS")));
 	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
 
-	static ConstructorHelpers::FClassFinder<UjinzzaCustomizationWidget> CustomizationWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_Customization"));
-	if (CustomizationWidgetBPClass.Succeeded())
+	static ConstructorHelpers::FClassFinder<UjinzzaFriendInviteWidget> FriendInviteWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_FriendInvite"));
+	if (FriendInviteWidgetBPClass.Succeeded())
 	{
-		CustomizationWidgetClass = CustomizationWidgetBPClass.Class;
+		FriendInviteWidgetClass = FriendInviteWidgetBPClass.Class;
 	}
 }
 
-void AjinzzaWardrobeKiosk::Interact(APlayerController* Interactor)
+void AjinzzaFriendInviteKiosk::Interact(APlayerController* Interactor)
 {
 	if (!Interactor || !Interactor->IsLocalController())
 	{
@@ -56,31 +56,27 @@ void AjinzzaWardrobeKiosk::Interact(APlayerController* Interactor)
 		return;
 	}
 
-	TSubclassOf<UjinzzaCustomizationWidget> WidgetClass = CustomizationWidgetClass;
+	TSubclassOf<UjinzzaFriendInviteWidget> WidgetClass = FriendInviteWidgetClass;
 	if (!WidgetClass)
 	{
-		WidgetClass = UjinzzaCustomizationWidget::StaticClass();
+		WidgetClass = UjinzzaFriendInviteWidget::StaticClass();
 	}
 
-	ActiveWidget = CreateWidget<UjinzzaCustomizationWidget>(Interactor, WidgetClass);
+	ActiveWidget = CreateWidget<UjinzzaFriendInviteWidget>(Interactor, WidgetClass);
 	if (ActiveWidget)
 	{
 		ActiveWidget->AddToViewport(10);
 
-		TWeakObjectPtr<AjinzzaWardrobeKiosk> WeakThis(this);
+		TWeakObjectPtr<AjinzzaFriendInviteKiosk> WeakThis(this);
 		TWeakObjectPtr<APlayerController> WeakInteractor(Interactor);
-		ActiveWidget->OnBackRequested.AddLambda([WeakThis, WeakInteractor]()
+		ActiveWidget->OnNativeDestruct.AddLambda([WeakThis, WeakInteractor](UUserWidget*)
 		{
-			if (AjinzzaWardrobeKiosk* Kiosk = WeakThis.Get())
+			if (AjinzzaFriendInviteKiosk* Kiosk = WeakThis.Get())
 			{
-				if (Kiosk->ActiveWidget)
-				{
-					Kiosk->ActiveWidget->RemoveFromParent();
-					Kiosk->ActiveWidget = nullptr;
-				}
+				Kiosk->ActiveWidget = nullptr;
 			}
-			AjinzzaWardrobeKiosk::ExitKioskUIMode(WeakInteractor.Get());
+			AjinzzaFriendInviteKiosk::ExitKioskUIMode(WeakInteractor.Get());
 		});
-		AjinzzaWardrobeKiosk::EnterKioskUIMode(Interactor, ActiveWidget);
+		AjinzzaFriendInviteKiosk::EnterKioskUIMode(Interactor, ActiveWidget);
 	}
 }

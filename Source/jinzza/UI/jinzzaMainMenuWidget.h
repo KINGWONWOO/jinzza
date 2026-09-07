@@ -21,15 +21,18 @@ class UAudioComponent;
  * Main menu UI: a button-list page plus Settings/Customization popup-pages swapped in via a
  * UWidgetSwitcher, a live character preview render, and a voice-modification test panel.
  *
- * UMG-authored: every property below must exist in this class's Widget Blueprint (e.g.
- * WBP_MainMenu), named exactly as below, for BindWidget to find it. SettingsWidget/
- * CustomizationWidget must each be a "User Widget" placed as one of the Switcher's children,
- * with its class set to that screen's own Widget Blueprint (e.g. WBP_Settings/
- * WBP_Customization). CustomizationButton, CharacterPreviewImage, and VoiceTestWidget are
- * BindWidgetOptional (added after this class already had a hand-authored layout) - place
- * CharacterPreviewImage on the right and VoiceTestWidget (a WBP_VoiceTest instance) at the
- * bottom-right; see AjinzzaCharacterPreviewCapture for what CharacterPreviewImage's texture
- * comes from.
+ * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
+ * BuildWidgetTree() instead of relying on a Designer-authored WBP_MainMenu layout, so PIE isn't
+ * blocked while the visual design pass hasn't happened yet. SettingsWidget is constructed
+ * directly as a UjinzzaSettingsWidget instance (which builds its own tree the same way) rather
+ * than loading a WBP_Settings class. CustomizationButton, CharacterPreviewImage, and
+ * VoiceTestWidget are left unconstructed (null) since their backing content
+ * (WBP_Customization / AjinzzaCharacterPreviewCapture wiring / WBP_VoiceTest) doesn't exist yet
+ * - existing code already null-checks all three. When the visual design pass happens, delete
+ * BuildWidgetTree(), restore `meta = (BindWidget)`/`BindWidgetOptional` on the properties below,
+ * and lay them out for real in WBP_MainMenu's Designer per the guide (including placing
+ * CharacterPreviewImage on the right and VoiceTestWidget at the bottom-right once that content
+ * exists).
  *
  * Host Game creates a Steam session immediately with default match settings and travels
  * straight to the lobby - there is no pre-create setup screen. Joining is invite-only: a
@@ -60,46 +63,47 @@ protected:
 	void OnQuitClicked();
 
 private:
+	void BuildWidgetTree();
 	void ShowButtonsPage();
 	void TryWireCharacterPreview();
 	void HandleSessionStatusChanged(EJinzzaSessionStatus Status, const FString& Message);
 	UjinzzaGameInstance* GetJinzzaGameInstance() const;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UWidgetSwitcher> Switcher;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UTextBlock> StatusText;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UButton> HostButton;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UButton> SettingsButton;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UButton> QuitButton;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UjinzzaSettingsWidget> SettingsWidget;
 
 	/** Root panel of the button-list page, faded in on open for a bit of life. */
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UWidget> ButtonsPageRoot;
 
-	/** Opens the Customization switcher page - see UjinzzaCustomizationWidget (shared with AjinzzaWardrobeKiosk in the lobby). */
-	UPROPERTY(meta = (BindWidgetOptional))
+	/** Opens the Customization switcher page - see UjinzzaCustomizationWidget (shared with AjinzzaWardrobeKiosk in the lobby). Left null - see class comment. */
+	UPROPERTY()
 	TObjectPtr<UButton> CustomizationButton;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY()
 	TObjectPtr<UjinzzaCustomizationWidget> CustomizationWidget;
 
-	/** Shows AjinzzaCharacterPreviewCapture's render target - a temporary character preview on the right side of the menu. */
-	UPROPERTY(meta = (BindWidgetOptional))
+	/** Shows AjinzzaCharacterPreviewCapture's render target - a temporary character preview on the right side of the menu. Left null - see class comment. */
+	UPROPERTY()
 	TObjectPtr<UImage> CharacterPreviewImage;
 
-	/** Bottom-right voice-modification test panel (speak into the mic, hear it filtered back) - see UjinzzaVoiceTestWidget. */
-	UPROPERTY(meta = (BindWidgetOptional))
+	/** Bottom-right voice-modification test panel (speak into the mic, hear it filtered back) - see UjinzzaVoiceTestWidget. Left null - see class comment. */
+	UPROPERTY()
 	TObjectPtr<UjinzzaVoiceTestWidget> VoiceTestWidget;
 
 	/** Looping menu BGM, started in NativeOnInitialized and stopped in NativeDestruct. */

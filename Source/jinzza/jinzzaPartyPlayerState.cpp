@@ -2,6 +2,7 @@
 
 #include "jinzzaPartyPlayerState.h"
 #include "jinzzaDisguiseComponent.h"
+#include "jinzzaCharacter.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/Pawn.h"
 
@@ -20,7 +21,24 @@ void AjinzzaPartyPlayerState::ServerSetGhost(bool bNewGhost)
 	{
 		return;
 	}
+
 	bIsGhost = bNewGhost;
+
+	if (bIsGhost)
+	{
+		// "위장 해제" - clear the underlying disguise data itself, not just have
+		// UjinzzaDisguiseComponent visually ignore it while ghosted.
+		FaceType = EJinzzaFaceType::None;
+		VoiceFilter = EJinzzaVoiceFilter::None;
+
+		// A ghost can no longer hold/use props (AjinzzaCharacter::IsGhost gates new pickups) -
+		// this clears whatever was already in hand at the moment of elimination.
+		if (AjinzzaCharacter* Character = Cast<AjinzzaCharacter>(GetPawn()))
+		{
+			Character->ServerForceDropHeldProp();
+		}
+	}
+
 	OnRep_DisguiseChanged();
 }
 

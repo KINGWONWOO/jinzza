@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/PlayerController.h"
+#include "jinzzaPlayerController.h"
 #include "jinzzaRoundTypes.h"
 #include "jinzzaGamePlayerController.generated.h"
 
@@ -13,9 +13,15 @@ class APlayerState;
 /**
  * Spawns the minimal in-round overlay (host-only End Game button) for Lvl_Game, and receives
  * this player's private role assignment - see AjinzzaGameGameMode::AssignRoles().
+ *
+ * Derives from AjinzzaPlayerController (not the bare engine APlayerController) specifically so
+ * its inherited SetupInputComponent() actually adds DefaultMappingContexts/
+ * MobileExcludedMappingContexts to the Enhanced Input subsystem - it used to derive straight
+ * from APlayerController, which meant Lvl_Game never had any Enhanced Input mapping context
+ * installed at all (WASD/Look/Jump were all silently dead), confirmed 2026-09-07.
  */
 UCLASS()
-class JINZZA_API AjinzzaGamePlayerController : public APlayerController
+class JINZZA_API AjinzzaGamePlayerController : public AjinzzaPlayerController
 {
 	GENERATED_BODY()
 

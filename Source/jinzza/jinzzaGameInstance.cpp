@@ -6,6 +6,8 @@
 #include "OnlineSessionSettings.h"
 #include "Interfaces/OnlineExternalUIInterface.h"
 #include "Interfaces/OnlinePresenceInterface.h"
+#include "Interfaces/OnlineFriendsInterface.h"
+#include "Interfaces/OnlineIdentityInterface.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
 #include "jinzza.h"
@@ -227,6 +229,68 @@ void UjinzzaGameInstance::InviteFriends()
 	if (!ExternalUI.IsValid() || !ExternalUI->ShowInviteUI(0, SessionName))
 	{
 		OnSessionStatusChanged.Broadcast(EJinzzaSessionStatus::Failed, TEXT("Could not open the Steam invite dialog"));
+	}
+}
+
+void UjinzzaGameInstance::RequestFriendsList()
+{
+	IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
+	IOnlineFriendsPtr Friends = Subsystem ? Subsystem->GetFriendsInterface() : nullptr;
+	if (!Friends.IsValid())
+	{
+		OnFriendsListReceived.Broadcast(TArray<FJinzzaFriendInfo>());
+		return;
+	}
+
+	Friends->ReadFriendsList(0, EFriendsLists::ToString(EFriendsLists::Default),
+		FOnReadFriendsListComplete::CreateUObject(this, &UjinzzaGameInstance::OnReadFriendsListComplete));
+}
+
+void UjinzzaGameInstance::OnReadFriendsListComplete(int32 LocalUserNum, bool bWasSuccessful, const FString& ListName, const FString& ErrorStr)
+{
+	TArray<FJinzzaFriendInfo> Result;
+
+	IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
+	IOnlineFriendsPtr Friends = Subsystem ? Subsystem->GetFriendsInterface() : nullptr;
+
+	if (bWasSuccessful && Friends.IsValid())
+	{
+		TArray<TSharedRef<FOnlineFriend>> FriendList;
+		if (Friends->GetFriendsList(LocalUserNum, ListName, FriendList))
+		{
+			for (const TSharedRef<FOnlineFriend>& Friend : FriendList)
+			{
+				FJinzzaFriendInfo Info;
+				Info.DisplayName = Friend->GetDisplayName();
+				Info.NetIdString = Friend->GetUserId()->ToString();
+				Info.bIsOnline = Friend->GetPresence().bIsOnline;
+				Result.Add(Info);
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(Logjinzza, Warning, TEXT("ReadFriendsList failed: %s"), *ErrorStr);
+	}
+
+	OnFriendsListReceived.Broadcast(Result);
+}
+
+void UjinzzaGameInstance::InviteFriendToSession(const FString& NetIdString)
+{
+	IOnlineSubsystem* Subsystem = IOnlineSubsystem::Get();
+	IOnlineSessionPtr Session = GetSessionInterface();
+	IOnlineIdentityPtr Identity = Subsystem ? Subsystem->GetIdentityInterface() : nullptr;
+	if (!Subsystem || !Session.IsValid() || !Identity.IsValid())
+	{
+		OnSessionStatusChanged.Broadcast(EJinzzaSessionStatus::Failed, TEXT("Online subsystem unavailable"));
+		return;
+	}
+
+	const FUniqueNetIdPtr FriendId = Identity->CreateUniquePlayerId(NetIdString);
+	if (!FriendId.IsValid() || !Session->SendSessionInviteToFriend(0, SessionName, *FriendId))
+	{
+		OnSessionStatusChanged.Broadcast(EJinzzaSessionStatus::Failed, TEXT("Could not send the invite"));
 	}
 }
 

@@ -13,6 +13,7 @@
 #include "jinzzaDisguiseComponent.h"
 #include "jinzzaCharacterCustomizationComponent.h"
 #include "jinzzaInteractableProp.h"
+#include "jinzzaPartyPlayerState.h"
 #include "jinzzaEmoteWheelWidget.h"
 #include "jinzzaPropUsageWidget.h"
 #include "jinzza.h"
@@ -72,6 +73,8 @@ void AjinzzaCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	BaseWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
+
 	if (IsLocallyControlled() && PropUsageWidgetClass)
 	{
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -104,6 +107,11 @@ void AjinzzaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		// Jumping
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoJumpStart);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &AjinzzaCharacter::DoJumpEnd);
+
+		// Sprinting (held)
+		EnhancedInputComponent->BindAction(SprintInputAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoSprintStart);
+		EnhancedInputComponent->BindAction(SprintInputAction, ETriggerEvent::Completed, this, &AjinzzaCharacter::DoSprintEnd);
+		EnhancedInputComponent->BindAction(SprintInputAction, ETriggerEvent::Canceled, this, &AjinzzaCharacter::DoSprintEnd);
 
 		// Moving
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AjinzzaCharacter::MoveInput);
@@ -205,8 +213,56 @@ void AjinzzaCharacter::DoJumpEnd()
 	StopJumping();
 }
 
+void AjinzzaCharacter::DoSprintStart()
+{
+	if (bStunned)
+	{
+		return;
+	}
+
+	SetSprinting(true);
+}
+
+void AjinzzaCharacter::DoSprintEnd()
+{
+	SetSprinting(false);
+}
+
+void AjinzzaCharacter::SetSprinting(bool bNewSprinting)
+{
+	if (bIsSprinting == bNewSprinting)
+	{
+		return;
+	}
+
+	// Apply locally right away - this is what makes sprint feel instant on the machine that
+	// pressed the key, whether that's the server or a client predicting ahead of its RPC.
+	bIsSprinting = bNewSprinting;
+	GetCharacterMovement()->MaxWalkSpeed = bNewSprinting ? BaseWalkSpeed * SprintSpeedMultiplier : BaseWalkSpeed;
+
+	if (!HasAuthority())
+	{
+		Server_SetSprinting(bNewSprinting);
+	}
+}
+
+void AjinzzaCharacter::Server_SetSprinting_Implementation(bool bNewSprinting)
+{
+	SetSprinting(bNewSprinting);
+}
+
+void AjinzzaCharacter::OnRep_IsSprinting()
+{
+	GetCharacterMovement()->MaxWalkSpeed = bIsSprinting ? BaseWalkSpeed * SprintSpeedMultiplier : BaseWalkSpeed;
+}
+
 void AjinzzaCharacter::DoInteract()
 {
+	if (IsGhost())
+	{
+		return;
+	}
+
 	if (AjinzzaInteractableProp* Prop = TraceForInteractableProp())
 	{
 		Server_InteractWithProp(Prop);
@@ -236,7 +292,7 @@ AjinzzaInteractableProp* AjinzzaCharacter::TraceForInteractableProp() const
 
 void AjinzzaCharacter::UpdateInteractionFocus()
 {
-	AjinzzaInteractableProp* NewFocus = bEmoteWheelOpen ? nullptr : TraceForInteractableProp();
+	AjinzzaInteractableProp* NewFocus = (bEmoteWheelOpen || IsGhost()) ? nullptr : TraceForInteractableProp();
 
 	// Don't prompt to interact with whatever you're already holding (it's still in the trace's way).
 	if (NewFocus && NewFocus->IsHeldBy(this))
@@ -287,17 +343,35 @@ void AjinzzaCharacter::HidePropUsageHUD(AjinzzaInteractableProp* Prop)
 
 void AjinzzaCharacter::DoUseHeldProp()
 {
+	if (IsGhost())
+	{
+		return;
+	}
 	Server_UseHeldProp();
 }
 
 void AjinzzaCharacter::DoDropHeldProp()
 {
+	if (IsGhost())
+	{
+		return;
+	}
 	Server_DropHeldProp();
 }
 
 void AjinzzaCharacter::DoThrowHeldProp()
 {
+	if (IsGhost())
+	{
+		return;
+	}
 	Server_ThrowHeldProp();
+}
+
+bool AjinzzaCharacter::IsGhost() const
+{
+	const AjinzzaPartyPlayerState* PartyPS = GetPlayerState<AjinzzaPartyPlayerState>();
+	return PartyPS && PartyPS->IsGhost();
 }
 
 void AjinzzaCharacter::Server_InteractWithProp_Implementation(AjinzzaInteractableProp* Prop)
@@ -335,6 +409,7 @@ void AjinzzaCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AjinzzaCharacter, bStunned);
+	DOREPLIFETIME(AjinzzaCharacter, bIsSprinting);
 }
 
 void AjinzzaCharacter::Stun(float Duration)
@@ -367,6 +442,15 @@ void AjinzzaCharacter::OnRep_Stunned()
 	{
 		// Kill existing momentum so "immobilized" reads immediately rather than sliding to a stop.
 		GetCharacterMovement()->StopMovementImmediately();
+
+		// Cancel sprint speed too - being stunned mid-sprint shouldn't leave MaxWalkSpeed raised
+		// (harmless once actually stopped, but would let the character immediately move at sprint
+		// speed the instant the stun timer clears, before DoSprintEnd ever fires again).
+		if (bIsSprinting)
+		{
+			bIsSprinting = false;
+			GetCharacterMovement()->MaxWalkSpeed = BaseWalkSpeed;
+		}
 	}
 }
 
@@ -380,6 +464,16 @@ void AjinzzaCharacter::Server_UseHeldProp_Implementation()
 
 void AjinzzaCharacter::Server_DropHeldProp_Implementation()
 {
+	ServerForceDropHeldProp();
+}
+
+void AjinzzaCharacter::ServerForceDropHeldProp()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
 	if (HeldProp)
 	{
 		HeldProp->DropFromHolder();

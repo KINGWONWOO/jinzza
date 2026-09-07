@@ -11,11 +11,35 @@
 #include "Blueprint/UserWidget.h"
 #include "jinzza.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+#include "UObject/ConstructorHelpers.h"
 
 AjinzzaPlayerController::AjinzzaPlayerController()
 {
 	// set the player camera manager class
 	PlayerCameraManagerClass = AjinzzaCameraManager::StaticClass();
+
+	// Hardcoded as C++ constructor defaults (rather than relying only on a Blueprint's Class
+	// Defaults panel) so every subclass - AjinzzaLobbyPlayerController and
+	// AjinzzaGamePlayerController included, neither of which has its own Blueprint asset - gets
+	// working Enhanced Input out of the box. A subclass's own Blueprint (if one exists) can still
+	// override these arrays entirely from its Class Defaults panel as usual.
+	static ConstructorHelpers::FObjectFinder<UInputMappingContext> DefaultIMCFinder(TEXT("/Game/JINZZA/Input/IMC_Default.IMC_Default"));
+	if (DefaultIMCFinder.Succeeded())
+	{
+		DefaultMappingContexts.Add(DefaultIMCFinder.Object);
+	}
+
+	static ConstructorHelpers::FObjectFinder<UInputMappingContext> SprintIMCFinder(TEXT("/Game/JINZZA/Input/IMC_Sprint.IMC_Sprint"));
+	if (SprintIMCFinder.Succeeded())
+	{
+		DefaultMappingContexts.Add(SprintIMCFinder.Object);
+	}
+
+	static ConstructorHelpers::FObjectFinder<UInputMappingContext> MouseLookIMCFinder(TEXT("/Game/JINZZA/Input/IMC_MouseLook.IMC_MouseLook"));
+	if (MouseLookIMCFinder.Succeeded())
+	{
+		MobileExcludedMappingContexts.Add(MouseLookIMCFinder.Object);
+	}
 }
 
 void AjinzzaPlayerController::BeginPlay()

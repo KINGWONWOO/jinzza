@@ -658,6 +658,213 @@ actually playtested the accumulated BGM/UI-sound/font/layout changes
   pushed now that it's been playtested clean.
 
 =================================================================
+DONE THIS SESSION (2026-09-07, by Claude) - fixed the PIE-blocking widget-binding
+compile errors by having 5 widget classes build their own UMG tree in C++
+=================================================================
+- Symptom: PIE failed to compile with `LogBlueprint: Error: ... A required widget
+  binding "X" ... was not found` on WBP_MainMenu, WBP_Settings, WBP_Lobby,
+  WBP_RoomSettings, and WBP_GameEnd - none of their Designer trees were ever
+  authored (confirmed via Saved/Logs/jinzza.log), and no unreal-mcp tool exists
+  that can place child widgets into a WBP's visual tree (still true - checked
+  BlueprintTools/ObjectTools again this session, nothing new).
+- User asked to fix it via C++ now rather than hand-placing widgets in the
+  Designer, with the explicit plan to swap back to Designer-authored BindWidget
+  layouts later, once the real UI design/art pass happens.
+- Wrote docs/umg_widget_authoring_guide.md first (the full per-widget required-
+  binding list + suggested layout + JinzzaUIStyle color/font values, for that
+  later Designer pass), then implemented the C++ route on top of it:
+  - Added `JinzzaUI::MakeLabeledRow` to jinzzaUIStyle.h/.cpp - a reusable
+    "fixed-width muted label + control" row, since Settings/RoomSettings both
+    needed dozens of these.
+  - jinzzaGameEndWidget, jinzzaLobbyWidget, jinzzaRoomSettingsWidget,
+    jinzzaMainMenuWidget, jinzzaSettingsWidget: removed `meta = (BindWidget)`
+    from every property (so the Blueprint compiler no longer requires anything
+    to exist in the WBP's Designer tree) and added a `BuildWidgetTree()`,
+    called first thing in `NativeOnInitialized()`, that constructs the entire
+    tree via `WidgetTree->ConstructWidget<>()` + the `JinzzaUI::Make*` helpers
+    and assigns the results straight to the member pointers. Verified first
+    (by reading every .cpp fully) that every click handler, combobox option
+    list, and slider/spinbox range is already wired in code (Populate*Page
+    etc.) - none of that needed touching, so this was purely a tree-
+    construction addition, not a logic change.
+  - MainMenu's SettingsWidget page is now a directly-constructed
+    UjinzzaSettingsWidget instance (WidgetTree->ConstructWidget), not a loaded
+    WBP_Settings class - consistent since Settings builds its own tree too.
+  - CustomizationButton/CustomizationWidget/CharacterPreviewImage/
+    VoiceTestWidget (MainMenu's BindWidgetOptional fields) are left
+    unconstructed/null on purpose - their backing content doesn't exist yet
+    and the existing code already null-checks all four.
+  - Each header's class comment now says "TEMP C++-built" and spells out the
+    exact revert steps (delete BuildWidgetTree(), restore the BindWidget meta,
+    lay it out for real) so a future session/you doesn't mistake this for the
+    permanent architecture.
+- [ ] NOT compiled or playtested this session (no build-trigger tool, as
+  always - see docs/PROJECT_STATUS.md §6). This is a substantial change across
+  5 files - please run a Live Coding compile (or full rebuild) and check
+  Saved/Logs/jinzza.log for the widget-binding errors clearing, then a PIE
+  pass on Lvl_MainMenu (Host Game -> Settings -> each tab) and Lvl_Lobby before
+  trusting it.
+- Changes are NOT committed.
+- docs/umg_widget_authoring_guide.md's intro now flags it as "superseded for
+  now" and doubles as documentation of what BuildWidgetTree() actually builds,
+  for whenever the Designer swap-back happens.
+
+=================================================================
+DONE THIS SESSION (2026-09-07, continued, by Claude) - found and fixed why
+movement/jump were never confirmed working, added Sprint, verified Settings
+really drive gameplay
+=================================================================
+- User asked to confirm WASD movement/interactions work in Lvl_Lobby and
+  Lvl_Game, implement Jump/Sprint if not already real, and verify Settings
+  changes actually affect gameplay (not just stored prefs).
+- Root cause found (this is the real finding, not a guess): AjinzzaLobbyPlayerController
+  and AjinzzaGamePlayerController - the PlayerControllerClass each GameMode
+  actually spawns - derived straight from the engine's bare APlayerController,
+  NOT from AjinzzaPlayerController (the class whose SetupInputComponent()
+  actually calls Subsystem->AddMappingContext(...)). Confirmed via
+  ObjectTools: IMC_Default/IMC_MouseLook are correctly configured with real
+  key mappings (get_dependencies showed IMC_Default depending on
+  IA_Move/IA_Jump/IA_Look/IA_Interact/etc, so the data assets themselves are
+  fine) and BP_FirstPersonPlayerController (a leftover, unused-by-any-GameMode
+  Blueprint) has them wired into DefaultMappingContexts - but neither Lobby
+  nor Game's actual controller ever added ANY mapping context to the Enhanced
+  Input subsystem. Net effect: WASD/Look/Jump were silently 100% dead in both
+  Lvl_Lobby and Lvl_Game, not just untested - this was never going to show up
+  in any of the prior sessions' PIE checks since those only verified BGM/
+  compile-cleanliness/role-assignment logs, never actual movement.
+  - Fix: AjinzzaLobbyPlayerController and AjinzzaGamePlayerController now
+    derive from AjinzzaPlayerController instead of APlayerController (both
+    already called Super::BeginPlay(), and Lobby already called
+    Super::SetupInputComponent(), so this was a one-line parent-class swap
+    each plus the header include). AjinzzaPlayerController's constructor now
+    also hardcodes ConstructorHelpers::FObjectFinder defaults for IMC_Default/
+    IMC_Sprint (DefaultMappingContexts) and IMC_MouseLook
+    (MobileExcludedMappingContexts), since neither Lobby nor Game controller
+    has a Blueprint asset of its own to configure these from a Class Defaults
+    panel - matches the existing DefaultPawnClass ConstructorHelpers fallback
+    pattern already used in both GameModes.
+- Jump: was already properly implemented (JumpAction bound to
+  DoJumpStart/DoJumpEnd -> Character's built-in Jump()/StopJumping()) - just
+  unreachable in practice because of the bug above.
+- Sprint: did NOT exist at all (no SprintAction, no speed-changing code, and
+  no IA_Sprint asset in JINZZA's own Input/Actions folder - only an unrelated
+  leftover in Content/JINZZA/Variant_Horror/Input/ tied to the unused
+  Horror-variant template character). Implemented:
+  - AjinzzaCharacter: new SprintAction (held IA_Sprint), SprintSpeedMultiplier
+    (default 1.6x, EditAnywhere), DoSprintStart/DoSprintEnd toggling
+    GetCharacterMovement()->MaxWalkSpeed relative to BaseWalkSpeed (captured
+    once in BeginPlay, so it scales whatever the Blueprint has configured
+    rather than a hardcoded number). Guarded by bStunned like DoJumpStart;
+    OnRep_Stunned also cancels an in-progress sprint's speed boost.
+  - Asset side (done via the live editor's object/asset tools, not by hand):
+    moved (not duplicated - a real engine reference-safe rename, so nothing
+    broke) Variant_Horror's IA_Sprint -> /Game/JINZZA/Input/Actions/IA_Sprint,
+    and its owning IMC_Horror -> /Game/JINZZA/Input/IMC_Sprint (renamed since
+    it's not Horror-specific content anymore, it's the one real Sprint
+    mapping). Verified via get_dependencies/get_referencers that the rename
+    fixup kept IMC_Sprint's mapping pointing at the moved IA_Sprint correctly.
+  - [ ] Not verified which physical key IMC_Sprint's mapping actually uses
+    (the Mappings array is a struct-of-structs that this session's object-
+    property tools can't reliably read back, confirmed - get_properties
+    returns "Mappings": [] even though get_dependencies proves real content
+    exists). Almost certainly Left Shift (stock template convention) - please
+    open IMC_Sprint in the editor once to confirm/adjust.
+  - [ ] After you compile: BP_FirstPersonCharacter's new SprintAction
+    property still needs to be set to /Game/JINZZA/Input/Actions/IA_Sprint
+    (same pattern as its existing JumpAction/MoveAction/etc.) - couldn't do
+    this yet since the property doesn't exist in the reflection system until
+    the C++ compiles. Ask Claude to do it via ObjectTools once compiled, or
+    set it by hand in the Blueprint's Class Defaults.
+- Settings-affects-real-gameplay verification (what was actually checked, not
+  assumed):
+  - Mouse Sensitivity + Invert Y: confirmed real - AjinzzaCharacter::DoAim
+    reads UjinzzaGameUserSettings::Get() every frame and scales/flips the aim
+    input directly. Genuinely wired, not just stored.
+  - Key rebinding: confirmed real and generic -
+    AjinzzaPlayerController::BuildRuntimeMappingContext looks up
+    Settings->GetKeyRebind(Mapping.Action->GetFName()) for every mapping on
+    whatever IMCs are actually in DefaultMappingContexts, so it isn't
+    hardcoded to the 4 rows Settings happens to expose. Jump's rebind row is
+    genuinely functional (IA_Jump matches). Sprint's rebind row will become
+    functional once the two follow-ups above land (name already matches:
+    "IA_Sprint").
+  - Found a real gap, not fixed (a product decision, not mine to make
+    unilaterally): Settings' Shoot/SwapWeapon rebind rows reference
+    IA_Shoot/IA_SwapWeapon, which are Variant_Shooter template leftovers -
+    AjinzzaCharacter never binds either action at all. Rebinding those two
+    rows currently does nothing in the real game. Design doc has no weapon
+    system, so these are almost certainly dead UI to remove - flagging for a
+    decision rather than deleting the rows myself.
+- [ ] NOT compiled or playtested this session (no build-trigger tool, as
+  always). This is a substantial change (2 controller base classes, new
+  Character input action, a constructor-level asset dependency) - please run
+  a Live Coding compile and check Saved/Logs/jinzza.log is clean, then
+  actually walk a character around in PIE for both Lvl_Lobby and Lvl_Game
+  (WASD, Space to jump, Left Shift to sprint) before trusting this fixes what
+  it's supposed to.
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-07, continued, by Claude) - user confirmed WASD
+works but Sprint key does nothing; reworked lobby mouse/UI flow into a
+kiosk-driven model and added a real Steam friends-list invite panel
+=================================================================
+- Sprint still not confirmed working - user reports the key does nothing.
+  SprintInputAction/BP_FirstPersonCharacter wiring is confirmed correct (read
+  back cleanly via ObjectTools after the compile). Two remaining suspects,
+  neither confirmed yet: (1) IMC_Sprint's actual mapped key - still can't be
+  read via this session's tools (Mappings is a struct array that get_properties
+  can't serialize), asked the user to open it in the editor and check/report;
+  (2) they may have tested in a PIE session from before the SprintInputAction
+  property was set on the Blueprint CDO - needs a fresh PIE launch.
+- User's real complaint: the always-on top-left lobby panel (Invite Friends +
+  Start Match) forces the mouse cursor visible/UI-focused just to reach two
+  buttons, fighting with FPS mouse-look. Root cause found while fixing it:
+  AjinzzaRoomSettingsKiosk/AjinzzaWardrobeKiosk only ever set
+  bShowMouseCursor = true on open and NEVER turned it back off on close - the
+  lobby's one-time BeginPlay GameAndUI+cursor-visible setup was the only thing
+  making the cursor usable at all, and nothing ever restored Game-only mode.
+- Fix, confirmed via user's answer to a clarifying question (Start Match
+  folds into a kiosk too, consistent with the existing interaction model):
+  - AjinzzaInteractableKiosk (new .cpp - didn't exist before, base class was
+    pure-virtual-only): added static EnterKioskUIMode/ExitKioskUIMode helpers
+    (cursor+SetInputMode together, both directions). RoomSettingsKiosk and
+    WardrobeKiosk now call these instead of only setting bShowMouseCursor.
+  - AjinzzaLobbyPlayerController::BeginPlay now defaults to hidden-cursor/
+    Game-only input (was GameAndUI + cursor visible + LobbyWidget focused) -
+    WASD look/move work immediately on entering the lobby now.
+  - UjinzzaLobbyWidget: removed InviteButton/StartButton and their click
+    handlers entirely - it's a pure display HUD now (room settings text,
+    player count, the bottom-center interact prompt).
+  - New AjinzzaStartMatchKiosk: no panel, just server-travels to Lvl_Game
+    immediately on E (host-only, same PC->HasAuthority() check the old button
+    used, just relocated).
+  - New AjinzzaFriendInviteKiosk + UjinzzaFriendInviteWidget: opens a
+    centered panel (same C++-built-tree pattern as this session's other
+    widgets) showing the local player's real Steam friends list, one row per
+    friend (name + an Invite button on its right via JinzzaUI::MakeLabeledRow,
+    disabled for offline friends), plus Refresh and Close. Per-row Invite
+    click uses a small UJinzzaFriendInviteRowHandler UObject (mirrors
+    UJinzzaUIButtonSounds's role) since UButton::OnClicked is zero-arg and
+    can't carry which friend was clicked.
+  - UjinzzaGameInstance: added RequestFriendsList()
+    (IOnlineFriends::ReadFriendsList/GetFriendsList -> OnFriendsListReceived
+    delegate) and InviteFriendToSession(NetIdString)
+    (IOnlineIdentity::CreateUniquePlayerId + IOnlineSession::
+    SendSessionInviteToFriend) - a real per-friend invite, not just Steam's
+    generic overlay dialog (InviteFriends()/ShowInviteUI left as-is, unused
+    by the new widget but harmless).
+- [ ] NOT compiled yet. After compile: still need to actually PLACE
+  AjinzzaFriendInviteKiosk and AjinzzaStartMatchKiosk into Lvl_Lobby (checked
+  the live level first - only one kiosk, jinzzaRoomSettingsKiosk_0, is
+  actually placed at (0,0,80); AjinzzaWardrobeKiosk isn't placed in the level
+  at all despite existing in code, a pre-existing gap this session didn't
+  cause or fix). Can't spawn the two new classes via SceneTools until they
+  exist in the compiled reflection system.
+- [ ] Also not yet placed/tested: the Sprint key question above.
+- Changes are NOT committed.
+
+=================================================================
 NOTES
 =================================================================
 - Section 16 of the doc flags these as still-undecided design details to

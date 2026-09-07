@@ -21,12 +21,13 @@ class UWidget;
  * UjinzzaGameUserSettings (see that class for why audio uses runtime SoundClass/SoundMix
  * objects and controls use per-action key overrides rather than content-authored assets).
  *
- * UMG-authored: every property below must exist in this class's Widget Blueprint (e.g.
- * WBP_Settings), named exactly as below, for BindWidget to find it. Section headings and
- * per-row labels are purely decorative and don't need to be bound. Layout is expected to be
- * a left tab sidebar (4 tab buttons + 4 accent bars, one visible at a time) next to a right
- * content column holding a TabSwitcher with one scrollable page per tab, plus a bottom-right
- * Apply/Back button pair.
+ * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
+ * BuildWidgetTree() instead of relying on a Designer-authored WBP_Settings layout, so PIE isn't
+ * blocked while the visual design pass hasn't happened yet - left tab sidebar (4 tab buttons +
+ * 4 accent bars) next to a right content column holding TabSwitcher with one scrollable page
+ * per tab, plus a bottom-right Apply/Back button pair. When that pass happens, delete
+ * BuildWidgetTree(), restore `meta = (BindWidget)` on every property below, and lay them out
+ * for real in WBP_Settings's Designer per the guide.
  */
 UCLASS()
 class JINZZA_API UjinzzaSettingsWidget : public UUserWidget
@@ -79,66 +80,68 @@ private:
 	/** Switches the content page and moves the sidebar's active-tab accent bar. */
 	void SetActiveTab(int32 TabIndex);
 
-	UPROPERTY(meta = (BindWidget))
+	void BuildWidgetTree();
+
+	UPROPERTY()
 	TObjectPtr<UWidgetSwitcher> TabSwitcher;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UButton> ApplyButton;
 
-	UPROPERTY(meta = (BindWidget))
+	UPROPERTY()
 	TObjectPtr<UButton> BackButton;
 
 	// Sidebar tab buttons and their accent bars (shown only next to the active tab).
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> GraphicsTabButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> AudioTabButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> ControlsTabButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> GameplayTabButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> GraphicsTabAccent;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> AudioTabAccent;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> ControlsTabAccent;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> GameplayTabAccent;
+	UPROPERTY() TObjectPtr<UButton> GraphicsTabButton;
+	UPROPERTY() TObjectPtr<UButton> AudioTabButton;
+	UPROPERTY() TObjectPtr<UButton> ControlsTabButton;
+	UPROPERTY() TObjectPtr<UButton> GameplayTabButton;
+	UPROPERTY() TObjectPtr<UWidget> GraphicsTabAccent;
+	UPROPERTY() TObjectPtr<UWidget> AudioTabAccent;
+	UPROPERTY() TObjectPtr<UWidget> ControlsTabAccent;
+	UPROPERTY() TObjectPtr<UWidget> GameplayTabAccent;
 
 	// Graphics
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UComboBoxString> WindowModeCombo;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UComboBoxString> ResolutionCombo;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UCheckBox> VSyncCheckBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> FrameRateLimitSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UComboBoxString> OverallQualityCombo;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> ViewDistanceSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> ShadowSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> GlobalIlluminationSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> ReflectionSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> AntiAliasingSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> TextureSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> EffectsSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> FoliageSpinBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USpinBox> ShadingSpinBox;
+	UPROPERTY() TObjectPtr<UComboBoxString> WindowModeCombo;
+	UPROPERTY() TObjectPtr<UComboBoxString> ResolutionCombo;
+	UPROPERTY() TObjectPtr<UCheckBox> VSyncCheckBox;
+	UPROPERTY() TObjectPtr<USpinBox> FrameRateLimitSpinBox;
+	UPROPERTY() TObjectPtr<UComboBoxString> OverallQualityCombo;
+	UPROPERTY() TObjectPtr<USpinBox> ViewDistanceSpinBox;
+	UPROPERTY() TObjectPtr<USpinBox> ShadowSpinBox;
+	UPROPERTY() TObjectPtr<USpinBox> GlobalIlluminationSpinBox;
+	UPROPERTY() TObjectPtr<USpinBox> ReflectionSpinBox;
+	UPROPERTY() TObjectPtr<USpinBox> AntiAliasingSpinBox;
+	UPROPERTY() TObjectPtr<USpinBox> TextureSpinBox;
+	UPROPERTY() TObjectPtr<USpinBox> EffectsSpinBox;
+	UPROPERTY() TObjectPtr<USpinBox> FoliageSpinBox;
+	UPROPERTY() TObjectPtr<USpinBox> ShadingSpinBox;
 
 	TArray<FIntPoint> AvailableResolutions;
 
 	// Audio
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USlider> MasterVolumeSlider;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USlider> MusicVolumeSlider;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USlider> SFXVolumeSlider;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USlider> VoiceVolumeSlider;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UComboBoxString> MicInputModeCombo;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UComboBoxString> MicDeviceCombo;
+	UPROPERTY() TObjectPtr<USlider> MasterVolumeSlider;
+	UPROPERTY() TObjectPtr<USlider> MusicVolumeSlider;
+	UPROPERTY() TObjectPtr<USlider> SFXVolumeSlider;
+	UPROPERTY() TObjectPtr<USlider> VoiceVolumeSlider;
+	UPROPERTY() TObjectPtr<UComboBoxString> MicInputModeCombo;
+	UPROPERTY() TObjectPtr<UComboBoxString> MicDeviceCombo;
 	/** Parallel to MicDeviceCombo's options - index 0 is always "" (system default). */
 	TArray<FString> AvailableMicDeviceIds;
 
 	// Controls
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USlider> MouseSensitivitySlider;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UCheckBox> InvertYCheckBox;
+	UPROPERTY() TObjectPtr<USlider> MouseSensitivitySlider;
+	UPROPERTY() TObjectPtr<UCheckBox> InvertYCheckBox;
 
 	// Key rebind rows: one button (click to rebind) + one label (shows the current key) per action.
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> JumpRebindButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> JumpRebindLabel;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> ShootRebindButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> ShootRebindLabel;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SwapWeaponRebindButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> SwapWeaponRebindLabel;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> SprintRebindButton;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> SprintRebindLabel;
+	UPROPERTY() TObjectPtr<UButton> JumpRebindButton;
+	UPROPERTY() TObjectPtr<UTextBlock> JumpRebindLabel;
+	UPROPERTY() TObjectPtr<UButton> ShootRebindButton;
+	UPROPERTY() TObjectPtr<UTextBlock> ShootRebindLabel;
+	UPROPERTY() TObjectPtr<UButton> SwapWeaponRebindButton;
+	UPROPERTY() TObjectPtr<UTextBlock> SwapWeaponRebindLabel;
+	UPROPERTY() TObjectPtr<UButton> SprintRebindButton;
+	UPROPERTY() TObjectPtr<UTextBlock> SprintRebindLabel;
 
 	UPROPERTY()
 	TMap<FName, TObjectPtr<UTextBlock>> RebindLabels;
@@ -147,7 +150,7 @@ private:
 	FName PendingRebindAction;
 
 	// Gameplay
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UCheckBox> SubtitlesCheckBox;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UComboBoxString> ColorblindModeCombo;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<USlider> ColorblindStrengthSlider;
+	UPROPERTY() TObjectPtr<UCheckBox> SubtitlesCheckBox;
+	UPROPERTY() TObjectPtr<UComboBoxString> ColorblindModeCombo;
+	UPROPERTY() TObjectPtr<USlider> ColorblindStrengthSlider;
 };

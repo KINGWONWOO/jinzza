@@ -1,19 +1,104 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaRoomSettingsWidget.h"
+#include "jinzzaUIStyle.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
 #include "Components/SpinBox.h"
 #include "Components/ComboBoxString.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/SizeBox.h"
+#include "Components/Border.h"
+#include "Blueprint/WidgetTree.h"
 #include "jinzzaGameInstance.h"
 #include "jinzzaLobbyGameState.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 
+namespace
+{
+	UVerticalBoxSlot* AddSpaced(UVerticalBox* Box, UWidget* Child, float TopPadding = 10.f)
+	{
+		UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(Child);
+		if (Slot)
+		{
+			Slot->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
+		}
+		return Slot;
+	}
+}
+
+void UjinzzaRoomSettingsWidget::BuildWidgetTree()
+{
+	if (!WidgetTree || WidgetTree->RootWidget)
+	{
+		return;
+	}
+
+	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
+	WidgetTree->RootWidget = Root;
+
+	UBorder* Panel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("Panel"));
+	Panel->SetPadding(FMargin(24.f));
+	if (UOverlaySlot* PanelSlot = Root->AddChildToOverlay(Panel))
+	{
+		PanelSlot->SetHorizontalAlignment(HAlign_Center);
+		PanelSlot->SetVerticalAlignment(VAlign_Center);
+	}
+
+	USizeBox* PanelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelBox"));
+	PanelBox->SetWidthOverride(460.f);
+	Panel->SetContent(PanelBox);
+
+	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Stack"));
+	PanelBox->AddChild(Stack);
+
+	HeaderNote = JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("HeaderNote"), FText::GetEmpty());
+	AddSpaced(Stack, HeaderNote, 0.f);
+	AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("HeaderDivider")));
+
+	RoomNameBox = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomNameBox"));
+	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("RoomNameRow"), FText::FromString(TEXT("Room Name")), RoomNameBox), 16.f);
+
+	MaxPlayersSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("MaxPlayersSpinBox"));
+	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("MaxPlayersRow"), FText::FromString(TEXT("Max Players")), MaxPlayersSpinBox));
+
+	JudgeCountSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("JudgeCountSpinBox"));
+	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("JudgeCountRow"), FText::FromString(TEXT("Judge Count")), JudgeCountSpinBox));
+
+	VoteCountSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("VoteCountSpinBox"));
+	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("VoteCountRow"), FText::FromString(TEXT("Vote Count")), VoteCountSpinBox));
+
+	PhaseSpeedCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("PhaseSpeedCombo"));
+	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("PhaseSpeedRow"), FText::FromString(TEXT("Phase Speed")), PhaseSpeedCombo));
+
+	RoleAssignCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("RoleAssignCombo"));
+	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("RoleAssignRow"), FText::FromString(TEXT("Role Assign Method")), RoleAssignCombo));
+
+	UHorizontalBox* ButtonRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("ButtonRow"));
+	AddSpaced(Stack, ButtonRow, 20.f);
+
+	CloseButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Close")));
+	if (UHorizontalBoxSlot* CloseSlot = ButtonRow->AddChildToHorizontalBox(CloseButton))
+	{
+		CloseSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	}
+
+	ApplyButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("ApplyButton"), FText::FromString(TEXT("Apply")));
+	ButtonRow->AddChildToHorizontalBox(ApplyButton);
+}
+
 void UjinzzaRoomSettingsWidget::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
+
+	BuildWidgetTree();
 
 	const APlayerController* OwningPC = GetOwningPlayer();
 	bEditable = OwningPC && OwningPC->HasAuthority();

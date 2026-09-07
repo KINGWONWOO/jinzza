@@ -40,13 +40,16 @@ void AjinzzaLobbyPlayerController::BeginPlay()
 	LobbyWidget = CreateWidget<UUserWidget>(this, WidgetClass);
 	if (LobbyWidget)
 	{
+		// Purely a display HUD now (room info + player count) - no buttons live here anymore
+		// (Invite/Start Match moved to walk-up-to kiosks, see AjinzzaFriendInviteKiosk/
+		// AjinzzaStartMatchKiosk), so it doesn't need keyboard focus or a visible cursor. Default
+		// to normal hidden-cursor/Game-only input so WASD look/move work immediately on entering
+		// the lobby - kiosks switch into UI mode themselves while their panel is open (see
+		// AjinzzaInteractableKiosk::EnterKioskUIMode/ExitKioskUIMode).
 		LobbyWidget->AddToViewport();
-		LobbyWidget->SetIsFocusable(true);
-		bShowMouseCursor = true;
+		bShowMouseCursor = false;
 
-		FInputModeGameAndUI InputMode;
-		InputMode.SetWidgetToFocus(LobbyWidget->TakeWidget());
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		FInputModeGameOnly InputMode;
 		SetInputMode(InputMode);
 	}
 

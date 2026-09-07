@@ -87,4 +87,9 @@ namespace JinzzaUI
 	UTextBlock* MakeTitleText(UWidgetTree* Tree, FName Name, const FText& Text, int32 Size = 48);
 	UTextBlock* MakeSectionHeading(UWidgetTree* Tree, FName Name, const FText& Text);
 	UTextBlock* MakeBodyText(UWidgetTree* Tree, FName Name, const FText& Text, bool bMuted = false);
+
+	/** A labeled settings row: a fixed-width muted label on the left, the given control filling
+	 * the rest on the right. Used by every C++-built settings/kiosk-style panel to avoid
+	 * repeating this layout per control - see UjinzzaSettingsWidget/UjinzzaRoomSettingsWidget. */
+	UWidget* MakeLabeledRow(UWidgetTree* Tree, FName Name, const FText& LabelText, UWidget* Control, float LabelWidth = 160.f);
 }
