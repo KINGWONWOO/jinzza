@@ -62,10 +62,6 @@ protected:
 	UFUNCTION()
 	void OnRebindJumpClicked();
 	UFUNCTION()
-	void OnRebindShootClicked();
-	UFUNCTION()
-	void OnRebindSwapWeaponClicked();
-	UFUNCTION()
 	void OnRebindSprintClicked();
 
 private:
@@ -134,12 +130,11 @@ private:
 	UPROPERTY() TObjectPtr<UCheckBox> InvertYCheckBox;
 
 	// Key rebind rows: one button (click to rebind) + one label (shows the current key) per action.
+	// Shoot/SwapWeapon rows were removed (2026-09-08) - IA_Shoot/IA_SwapWeapon are Variant_Shooter
+	// template leftovers AjinzzaCharacter never binds, so rebinding them did nothing (dead UI,
+	// flagged 2026-09-07; this project has no weapon system per the design doc).
 	UPROPERTY() TObjectPtr<UButton> JumpRebindButton;
 	UPROPERTY() TObjectPtr<UTextBlock> JumpRebindLabel;
-	UPROPERTY() TObjectPtr<UButton> ShootRebindButton;
-	UPROPERTY() TObjectPtr<UTextBlock> ShootRebindLabel;
-	UPROPERTY() TObjectPtr<UButton> SwapWeaponRebindButton;
-	UPROPERTY() TObjectPtr<UTextBlock> SwapWeaponRebindLabel;
 	UPROPERTY() TObjectPtr<UButton> SprintRebindButton;
 	UPROPERTY() TObjectPtr<UTextBlock> SprintRebindLabel;
 

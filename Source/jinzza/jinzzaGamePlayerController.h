@@ -9,6 +9,7 @@
 
 class UUserWidget;
 class APlayerState;
+class UAudioComponent;
 
 /**
  * Spawns the minimal in-round overlay (host-only End Game button) for Lvl_Game, and receives
@@ -52,13 +53,24 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	UPROPERTY()
 	TObjectPtr<UUserWidget> GameEndWidget;
 
+	/** Looping in-round BGM, started in BeginPlay and stopped in EndPlay - same TEMP-placeholder
+	 * pattern as the main menu/lobby BGM (see UjinzzaMainMenuWidget/UjinzzaLobbyWidget). Local-
+	 * controller-only, like the rest of this class's BeginPlay. */
+	UPROPERTY()
+	TObjectPtr<UAudioComponent> MusicComponent;
+
 	EJinzzaPartyRole LocalRole = EJinzzaPartyRole::None;
 
 	UPROPERTY()
 	TObjectPtr<APlayerState> KnownRealOne;
+
+	/** Plays a one-shot notification sound on every round-phase transition - see BeginPlay/EndPlay. */
+	void HandlePhaseChanged(EJinzzaRoundPhase NewPhase);
+	FDelegateHandle PhaseChangedHandle;
 };

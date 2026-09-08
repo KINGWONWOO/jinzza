@@ -63,6 +63,9 @@ private:
 	TObjectPtr<USpinBox> VoteCountSpinBox;
 
 	UPROPERTY()
+	TObjectPtr<USpinBox> QuestionTimeCyclesSpinBox;
+
+	UPROPERTY()
 	TObjectPtr<UComboBoxString> PhaseSpeedCombo;
 
 	UPROPERTY()

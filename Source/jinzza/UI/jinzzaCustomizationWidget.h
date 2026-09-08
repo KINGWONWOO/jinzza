@@ -26,9 +26,13 @@ class UImage;
  * the main menu binds it to switch back to its buttons page, AjinzzaWardrobeKiosk binds it to
  * remove this widget from the viewport - see UjinzzaSettingsWidget for the identical pattern.
  *
- * UMG-authored: add, per row, a UTextBlock value label and two UButtons (Prev/Next) named
- * exactly as below, plus a UImage "HairColorSwatch" and a "DoneButton". All BindWidgetOptional
- * so the class compiles before that layout exists.
+ * TEMP C++-built (see docs/umg_widget_authoring_guide.md, same pattern as UjinzzaSettingsWidget/
+ * UjinzzaRoomSettingsWidget/etc.): builds its own tree in BuildWidgetTree() since WBP_Customization
+ * has never had a Designer-authored layout (there's no unreal-mcp tool that can place child
+ * widgets into a WBP's visual tree - see [[unreal-mcp-gotchas]]). Properties below stay
+ * BindWidgetOptional (harmless either way) so a future hand-authored WBP_Customization layout
+ * would still bind to them instead of BuildWidgetTree()'s constructed ones - see that method's
+ * own early-out (`if (WidgetTree->RootWidget) return;`).
  */
 UCLASS()
 class JINZZA_API UjinzzaCustomizationWidget : public UUserWidget
@@ -54,6 +58,7 @@ protected:
 	UFUNCTION() void OnDoneClicked();
 
 private:
+	void BuildWidgetTree();
 	void RefreshAllRows();
 	static FText GetStyleDisplayName(EJinzzaCustomizationStyle Style);
 	static FText GetHairColorDisplayName(EJinzzaHairColor Color);

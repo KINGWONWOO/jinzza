@@ -26,6 +26,12 @@ struct FJinzzaMatchSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	int32 VoteCount = 1;
 
+	/** 1-3 (design doc section 9) - how many (write 20s + answer 15s + discuss 30s) = 65s cycles
+	 * Question Time runs before moving to Mid Evaluation. Previously hardcoded to the doc's
+	 * default of 2 - see UjinzzaRoundPhaseSubsystem::GetPhaseDurationSeconds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 QuestionTimeCycles = 2;
+
 	/** One of "Slow" / "Normal" / "Fast". */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString PhaseSpeed = TEXT("Normal");

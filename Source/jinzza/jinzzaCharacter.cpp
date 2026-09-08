@@ -19,6 +19,8 @@
 #include "jinzza.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 AjinzzaCharacter::AjinzzaCharacter()
 {
@@ -67,6 +69,55 @@ AjinzzaCharacter::AjinzzaCharacter()
 	{
 		PropUsageWidgetClass = PropUsageWidgetBPClass.Class;
 	}
+
+	// TEMP placeholder audio defaults - swap these for real per-surface/animation sounds later.
+	static ConstructorHelpers::FObjectFinder<USoundBase> FootstepSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/FootStep/Footstep.Footstep"));
+	if (FootstepSoundFinder.Succeeded())
+	{
+		FootstepSound = FootstepSoundFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> FootstepSoundAltFinder(TEXT("/Game/JINZZA/Audio/Sounds/FootStep/FootstepGrass.FootstepGrass"));
+	if (FootstepSoundAltFinder.Succeeded())
+	{
+		FootstepSoundAlt = FootstepSoundAltFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> JumpSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/UISounds/ButtonClickPopSound.ButtonClickPopSound"));
+	if (JumpSoundFinder.Succeeded())
+	{
+		JumpSound = JumpSoundFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> LandSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/Basketball/InteractWoodenBox__cut_0sec_.InteractWoodenBox__cut_0sec_"));
+	if (LandSoundFinder.Succeeded())
+	{
+		LandSound = LandSoundFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> ThumbsUpSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/BasketballHoop/correctanswer.correctanswer"));
+	if (ThumbsUpSoundFinder.Succeeded())
+	{
+		ThumbsUpSound = ThumbsUpSoundFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> ThumbsDownSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/Emotes/WrongAnswerSound.WrongAnswerSound"));
+	if (ThumbsDownSoundFinder.Succeeded())
+	{
+		ThumbsDownSound = ThumbsDownSoundFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> MiddleFingerSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/Bat/Punch1.Punch1"));
+	if (MiddleFingerSoundFinder.Succeeded())
+	{
+		MiddleFingerSound = MiddleFingerSoundFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<USoundBase> PointSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/Megaphone/PressButton.PressButton"));
+	if (PointSoundFinder.Succeeded())
+	{
+		PointSound = PointSoundFinder.Object;
+	}
 }
 
 void AjinzzaCharacter::BeginPlay()
@@ -96,6 +147,46 @@ void AjinzzaCharacter::Tick(float DeltaSeconds)
 	if (IsLocallyControlled())
 	{
 		UpdateInteractionFocus();
+	}
+
+	UpdateFootsteps(DeltaSeconds);
+}
+
+void AjinzzaCharacter::UpdateFootsteps(float DeltaSeconds)
+{
+	if (!GetCharacterMovement()->IsMovingOnGround())
+	{
+		DistanceSinceLastFootstep = 0.f;
+		return;
+	}
+
+	const float Speed = GetVelocity().Size2D();
+	if (Speed < 10.f)
+	{
+		return;
+	}
+
+	DistanceSinceLastFootstep += Speed * DeltaSeconds;
+	if (DistanceSinceLastFootstep < FootstepDistanceInterval)
+	{
+		return;
+	}
+	DistanceSinceLastFootstep = 0.f;
+
+	USoundBase* StepSound = (FootstepSoundAlt && FMath::RandBool()) ? FootstepSoundAlt : FootstepSound;
+	if (StepSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, StepSound, GetActorLocation());
+	}
+}
+
+void AjinzzaCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+
+	if (LandSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, LandSound, GetActorLocation());
 	}
 }
 
@@ -201,6 +292,11 @@ void AjinzzaCharacter::DoJumpStart()
 	if (bStunned)
 	{
 		return;
+	}
+
+	if (JumpSound && CanJump())
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, JumpSound, GetActorLocation());
 	}
 
 	// pass Jump to the character
@@ -557,6 +653,13 @@ void AjinzzaCharacter::Server_PlayEmote_Implementation(EJinzzaEmoteType EmoteTyp
 
 void AjinzzaCharacter::Multicast_PlayEmote_Implementation(EJinzzaEmoteType EmoteType)
 {
+	// TEMP placeholder sound - plays independently of whether a montage exists yet, so emotes are
+	// audible today even with no animation content.
+	if (USoundBase* Sound = GetSoundForEmote(EmoteType))
+	{
+		UGameplayStatics::PlaySoundAtLocation(this, Sound, GetActorLocation());
+	}
+
 	UAnimMontage* Montage = GetMontageForEmote(EmoteType);
 	if (!Montage)
 	{
@@ -579,6 +682,18 @@ UAnimMontage* AjinzzaCharacter::GetMontageForEmote(EJinzzaEmoteType EmoteType) c
 	case EJinzzaEmoteType::ThumbsDown:   return ThumbsDownMontage;
 	case EJinzzaEmoteType::MiddleFinger: return MiddleFingerMontage;
 	case EJinzzaEmoteType::Point:        return PointMontage;
+	default:                             return nullptr;
+	}
+}
+
+USoundBase* AjinzzaCharacter::GetSoundForEmote(EJinzzaEmoteType EmoteType) const
+{
+	switch (EmoteType)
+	{
+	case EJinzzaEmoteType::ThumbsUp:     return ThumbsUpSound;
+	case EJinzzaEmoteType::ThumbsDown:   return ThumbsDownSound;
+	case EJinzzaEmoteType::MiddleFinger: return MiddleFingerSound;
+	case EJinzzaEmoteType::Point:        return PointSound;
 	default:                             return nullptr;
 	}
 }

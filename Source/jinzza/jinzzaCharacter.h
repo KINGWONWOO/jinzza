@@ -13,6 +13,7 @@ class USkeletalMeshComponent;
 class UCameraComponent;
 class UInputAction;
 class UAnimMontage;
+class USoundBase;
 class UjinzzaDisguiseComponent;
 class UjinzzaCharacterCustomizationComponent;
 class UjinzzaEmoteWheelWidget;
@@ -100,6 +101,32 @@ protected:
 	UPROPERTY(EditAnywhere, Category ="Input", meta = (ClampMin = 0, Units = "cm"))
 	float InteractTraceDistance = 300.f;
 
+	/** Footstep sound played at a roughly even stride interval while walking/sprinting on the
+	 * ground - alternates with FootstepSoundAlt for a little variety. TEMP placeholder audio
+	 * (see [[placeholder-prop-meshes]]-style project convention) - defaults to the project's
+	 * generic Footstep asset until real per-surface sounds exist. */
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	TObjectPtr<USoundBase> FootstepSound;
+
+	/** Second footstep variant, randomly alternated with FootstepSound. */
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	TObjectPtr<USoundBase> FootstepSoundAlt;
+
+	/** Ground distance (cm) the character must cover between footstep sounds - roughly one stride. */
+	UPROPERTY(EditAnywhere, Category = "Audio", meta = (ClampMin = "1.0", Units = "cm"))
+	float FootstepDistanceInterval = 150.f;
+
+	/** Played once when this character actually leaves the ground under their own input (Jump()). */
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	TObjectPtr<USoundBase> JumpSound;
+
+	/** Played once when this character lands back on the ground after being airborne. */
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	TObjectPtr<USoundBase> LandSound;
+
+	/** Ground distance covered since the last footstep sound - see UpdateFootsteps. */
+	float DistanceSinceLastFootstep = 0.f;
+
 	/** Server-only. The prop currently attached to this character, if any - never needs to be known by clients (they just ask the server to use it). */
 	TObjectPtr<AjinzzaInteractableProp> HeldProp;
 
@@ -119,6 +146,21 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Emote")
 	TObjectPtr<UAnimMontage> PointMontage;
+
+	/** TEMP placeholder sound effects for each emote-wheel direction - swap for real SFX later.
+	 * Unlike the montages above these already have defaults (set in the constructor), so emotes
+	 * are audible today even with no animation content yet. */
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TObjectPtr<USoundBase> ThumbsUpSound;
+
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TObjectPtr<USoundBase> ThumbsDownSound;
+
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TObjectPtr<USoundBase> MiddleFingerSound;
+
+	UPROPERTY(EditAnywhere, Category = "Emote")
+	TObjectPtr<USoundBase> PointSound;
 
 	/** True while the radial emote menu is open - suppresses camera look so mouse movement steers the wheel instead. */
 	bool bEmoteWheelOpen = false;
@@ -199,6 +241,15 @@ protected:
 	/** Every tick, shows/hides the interaction prompt on whichever prop the local player is currently looking at. */
 	void UpdateInteractionFocus();
 
+	/** Plays a footstep sound at a roughly even stride interval while moving on the ground. Runs
+	 * on every instance (not just the locally-controlled one) since replicated movement drives a
+	 * simulated proxy's velocity too - so nearby players hear each other's footsteps from their
+	 * own machine's Tick without needing an RPC. Purely cosmetic, never gameplay-authoritative. */
+	void UpdateFootsteps(float DeltaSeconds);
+
+	/** Plays LandSound when this character touches back down after being airborne. */
+	virtual void Landed(const FHitResult& Hit) override;
+
 	/** Requests the server activate whatever prop this character is currently holding */
 	void DoUseHeldProp();
 
@@ -251,6 +302,7 @@ protected:
 
 private:
 	UAnimMontage* GetMontageForEmote(EJinzzaEmoteType EmoteType) const;
+	USoundBase* GetSoundForEmote(EJinzzaEmoteType EmoteType) const;
 
 public:
 

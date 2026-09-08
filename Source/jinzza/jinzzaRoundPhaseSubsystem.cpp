@@ -135,9 +135,9 @@ float UjinzzaRoundPhaseSubsystem::GetPhaseDurationSeconds(EJinzzaRoundPhase Phas
 	case EJinzzaRoundPhase::FreeTime1:
 		return 120.f * FreeTimeMultiplier;
 	case EJinzzaRoundPhase::QuestionTime:
-		// 2 cycles of (작성 20s + 답변 15s + 토론 30s) = 130s. The cycle count (1-3, doc section 9)
-		// isn't a lobby setting yet, so this is fixed at the doc's default of 2 for now.
-		return 130.f;
+		// Each cycle is (작성 20s + 답변 15s + 토론 30s) = 65s; QuestionTimeCycles (1-3, doc section 9)
+		// is now a real lobby setting - defaults to the doc's own 2-cycle (130s) example.
+		return 65.f * FMath::Clamp(GetMatchSettings().QuestionTimeCycles, 1, 3);
 	case EJinzzaRoundPhase::MidEvaluation:
 		return 60.f;
 	case EJinzzaRoundPhase::FreeTime2:

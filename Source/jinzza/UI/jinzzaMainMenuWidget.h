@@ -23,16 +23,18 @@ class UAudioComponent;
  *
  * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
  * BuildWidgetTree() instead of relying on a Designer-authored WBP_MainMenu layout, so PIE isn't
- * blocked while the visual design pass hasn't happened yet. SettingsWidget is constructed
- * directly as a UjinzzaSettingsWidget instance (which builds its own tree the same way) rather
- * than loading a WBP_Settings class. CustomizationButton, CharacterPreviewImage, and
- * VoiceTestWidget are left unconstructed (null) since their backing content
- * (WBP_Customization / AjinzzaCharacterPreviewCapture wiring / WBP_VoiceTest) doesn't exist yet
- * - existing code already null-checks all three. When the visual design pass happens, delete
- * BuildWidgetTree(), restore `meta = (BindWidget)`/`BindWidgetOptional` on the properties below,
- * and lay them out for real in WBP_MainMenu's Designer per the guide (including placing
- * CharacterPreviewImage on the right and VoiceTestWidget at the bottom-right once that content
- * exists).
+ * blocked while the visual design pass hasn't happened yet. SettingsWidget and
+ * CustomizationWidget are both constructed directly as nested widget instances (which build their
+ * own trees the same way) rather than loading WBP_Settings/WBP_Customization classes.
+ * CustomizationButton sits on the right side of the button page. A "LOGO" text badge stands in
+ * for the company logo in the top-left corner until the user supplies the real image - swap it
+ * for a UImage at that point. CharacterPreviewImage and VoiceTestWidget are still left
+ * unconstructed (null) since their backing content (AjinzzaCharacterPreviewCapture wiring /
+ * WBP_VoiceTest) doesn't exist yet - existing code already null-checks both. When the visual
+ * design pass happens, delete BuildWidgetTree(), restore `meta = (BindWidget)`/
+ * `BindWidgetOptional` on the properties below, and lay them out for real in WBP_MainMenu's
+ * Designer per the guide (including placing CharacterPreviewImage on the right and
+ * VoiceTestWidget at the bottom-right once that content exists).
  *
  * Host Game creates a Steam session immediately with default match settings and travels
  * straight to the lobby - there is no pre-create setup screen. Joining is invite-only: a
@@ -91,7 +93,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UWidget> ButtonsPageRoot;
 
-	/** Opens the Customization switcher page - see UjinzzaCustomizationWidget (shared with AjinzzaWardrobeKiosk in the lobby). Left null - see class comment. */
+	/** Opens the Customization switcher page - see UjinzzaCustomizationWidget (shared with AjinzzaWardrobeKiosk in the lobby). Placed on the right side of the button page - see BuildWidgetTree. */
 	UPROPERTY()
 	TObjectPtr<UButton> CustomizationButton;
 

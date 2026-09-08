@@ -21,19 +21,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 
-namespace
-{
-	UVerticalBoxSlot* AddSpaced(UVerticalBox* Box, UWidget* Child, float TopPadding = 10.f)
-	{
-		UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(Child);
-		if (Slot)
-		{
-			Slot->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
-		}
-		return Slot;
-	}
-}
-
 void UjinzzaRoomSettingsWidget::BuildWidgetTree()
 {
 	if (!WidgetTree || WidgetTree->RootWidget)
@@ -60,29 +47,32 @@ void UjinzzaRoomSettingsWidget::BuildWidgetTree()
 	PanelBox->AddChild(Stack);
 
 	HeaderNote = JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("HeaderNote"), FText::GetEmpty());
-	AddSpaced(Stack, HeaderNote, 0.f);
-	AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("HeaderDivider")));
+	JinzzaUI::AddSpaced(Stack, HeaderNote, 0.f);
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("HeaderDivider")));
 
 	RoomNameBox = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomNameBox"));
-	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("RoomNameRow"), FText::FromString(TEXT("Room Name")), RoomNameBox), 16.f);
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("RoomNameRow"), FText::FromString(TEXT("Room Name")), RoomNameBox), 16.f);
 
 	MaxPlayersSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("MaxPlayersSpinBox"));
-	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("MaxPlayersRow"), FText::FromString(TEXT("Max Players")), MaxPlayersSpinBox));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("MaxPlayersRow"), FText::FromString(TEXT("Max Players")), MaxPlayersSpinBox));
 
 	JudgeCountSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("JudgeCountSpinBox"));
-	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("JudgeCountRow"), FText::FromString(TEXT("Judge Count")), JudgeCountSpinBox));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("JudgeCountRow"), FText::FromString(TEXT("Judge Count")), JudgeCountSpinBox));
 
 	VoteCountSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("VoteCountSpinBox"));
-	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("VoteCountRow"), FText::FromString(TEXT("Vote Count")), VoteCountSpinBox));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("VoteCountRow"), FText::FromString(TEXT("Vote Count")), VoteCountSpinBox));
+
+	QuestionTimeCyclesSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("QuestionTimeCyclesSpinBox"));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("QuestionTimeCyclesRow"), FText::FromString(TEXT("Question Time Cycles")), QuestionTimeCyclesSpinBox));
 
 	PhaseSpeedCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("PhaseSpeedCombo"));
-	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("PhaseSpeedRow"), FText::FromString(TEXT("Phase Speed")), PhaseSpeedCombo));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("PhaseSpeedRow"), FText::FromString(TEXT("Phase Speed")), PhaseSpeedCombo));
 
 	RoleAssignCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("RoleAssignCombo"));
-	AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("RoleAssignRow"), FText::FromString(TEXT("Role Assign Method")), RoleAssignCombo));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("RoleAssignRow"), FText::FromString(TEXT("Role Assign Method")), RoleAssignCombo));
 
 	UHorizontalBox* ButtonRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("ButtonRow"));
-	AddSpaced(Stack, ButtonRow, 20.f);
+	JinzzaUI::AddSpaced(Stack, ButtonRow, 20.f);
 
 	CloseButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Close")));
 	if (UHorizontalBoxSlot* CloseSlot = ButtonRow->AddChildToHorizontalBox(CloseButton))
@@ -152,6 +142,17 @@ void UjinzzaRoomSettingsWidget::NativeOnInitialized()
 		VoteCountSpinBox->SetIsEnabled(bEditable);
 	}
 
+	if (QuestionTimeCyclesSpinBox)
+	{
+		QuestionTimeCyclesSpinBox->SetMinValue(1.f);
+		QuestionTimeCyclesSpinBox->SetMaxValue(3.f);
+		QuestionTimeCyclesSpinBox->SetMinSliderValue(1.f);
+		QuestionTimeCyclesSpinBox->SetMaxSliderValue(3.f);
+		QuestionTimeCyclesSpinBox->SetValue(static_cast<float>(CurrentSettings.QuestionTimeCycles));
+		QuestionTimeCyclesSpinBox->SetDelta(1.f);
+		QuestionTimeCyclesSpinBox->SetIsEnabled(bEditable);
+	}
+
 	if (PhaseSpeedCombo)
 	{
 		PhaseSpeedCombo->AddOption(TEXT("Slow"));
@@ -199,6 +200,7 @@ void UjinzzaRoomSettingsWidget::OnApplyClicked()
 	NewSettings.MaxPlayers = MaxPlayersSpinBox ? FMath::RoundToInt(MaxPlayersSpinBox->GetValue()) : 6;
 	NewSettings.JudgeCount = JudgeCountSpinBox ? FMath::RoundToInt(JudgeCountSpinBox->GetValue()) : 1;
 	NewSettings.VoteCount = VoteCountSpinBox ? FMath::RoundToInt(VoteCountSpinBox->GetValue()) : 1;
+	NewSettings.QuestionTimeCycles = QuestionTimeCyclesSpinBox ? FMath::RoundToInt(QuestionTimeCyclesSpinBox->GetValue()) : 2;
 	NewSettings.PhaseSpeed = PhaseSpeedCombo ? PhaseSpeedCombo->GetSelectedOption() : TEXT("Normal");
 	NewSettings.RoleAssignMethod = RoleAssignCombo ? RoleAssignCombo->GetSelectedOption() : TEXT("Random");
 

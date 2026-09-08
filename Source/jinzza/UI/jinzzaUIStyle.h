@@ -11,6 +11,8 @@ class UWidget;
 class UWidgetTree;
 class UTextBlock;
 class UBorder;
+class UVerticalBox;
+class UVerticalBoxSlot;
 
 /** Binds click/hover sound playback to buttons built via JinzzaUI::MakeStyledButton. Not for direct use. */
 UCLASS()
@@ -92,4 +94,13 @@ namespace JinzzaUI
 	 * the rest on the right. Used by every C++-built settings/kiosk-style panel to avoid
 	 * repeating this layout per control - see UjinzzaSettingsWidget/UjinzzaRoomSettingsWidget. */
 	UWidget* MakeLabeledRow(UWidgetTree* Tree, FName Name, const FText& LabelText, UWidget* Control, float LabelWidth = 160.f);
+
+	/** Adds Child to the bottom of Box with TopPadding above it, filled horizontally - the
+	 * standard vertical-stack spacing helper every C++-built panel needs. Centralized here
+	 * (rather than each widget .cpp defining its own identically-named anonymous-namespace
+	 * copy, as several used to) specifically because Unreal's unity build concatenates multiple
+	 * .cpp files into one translation unit - two same-named functions in anonymous namespaces
+	 * only collide once unity grouping happens to put both files in the same blob, which is a
+	 * latent, unity-grouping-dependent bug rather than an immediate one. */
+	UVerticalBoxSlot* AddSpaced(UVerticalBox* Box, UWidget* Child, float TopPadding = 10.f);
 }

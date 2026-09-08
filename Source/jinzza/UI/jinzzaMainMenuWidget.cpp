@@ -37,6 +37,16 @@ namespace
 	};
 
 	constexpr float FadeInDuration = 0.35f;
+
+	// TEMP placeholder panel-open sound (menu entry, opening Settings/Customization) - swap for
+	// real SFX later. Shared here since three call sites in this file all want the same one-shot.
+	void PlayPanelOpenSound(const UObject* WorldContext)
+	{
+		if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/UISounds/LobbyPannelOpen__cut_1sec_.LobbyPannelOpen__cut_1sec_")))
+		{
+			UGameplayStatics::PlaySound2D(WorldContext, Sound);
+		}
+	}
 }
 
 void UjinzzaMainMenuWidget::BuildWidgetTree()
@@ -52,8 +62,35 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 	Background->SetVerticalAlignment(VAlign_Fill);
 	WidgetTree->RootWidget = Background;
 
+	// RootOverlay holds the page Switcher plus the logo badge, so the badge stays on screen no
+	// matter which switcher page (Buttons/Settings/Customization) is active.
+	UOverlay* RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
+	Background->SetContent(RootOverlay);
+
 	Switcher = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass(), TEXT("Switcher"));
-	Background->SetContent(Switcher);
+	if (UOverlaySlot* SwitcherSlot = RootOverlay->AddChildToOverlay(Switcher))
+	{
+		SwitcherSlot->SetHorizontalAlignment(HAlign_Fill);
+		SwitcherSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+
+	// TEMP placeholder company logo (top-left corner) - the user will supply the real logo later;
+	// swap this badge for a UImage pointed at that texture when it exists.
+	USizeBox* LogoBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("LogoBox"));
+	LogoBox->SetWidthOverride(84.f);
+	LogoBox->SetHeightOverride(84.f);
+	if (UOverlaySlot* LogoSlot = RootOverlay->AddChildToOverlay(LogoBox))
+	{
+		LogoSlot->SetHorizontalAlignment(HAlign_Left);
+		LogoSlot->SetVerticalAlignment(VAlign_Top);
+		LogoSlot->SetPadding(FMargin(24.f));
+	}
+
+	UBorder* LogoBadge = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("LogoBadge"));
+	LogoBadge->SetHorizontalAlignment(HAlign_Center);
+	LogoBadge->SetVerticalAlignment(VAlign_Center);
+	LogoBox->AddChild(LogoBadge);
+	LogoBadge->SetContent(JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("LogoText"), FText::FromString(TEXT("LOGO"))));
 
 	// Page 0: the button-list page. ButtonsPageRoot is the whole page (fade target); its content
 	// is centered in a fixed-width column via a Size Box.
@@ -95,12 +132,26 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 	QuitButton = JinzzaUI::MakeWarningButton(WidgetTree, TEXT("QuitButton"), FText::FromString(TEXT("Quit")));
 	AddSpaced(QuitButton);
 
+	// Customization button sits on the right side of the page, independent of the centered
+	// button column above, so it doesn't get mixed in with Host/Settings/Quit's stack.
+	CustomizationButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CustomizationButton"), FText::FromString(TEXT("Customize")));
+	if (UOverlaySlot* CustomizeSlot = ButtonsPage->AddChildToOverlay(CustomizationButton))
+	{
+		CustomizeSlot->SetHorizontalAlignment(HAlign_Right);
+		CustomizeSlot->SetVerticalAlignment(VAlign_Center);
+		CustomizeSlot->SetPadding(FMargin(0.f, 0.f, 48.f, 0.f));
+	}
+
 	Switcher->AddChild(ButtonsPage);
 
 	// Page 1: Settings, built directly as a nested UjinzzaSettingsWidget (which builds its own
 	// tree the same way) rather than loading a WBP_Settings Blueprint class.
 	SettingsWidget = WidgetTree->ConstructWidget<UjinzzaSettingsWidget>(UjinzzaSettingsWidget::StaticClass(), TEXT("SettingsWidget"));
 	Switcher->AddChild(SettingsWidget);
+
+	// Page 2: Customization, same nested-widget pattern as Settings above.
+	CustomizationWidget = WidgetTree->ConstructWidget<UjinzzaCustomizationWidget>(UjinzzaCustomizationWidget::StaticClass(), TEXT("CustomizationWidget"));
+	Switcher->AddChild(CustomizationWidget);
 }
 
 void UjinzzaMainMenuWidget::NativeOnInitialized()
@@ -160,6 +211,8 @@ void UjinzzaMainMenuWidget::NativeOnInitialized()
 	{
 		MusicComponent = UGameplayStatics::SpawnSound2D(this, Bgm, 1.f, 1.f, 0.f, nullptr, true, false);
 	}
+
+	PlayPanelOpenSound(this);
 }
 
 void UjinzzaMainMenuWidget::NativeDestruct()
@@ -247,6 +300,7 @@ void UjinzzaMainMenuWidget::OnSettingsClicked()
 	if (Switcher)
 	{
 		Switcher->SetActiveWidgetIndex(Page_Settings);
+		PlayPanelOpenSound(this);
 	}
 }
 
@@ -255,6 +309,7 @@ void UjinzzaMainMenuWidget::OnCustomizationClicked()
 	if (Switcher)
 	{
 		Switcher->SetActiveWidgetIndex(Page_Customization);
+		PlayPanelOpenSound(this);
 	}
 }
 

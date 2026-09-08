@@ -8,6 +8,8 @@
 #include "Components/SizeBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateBrush.h"
@@ -290,6 +292,16 @@ namespace JinzzaUI
 		Body->SetFont(BodyFont(15));
 		Body->SetColorAndOpacity(FSlateColor(bMuted ? Color_TextMuted : Color_TextPrimary));
 		return Body;
+	}
+
+	UVerticalBoxSlot* AddSpaced(UVerticalBox* Box, UWidget* Child, float TopPadding)
+	{
+		UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(Child);
+		if (Slot)
+		{
+			Slot->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
+		}
+		return Slot;
 	}
 
 	UWidget* MakeLabeledRow(UWidgetTree* Tree, FName Name, const FText& LabelText, UWidget* Control, float LabelWidth)

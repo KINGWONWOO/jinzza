@@ -154,12 +154,6 @@ void AjinzzaGameGameMode::AssignRoles()
 		Imitator->ServerSetVoiceFilter(RoundVoiceFilter);
 	}
 
-	// TEMP DEBUG (remove once the PostLogin/TryStartRound fix is trusted - see todo.txt round 4):
-	// success-path log, since the only existing AssignRoles log line was on the skip path and gave
-	// no positive signal that a real assignment (as opposed to none happening at all) occurred.
-	UE_LOG(Logjinzza, Warning, TEXT("[TEMP DEBUG] AssignRoles succeeded with %d players - RealOne=%s Judge=%s Imitators=%d"),
-		Players.Num(), *RealOne->GetPlayerName(), *Judge->GetPlayerName(), Players.Num() - 2);
-
 	// Deliver role knowledge - each player learns only what the design doc says they're allowed
 	// to know (info asymmetry is the whole point; see AjinzzaPartyPlayerState's class comment).
 	for (AjinzzaPartyPlayerState* PartyPS : Players)

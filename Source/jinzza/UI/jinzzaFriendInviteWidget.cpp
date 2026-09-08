@@ -25,19 +25,6 @@ void UJinzzaFriendInviteRowHandler::HandleInviteClicked()
 	}
 }
 
-namespace
-{
-	UVerticalBoxSlot* AddSpaced(UVerticalBox* Box, UWidget* Child, float TopPadding = 10.f)
-	{
-		UVerticalBoxSlot* Slot = Box->AddChildToVerticalBox(Child);
-		if (Slot)
-		{
-			Slot->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
-		}
-		return Slot;
-	}
-}
-
 void UjinzzaFriendInviteWidget::BuildWidgetTree()
 {
 	if (!WidgetTree || WidgetTree->RootWidget)
@@ -63,17 +50,17 @@ void UjinzzaFriendInviteWidget::BuildWidgetTree()
 	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Stack"));
 	PanelBox->AddChild(Stack);
 
-	AddSpaced(Stack, JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("Title"), FText::FromString(TEXT("Invite Friends"))), 0.f);
-	AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("TitleDivider")));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("Title"), FText::FromString(TEXT("Invite Friends"))), 0.f);
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("TitleDivider")));
 
 	HeaderNote = JinzzaUI::MakeBodyText(WidgetTree, TEXT("HeaderNote"), FText::FromString(TEXT("Loading friends list...")), true);
-	AddSpaced(Stack, HeaderNote, 12.f);
+	JinzzaUI::AddSpaced(Stack, HeaderNote, 12.f);
 
 	FriendListScrollBox = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("FriendListScrollBox"));
 	USizeBox* ScrollHeightBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("FriendListHeightBox"));
 	ScrollHeightBox->SetHeightOverride(320.f);
 	ScrollHeightBox->AddChild(FriendListScrollBox);
-	AddSpaced(Stack, ScrollHeightBox, 10.f);
+	JinzzaUI::AddSpaced(Stack, ScrollHeightBox, 10.f);
 
 	FriendListBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("FriendListBox"));
 	FriendListScrollBox->AddChild(FriendListBox);

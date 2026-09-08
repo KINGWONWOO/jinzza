@@ -221,14 +221,6 @@ void UjinzzaSettingsWidget::BuildWidgetTree()
 	JumpRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("JumpRebindLabel"), FText::FromString(TEXT("Default")));
 	AddRow(ControlsPage, TEXT("Jump"), FText::FromString(TEXT("Jump")), MakeRebindControl(WidgetTree, JumpRebindButton, JumpRebindLabel));
 
-	ShootRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("ShootRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
-	ShootRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("ShootRebindLabel"), FText::FromString(TEXT("Default")));
-	AddRow(ControlsPage, TEXT("Shoot"), FText::FromString(TEXT("Shoot")), MakeRebindControl(WidgetTree, ShootRebindButton, ShootRebindLabel));
-
-	SwapWeaponRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("SwapWeaponRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
-	SwapWeaponRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("SwapWeaponRebindLabel"), FText::FromString(TEXT("Default")));
-	AddRow(ControlsPage, TEXT("SwapWeapon"), FText::FromString(TEXT("Swap Weapon")), MakeRebindControl(WidgetTree, SwapWeaponRebindButton, SwapWeaponRebindLabel));
-
 	SprintRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("SprintRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
 	SprintRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("SprintRebindLabel"), FText::FromString(TEXT("Default")));
 	AddRow(ControlsPage, TEXT("Sprint"), FText::FromString(TEXT("Sprint")), MakeRebindControl(WidgetTree, SprintRebindButton, SprintRebindLabel));
@@ -282,8 +274,6 @@ void UjinzzaSettingsWidget::NativeOnInitialized()
 	if (BackButton) BackButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnBackClicked);
 
 	if (JumpRebindButton) JumpRebindButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnRebindJumpClicked);
-	if (ShootRebindButton) ShootRebindButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnRebindShootClicked);
-	if (SwapWeaponRebindButton) SwapWeaponRebindButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnRebindSwapWeaponClicked);
 	if (SprintRebindButton) SprintRebindButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnRebindSprintClicked);
 }
 
@@ -478,13 +468,9 @@ void UjinzzaSettingsWidget::PopulateControlsPage()
 
 	RebindLabels.Reset();
 	RebindLabels.Add(TEXT("IA_Jump"), JumpRebindLabel);
-	RebindLabels.Add(TEXT("IA_Shoot"), ShootRebindLabel);
-	RebindLabels.Add(TEXT("IA_SwapWeapon"), SwapWeaponRebindLabel);
 	RebindLabels.Add(TEXT("IA_Sprint"), SprintRebindLabel);
 
 	RefreshRebindButtonLabel(TEXT("IA_Jump"));
-	RefreshRebindButtonLabel(TEXT("IA_Shoot"));
-	RefreshRebindButtonLabel(TEXT("IA_SwapWeapon"));
 	RefreshRebindButtonLabel(TEXT("IA_Sprint"));
 }
 
@@ -572,8 +558,6 @@ FReply UjinzzaSettingsWidget::NativeOnKeyDown(const FGeometry& InGeometry, const
 }
 
 void UjinzzaSettingsWidget::OnRebindJumpClicked() { StartRebind(TEXT("IA_Jump")); }
-void UjinzzaSettingsWidget::OnRebindShootClicked() { StartRebind(TEXT("IA_Shoot")); }
-void UjinzzaSettingsWidget::OnRebindSwapWeaponClicked() { StartRebind(TEXT("IA_SwapWeapon")); }
 void UjinzzaSettingsWidget::OnRebindSprintClicked() { StartRebind(TEXT("IA_Sprint")); }
 
 void UjinzzaSettingsWidget::SetActiveTab(int32 TabIndex)

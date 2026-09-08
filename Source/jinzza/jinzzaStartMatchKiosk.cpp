@@ -7,6 +7,8 @@
 #include "jinzzaUIStyle.h"
 #include "GameFramework/PlayerController.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 
 AjinzzaStartMatchKiosk::AjinzzaStartMatchKiosk()
 {
@@ -42,6 +44,12 @@ void AjinzzaStartMatchKiosk::Interact(APlayerController* Interactor)
 	if (!Interactor || !Interactor->IsLocalController() || !Interactor->HasAuthority())
 	{
 		return;
+	}
+
+	// TEMP placeholder confirm sound - swap for real SFX later.
+	if (USoundBase* ConfirmSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/UISounds/LobbyPannelOpen__cut_1sec_.LobbyPannelOpen__cut_1sec_")))
+	{
+		UGameplayStatics::PlaySound2D(Interactor, ConfirmSound);
 	}
 
 	if (UWorld* World = GetWorld())

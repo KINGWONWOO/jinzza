@@ -865,6 +865,292 @@ kiosk-driven model and added a real Steam friends-list invite panel
 - Changes are NOT committed.
 
 =================================================================
+DONE THIS SESSION (2026-09-08, by Claude) - full TEMP audio pass: footsteps,
+jump/land, per-prop use sounds, and a Lvl_Game BGM, all placeholder content
+per the user's explicit "add everything you can, temporarily, I'll replace
+later" ask
+=================================================================
+- Fetched real placeholder SFX/BGM from the same source this project already
+  draws its other temp audio from (github.com/KINGWONWOO/Unreal_Game_Noob) -
+  same method as the 2026-09-02 sessions (the local docs/Unreal_Game_Noob-main
+  checkout's .uasset files are still Git LFS pointer text, so fetched the real
+  binaries directly from media.githubusercontent.com/media/KINGWONWOO/
+  Unreal_Game_Noob/main/<path> and copied them straight into Content/JINZZA/
+  Audio/Sounds/<Category>/, keeping each file's original name so no internal
+  package-name mismatch is introduced). All plain SoundWave assets (no _Cue
+  wrapper, no dependencies) - confirmed via get_dependencies, same "no path
+  issues" property the existing Footstep/FootstepGrass assets already had:
+  - Audio/Sounds/Bat/Punch1 (Combat/Punch1) - Bat's UseSound
+  - Audio/Sounds/Boombox/FruitGameBgm (fruitGame/FruitGameBgm) - Boombox's Track
+  - Audio/Sounds/Megaphone/PressButton (fruitGame/PressButton) - Megaphone's UseSound
+  - Audio/Sounds/Basketball/InteractWoodenBox__cut_0sec_ (fruitGame/InteractWoodenBox)
+    - Basketball's UseSound, also reused as the Character's LandSound (see below)
+  - Audio/Sounds/BasketballHoop/correctanswer (fruitGame/correctanswer) - Hoop's ScoreSound
+  - Audio/Sounds/StunGun/Stunned (Combat/Stunned) - StunGun's UseSound
+  - Audio/Sounds/Game/QuizGameBgm (QuizGame/QuizGameBgm) - new Lvl_Game BGM,
+    set bLooping=true directly on the SoundWave via ObjectTools (no Cue needed
+    for a simple loop)
+  All 6 prop Blueprints' CDOs (BP_Bat/BP_Boombox/BP_Megaphone/BP_Basketball/
+  BP_BasketballHoop/BP_StunGun) already had these exact USoundBase fields
+  wired to UGameplayStatics::PlaySoundAtLocation in C++ from earlier sessions
+  (AjinzzaInteractableProp::Multicast_PlayEffects, AjinzzaBasketballHoop::
+  Multicast_PlayScoreEffects, AjinzzaBoomboxProp's AudioComponent) - just
+  unassigned until now, so this was pure asset-assignment via ObjectTools'
+  set_properties on each Default__X_C, no C++ changes needed for props.
+- New C++ (AjinzzaCharacter, jinzzaCharacter.h/.cpp): footsteps didn't exist
+  in any form before (todo.txt's 2026-09-02 entry explicitly flagged this as
+  not built). Added FootstepSound/FootstepSoundAlt (defaults to the existing
+  Footstep/FootstepGrass assets, randomly alternated), FootstepDistanceInterval
+  (150cm stride), ticked every instance (not just locally-controlled - this is
+  cosmetic and replicated movement drives a simulated proxy's velocity too, so
+  nearby players hear each other's footsteps with no RPC) via new
+  UpdateFootsteps(), called unconditionally from Tick(). Also added JumpSound
+  (defaults to the existing ButtonClickPopSound - played in DoJumpStart only
+  when CanJump() is true) and LandSound (defaults to the new
+  InteractWoodenBox thud - played from a new Landed() override).
+- New C++ (AjinzzaGamePlayerController): Lvl_Game had no BGM at all (only
+  MainMenu/Lobby did). Added a MusicComponent, started in BeginPlay (same
+  IsLocalController()-gated block that already creates the GameEndWidget) via
+  LoadObject<USoundBase> + UGameplayStatics::SpawnSound2D on QuizGameBgm,
+  stopped in a new EndPlay() override - exact same pattern as
+  UjinzzaMainMenuWidget/UjinzzaLobbyWidget's BGM (NativeOnInitialized/
+  NativeDestruct), just on a PlayerController instead of a widget since
+  Lvl_Game has no persistent menu-style widget to hang it off.
+- Deliberately NOT touched (would need their own new C++ hooks, out of scope
+  for "add what you can" without extra design calls):
+  - Kiosk panel-open sound (RoomSettings/Wardrobe/FriendInvite/StartMatch) -
+    the reference project has a LobbyPannelOpen sound that would fit, but
+    wiring it means picking a call site in AjinzzaInteractableKiosk's
+    EnterKioskUIMode - flagging as a good next step, not done automatically.
+  - Emote montages, prop UsageIcons, BasketballHoop's ScoreEffect (Niagara) -
+    still genuinely blocked on missing animation/VFX content, not audio.
+- [ ] NOT compiled or playtested this session (no build-trigger tool, as
+  always - see docs/PROJECT_STATUS.md §6). Touches jinzzaCharacter.h/.cpp and
+  jinzzaGamePlayerController.h/.cpp - please run a Live Coding compile, then
+  check Saved/Logs/jinzza.log is clean and walk around in PIE (Lvl_Lobby or
+  Lvl_Game) to confirm footsteps/jump/land play and don't sound obnoxious at
+  default volumes, and test each prop's F-key/use interaction for its sound.
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - fixed a real build
+failure the user hit after compiling the changes below
+=================================================================
+- User ran a Live Coding build and got a C2084/C2572 redefinition error in
+  "Module.jinzza.cpp" (the unity blob) between jinzzaRoomSettingsWidget.cpp
+  and jinzzaFriendInviteWidget.cpp - both had their own identically-signed
+  `AddSpaced(UVerticalBox*, UWidget*, float)` helper in an anonymous
+  namespace. Root cause: anonymous namespaces only guarantee uniqueness per
+  translation unit, and Unreal's adaptive-non-unity build pulled this
+  session's 5 changed files OUT of the unity blobs (per-file compile,
+  confirmed clean individually - steps 2-6 all succeeded), which reshuffled
+  which unchanged files land in the same blob together - putting
+  RoomSettingsWidget.cpp and FriendInviteWidget.cpp in the same one for the
+  first time and surfacing a pre-existing latent collision neither file had
+  hit before. Grepped and found jinzzaLobbyWidget.cpp and
+  jinzzaCustomizationWidget.cpp (both edited this session) had each grown
+  their own third and fourth copies of the exact same helper - a ticking
+  time bomb regardless of what triggered it this time.
+- Fix: moved `AddSpaced` into the shared `JinzzaUI` namespace
+  (jinzzaUIStyle.h/.cpp, right after MakeLabeledRow) as the one real
+  definition, and deleted the four per-file anonymous-namespace copies
+  (jinzzaRoomSettingsWidget.cpp, jinzzaFriendInviteWidget.cpp,
+  jinzzaLobbyWidget.cpp, jinzzaCustomizationWidget.cpp), updating every call
+  site to `JinzzaUI::AddSpaced(...)`. UjinzzaMainMenuWidget's own AddSpaced is
+  a local lambda captured inside BuildWidgetTree (not a free function), so it
+  was never part of this collision and needed no change. Behavior is
+  otherwise identical - the only real difference is the default TopPadding
+  argument value used by the couple of call sites in each file that didn't
+  pass one explicitly is now uniformly 10.f (was already 10.f in Room
+  Settings/FriendInvite/Customization; only Lobby's had used 8.f - the two
+  divider-spacing call sites affected are +2px, cosmetically invisible).
+- [ ] Still not compiled by this session (no build-trigger tool) - please
+  re-run the Live Coding build. This should now get past Module.jinzza.cpp;
+  if anything else fails, paste the new error.
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - placed the last lobby
+kiosk, gave Customization a real UMG tree, added a main-menu Customize button
++ placeholder logo, and a first-open welcome overlay in the lobby
+=================================================================
+- User asked to: invite/start-match-test the lobby kiosks, place the
+  "customizable object" in Lvl_Lobby, confirm the mouse-visible/keyboard-input
+  toggle on opening/closing a kiosk UI, show an intro when the lobby first
+  opens, and add a Customization button (right side of the main menu) with a
+  temporary placeholder for a company logo the user will supply later.
+- Checked Lvl_Lobby first: AjinzzaFriendInviteKiosk and AjinzzaStartMatchKiosk
+  were already placed (from the 2026-09-07 session, once compiled) at
+  (-400,0,80)/(400,0,80) either side of the existing RoomSettingsKiosk at
+  (0,0,80) - only AjinzzaWardrobeKiosk ("the customizable object") was still
+  missing. Spawned it at (0,400,80) via SceneTools and saved the level.
+- Mouse-visible/keyboard-input toggle: already fully implemented (confirmed by
+  reading, not assumed) - every kiosk (RoomSettings/Wardrobe/FriendInvite)
+  calls AjinzzaInteractableKiosk::EnterKioskUIMode on open (cursor visible,
+  Game+UI input, keyboard focus on the panel) and ExitKioskUIMode on close
+  (cursor hidden, Game-only input) - see that class's 2026-09-07 header
+  comment. Nothing needed changing here, just verifying it covers the newly-
+  placed Wardrobe kiosk too (it does, same base class).
+- Found a real gap while wiring the Customization button: UjinzzaCustomizationWidget
+  was the one main-menu-adjacent widget the 2026-09-07 "5 widgets get a
+  BuildWidgetTree()" pass had NOT touched - it was still UMG-authored
+  (BindWidgetOptional, no Designer layout ever built, same "no unreal-mcp
+  tool can place child widgets in a WBP" gap as always). Adding a working
+  Customization button meant it would open a genuinely blank panel otherwise,
+  so gave it the same BuildWidgetTree() treatment as
+  UjinzzaSettingsWidget/UjinzzaRoomSettingsWidget: 5 Prev/Value/Next cycle rows
+  (Head/HairColor/Top/Eyebrows/Eyes, HairColor's row also gets its color
+  swatch image) plus a Done button, all via JinzzaUI helpers - no logic
+  changed, RefreshAllRows/OnXPrevClicked/etc. were already complete and just
+  needed real widgets to bind to.
+- jinzzaMainMenuWidget.cpp: constructed CustomizationButton (right side of the
+  button page, independent of the centered Host/Settings/Quit stack) and
+  CustomizationWidget (Switcher page 2) for real - both were previously
+  declared but deliberately left null. The click handler/back-navigation
+  wiring in NativeOnInitialized already existed and needed no changes.
+  Wrapped Switcher in a new RootOverlay so a top-left "LOGO" text badge (via
+  JinzzaUI::MakePanelBackground) can sit on top of every switcher page as a
+  TEMP stand-in for the company logo the user said they'll provide later -
+  swap that badge for a UImage pointed at the real texture when it exists.
+- jinzzaLobbyWidget.h/.cpp: added a first-open welcome overlay (full-screen
+  dim scrim + centered panel: "JINZZA" title, a short orientation blurb about
+  the kiosks, and a "closes automatically" hint) built in BuildWidgetTree,
+  shown immediately and auto-hidden via a 5-second FTimerHandle set in
+  NativeOnInitialized (cleared in NativeDestruct). Deliberately dismiss-by-
+  timer only, no input-driven skip - simplest fit for "show it when the lobby
+  first opens" without adding new input plumbing.
+- [ ] NOT compiled or playtested this session either (same standing
+  limitation). New/changed files: jinzzaCustomizationWidget.h/.cpp,
+  jinzzaMainMenuWidget.cpp, jinzzaLobbyWidget.h/.cpp. After compiling: PIE the
+  main menu and click Customize (right side) to confirm the 5 rows + Done
+  button actually work and the logo badge reads fine top-left; PIE Lvl_Lobby
+  to confirm the welcome overlay shows on open and clears after ~5s; walk up
+  to the Wardrobe kiosk (0,400,80) and press E to confirm it opens the same
+  Customization panel with the cursor toggle working.
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - worked through
+docs/JINZZA_todo.xlsx (a 212-row project tracker, Korean 완료/부분완료/예정
+status columns) and closed out everything genuinely finishable right now -
+skipped anything blocked on external accounts, real art/animation content, or
+undecided game-design questions (2-judge mode, host-picks UI, candidate-vote
+flow, etc. - all already flagged as such in the sheet itself)
+=================================================================
+- Removed the AssignRoles() [TEMP DEBUG] success-path log (jinzzaGameGameMode.cpp)
+  - the sheet's own §13 QA row asked for this; the PostLogin/TryStartRound fix
+  it was guarding has been stable since 2026-09-01 round 4.
+- Removed the dead Shoot/SwapWeapon key-rebind rows from Settings' Controls tab
+  (jinzzaSettingsWidget.h/.cpp) - IA_Shoot/IA_SwapWeapon are Variant_Shooter
+  template leftovers AjinzzaCharacter never binds (flagged 2026-09-07, this
+  project has no weapon system). Jump/Sprint rebind rows untouched.
+- Wired Question Time's cycle count to a real lobby setting instead of a
+  hardcoded 2 (design doc §9's own default): added
+  FJinzzaMatchSettings::QuestionTimeCycles (1-3), a new spin-box row in
+  AjinzzaRoomSettingsKiosk's panel (jinzzaRoomSettingsWidget.h/.cpp, mirrors
+  VoteCount's row exactly), read by
+  UjinzzaRoundPhaseSubsystem::GetPhaseDurationSeconds (65s/cycle - the doc's
+  own 작성20s+답변15s+토론30s math), and surfaced in the lobby's room-info text.
+- Checked docs/JINZZA_todo.xlsx's "Sprint 키 동작 검증" concern: BP_FirstPersonCharacter's
+  SprintInputAction and IMC_Sprint's IA_Sprint dependency are both still
+  correctly wired (re-verified via ObjectTools/get_dependencies) - the wiring
+  is not the problem. IMC_Sprint's actual mapped key still can't be read
+  through this session's tools (Mappings is a struct array get_properties
+  returns as [] - same limitation as 2026-09-07) and blindly overwriting it
+  risks corrupting or wiping a config this session can't verify first, so
+  deliberately NOT touched. [ ] Still needs the user to open IMC_Sprint in
+  the editor once and confirm/fix the mapped key - unchanged ask from
+  2026-09-07.
+- Confirmed already-satisfied (no code needed) rather than duplicating work:
+  - "설정 화면 탭 전환음" (Settings tab-switch sound) and "커스터마이징 아이템
+    변경음" (Customization item-change sound) - both the sidebar tab buttons
+    and the Customization Prev/Next buttons are already built via
+    JinzzaUI::MakeSecondaryButton, which auto-attaches a click/hover sound
+    for every button it makes (2026-09-02) - adding another explicit sound
+    call would just double it up.
+  - "UCharacterCustomizationComponent 구현" (row84) - already exists and is
+    already functional (jinzzaCharacterCustomizationComponent.h/.cpp, reads
+    UjinzzaGameUserSettings, degrades to a no-op only for the parts with no
+    real content yet) - the spreadsheet is stale here, predating that class.
+- Added TEMP placeholder one-shot SFX at every "예정" sound hook that already
+  has a real code path to hang off of (all reuse assets already in the
+  project, plus 2 new ones fetched the same way as the 2026-09-08 audio pass
+  - LobbyPannelOpen__cut_1sec_ and WrongAnswerSound, both from the same
+  Unreal_Game_Noob reference repo, copied to Content/JINZZA/Audio/Sounds/
+  UISounds/ and /Emotes/ respectively, confirmed plain SoundWaves with no
+  dependencies same as every other temp asset so far):
+  - Main menu entry (NativeOnInitialized) and opening Settings/Customization
+    from it (jinzzaMainMenuWidget.cpp - new shared PlayPanelOpenSound helper)
+  - Lobby entry (jinzzaLobbyWidget.cpp NativeOnInitialized)
+  - Kiosk E-key confirm - AjinzzaInteractableKiosk::EnterKioskUIMode (covers
+    RoomSettings/Wardrobe/FriendInvite) and AjinzzaStartMatchKiosk::Interact
+    (no panel, so the sound is the only feedback there)
+  - Role assignment reveal - AjinzzaGamePlayerController::Client_ReceiveRoleAssignment_Implementation
+  - Round phase transitions - new AjinzzaGamePlayerController::HandlePhaseChanged,
+    bound to AjinzzaGameGameState::OnPhaseChanged in BeginPlay/unbound in EndPlay
+  - All 4 emotes - AjinzzaCharacter gained ThumbsUpSound/ThumbsDownSound/
+    MiddleFingerSound/PointSound (EditAnywhere, defaulted via ConstructorHelpers
+    same as the footstep/jump/land sounds), played in
+    Multicast_PlayEmote_Implementation *before* the montage null-check so
+    emotes are audible today even with zero animation content
+  - Did NOT add: role-assignment/phase-transition/emote sounds were the only
+    ones in §8 with an existing code hook to attach to - everything else left
+    "예정" (question submit/reveal, vote confirm, ghost transition, final
+    reveal fanfare, win/lose) is tied to Question Time/Voting/Interview/Ghost
+    systems that don't exist in code yet, not just missing audio.
+- Found and fixed a real UX gap while reading UjinzzaEmoteWheelWidget for the
+  above: unlike every other widget in this project, its header explicitly
+  said it "needs no BindWidget children" and left the actual visual entirely
+  to a hand-authored WBP_EmoteWheel - which (same as every other WBP in this
+  project) was never actually laid out, meaning holding E currently shows
+  nothing at all on screen even though the hover-detection math underneath
+  already works correctly. Gave it the same BuildWidgetTree() treatment as
+  the other 7 widgets that got it: a plain text cross layout (Thumbs Up/Down/
+  Middle Finger/Point at N/S/W/E), recolored gold when hovered via a new
+  RefreshHighlight() called from NativeTick alongside the existing
+  BP_OnHoveredEmoteChanged (left in place for a future hand-authored
+  WBP_EmoteWheel to still hook). Closes docs/JINZZA_todo.xlsx row177
+  ("라디얼 메뉴 UI 시안/구현") on the implementation half - the concept-art
+  half is still a real open design/art task.
+- Deliberately NOT attempted (would need a whole new subsystem, a new
+  in-world zone blockout, new input-mapping assets, or a human decision -
+  see docs/JINZZA_todo.xlsx for the full remaining list):
+  - Week 7/8 systems: UQuestionTimeSubsystem, AVoteManager + vote UI,
+    interview-target assignment + isolated voice channel, ghost-state
+    transition + spectate HUD - none of these exist in any form yet; building
+    them now without a scoped design pass first risks a lot of guessed,
+    untested gameplay code landing at once.
+  - Week 9 map blockout (6 zones in Lvl_Game, teleport triggers, isolation
+    volume, stages) - has little value before the phase systems above exist
+    to actually use those zones for something.
+  - New noise props (Bell/AirHorn/Drum/Whistle/ConfettiCannon) - the design
+    doc's original 8-prop list; these don't exist as classes yet at all
+    (Boombox/Basketball/BasketballHoop/StunGun were built instead, per
+    2026-09-08's own row15/16/186 - a real doc/implementation divergence the
+    sheet flags as needing a decision, not something to silently resolve).
+  - Emote hotkeys (1-4, row178) - needs new IA_Emote1-4 Input Actions and an
+    IMC_Default mapping addition; the Enhanced Input mapping-array
+    read/write limitation (see Sprint note above) applies here too, so this
+    needs the same manual in-editor step rather than a blind tool-driven one.
+  - 331 uncommitted changes / git push (row27/210) - explicitly did not
+    commit anything without being asked, per this session's standing
+    instructions; flagging that the sheet lists this as outstanding.
+- [ ] NOT compiled or playtested this session (no build-trigger tool, as
+  always). Touches jinzzaGameGameMode.cpp, jinzzaSettingsWidget.h/.cpp,
+  jinzzaMatchSettings.h, jinzzaRoundPhaseSubsystem.cpp,
+  jinzzaRoomSettingsWidget.h/.cpp, jinzzaInteractableKiosk.cpp,
+  jinzzaStartMatchKiosk.cpp, jinzzaMainMenuWidget.cpp, jinzzaLobbyWidget.cpp,
+  jinzzaGamePlayerController.h/.cpp, jinzzaCharacter.h/.cpp,
+  jinzzaEmoteWheelWidget.h/.cpp - a big batch across many files, please Live
+  Coding compile and check Saved/Logs/jinzza.log before relying on any of it.
+  Suggested playtest order: Settings Controls tab (Shoot/SwapWeapon rows
+  gone, Jump/Sprint still there) -> Room Settings kiosk (new Question Time
+  Cycles row) -> hold E for the emote wheel (should show 4 labeled
+  directions now, highlighting on hover) -> a 3-player round for role-reveal/
+  phase-transition sounds.
+- Changes are NOT committed.
+
+=================================================================
 NOTES
 =================================================================
 - Section 16 of the doc flags these as still-undecided design details to
