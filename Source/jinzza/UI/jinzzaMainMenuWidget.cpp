@@ -3,6 +3,7 @@
 #include "jinzzaMainMenuWidget.h"
 #include "jinzzaSettingsWidget.h"
 #include "jinzzaCustomizationWidget.h"
+#include "jinzzaVoiceTestWidget.h"
 #include "jinzzaCharacterPreviewCapture.h"
 #include "jinzzaUIStyle.h"
 #include "Components/TextBlock.h"
@@ -91,6 +92,16 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 	LogoBadge->SetVerticalAlignment(VAlign_Center);
 	LogoBox->AddChild(LogoBadge);
 	LogoBadge->SetContent(JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("LogoText"), FText::FromString(TEXT("LOGO"))));
+
+	// Bottom-right voice-modification test panel - a self-contained nested widget, same pattern as
+	// SettingsWidget/CustomizationWidget above.
+	VoiceTestWidget = WidgetTree->ConstructWidget<UjinzzaVoiceTestWidget>(UjinzzaVoiceTestWidget::StaticClass(), TEXT("VoiceTestWidget"));
+	if (UOverlaySlot* VoiceTestSlot = RootOverlay->AddChildToOverlay(VoiceTestWidget))
+	{
+		VoiceTestSlot->SetHorizontalAlignment(HAlign_Right);
+		VoiceTestSlot->SetVerticalAlignment(VAlign_Bottom);
+		VoiceTestSlot->SetPadding(FMargin(24.f));
+	}
 
 	// Page 0: the button-list page. ButtonsPageRoot is the whole page (fade target); its content
 	// is centered in a fixed-width column via a Size Box.

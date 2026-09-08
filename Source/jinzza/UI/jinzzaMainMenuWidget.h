@@ -104,7 +104,7 @@ private:
 	UPROPERTY()
 	TObjectPtr<UImage> CharacterPreviewImage;
 
-	/** Bottom-right voice-modification test panel (speak into the mic, hear it filtered back) - see UjinzzaVoiceTestWidget. Left null - see class comment. */
+	/** Bottom-right voice-modification test panel (speak into the mic, hear it filtered back) - see UjinzzaVoiceTestWidget. */
 	UPROPERTY()
 	TObjectPtr<UjinzzaVoiceTestWidget> VoiceTestWidget;
 

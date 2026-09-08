@@ -1151,6 +1151,323 @@ flow, etc. - all already flagged as such in the sheet itself)
 - Changes are NOT committed.
 
 =================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - real local voice
+modulation (Pitch/Robot/Cave Echo sliders + Cave/Helium/Robot templates),
+and fixed real problems found in Lvl_test while turning it into a proper
+walkable exhibition
+=================================================================
+- User asked for voice modulation with direct pitch control + a few simple
+  settings + three named templates (cave/helium/robot voices), and separately
+  flagged that Lvl_test "isn't properly set up" and asked for it to read like
+  an exhibition characters can walk through to test each feature.
+- Read the actual UE 5.8 engine source (Engine/Plugins/Runtime/Synthesis/...,
+  Engine/Source/.../SynthComponent.h) directly rather than assuming API
+  shapes, since this session had no prior confirmed knowledge of the
+  Synthesis plugin's exact class/property names. Found: no dedicated
+  "pitch shifter" source effect exists in this engine version - pitch is
+  meant to go through the simpler UAudioComponent::SetPitchMultiplier
+  (which is also just... the actual mechanism real chipmunk/helium and
+  slowed-down/cave voice memes use, so no DSP plugin needed for that part
+  at all); USynthComponent::SourceEffectChain is a public, EditAnywhere
+  TObjectPtr<USoundEffectSourcePresetChain>, settable from plain C++.
+- jinzza.Build.cs: added "Synthesis" (NEW dependency - the plugin was
+  already enabled in jinzza.uproject, but linking its classes needs the
+  module too, same two-step gotcha as AudioCapture/AudioMixer). Unlike that
+  earlier addition, this one's Live-Coding-vs-full-rebuild fate is
+  unverified - try Live Coding first, but be ready for a full close-editor
+  rebuild if it fails to link.
+- jinzzaVoiceTestWidget.h/.cpp: full rewrite. Real BuildWidgetTree() (it was
+  UMG-authored/BindWidgetOptional and, since nothing in the project ever
+  actually constructed a VoiceTestWidget anywhere, was 100% dead code before
+  this session - not just unstyled, literally never instantiated). Three
+  sliders (Pitch 0.5-2.0x, Robot 0-100%, Cave Echo 0-100%) apply live while
+  dragging - Pitch restarts the capture component to pick up the change
+  (same restart-on-change behavior the old None/High/Low version already
+  had), Robot/Echo push updates through their preset objects' SetSettings()
+  instead, no restart needed. Three template buttons (Cave/Helium/Robot) set
+  all three sliders at once: Cave = 0.65x pitch + 60% echo, Helium = 1.7x
+  pitch alone, Robot = 0.9x pitch + 85% ring-mod + 15% echo. Deliberately
+  built as its own independent slider state, NOT reusing EJinzzaVoiceFilter
+  (that enum is the round-disguise mechanism's - collapsing them would risk
+  exactly the collision AjinzzaStunGunProp's class comment already warned
+  against for a different feature).
+- New AjinzzaVoiceTestKiosk (jinzzaVoiceTestKiosk.h/.cpp) - mirrors
+  AjinzzaWardrobeKiosk exactly (cylinder mesh, floating label, opens the
+  widget as a centered popup via EnterKioskUIMode/ExitKioskUIMode). Placed
+  in Lvl_test's exhibition (see below) but NOT yet placed anywhere - it's a
+  brand-new C++ class, can't be spawned via SceneTools until it exists in
+  the compiled reflection system (same standing limitation as every prior
+  new-class session).
+- jinzzaMainMenuWidget.cpp: VoiceTestWidget is now actually constructed
+  (bottom-right corner of RootOverlay, same nested-widget pattern as
+  Settings/Customization) - previously declared in the header and referenced
+  in comments but never built, so it silently did nothing.
+- Lvl_test - real problems found and fixed, not just polish:
+  - No DirectionalLight or SkyLight existed anywhere in the level - it would
+    PIE almost pitch black. Added both, matching Lvl_Lobby's DirectionalLight
+    rotation (Pitch -50, Yaw 20).
+  - Extended the floor (a scaled cube) from a 3900x1000 corridor to
+    5100x1000 to fit two more zones.
+  - Added Zone 8 (Jump Pad, BP_JumpPad, at the new floor's far end) and Zone
+    9 (Wardrobe kiosk, moved in from its originally-planned zone-5 slot).
+  - Caught and fixed a real placement mistake mid-session: zone spacing in
+    this level is a fixed ~460 units (zones 1-7 already occupy 0/460/920/
+    1380/1840/2300/2760), and zone 5 (1840) is deliberately propless per
+    Lvl_Test_README.txt - "Emote Wheel, no prop, tests AjinzzaCharacter
+    itself via E-hold". First pass placed the new Jump Pad directly on top
+    of that documented-but-empty slot without noticing; caught it by
+    actually reading Lvl_Test_README.txt (which [[test-level-convention]]
+    says to keep in sync) before writing the summary, and moved Jump Pad to
+    a genuinely new zone 8 (3220) and Wardrobe to zone 9 (3680) instead.
+  - Zone 10 (4140) is reserved in the README for the Voice Test kiosk once
+    it can be placed post-compile - floor already extended to cover it.
+  - Updated Lvl_Test_README.txt for all of the above, per its own stated
+    convention of staying in sync with the level.
+- [ ] NOT compiled - and this one specifically needs verifying whether Live
+  Coding is enough or a full rebuild is required (see the Synthesis
+  dependency note above). After compiling: place AjinzzaVoiceTestKiosk at
+  (4140, 0, 80) in Lvl_test (ask Claude to do this via SceneTools once the
+  class exists in the reflection system), then playtest the whole exhibition
+  corridor end to end, and specifically confirm the mic capture + three
+  sliders + three template buttons all produce an audible difference (this
+  session could not playtest audio at all - no way to hear output from this
+  session).
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - fixed the build error
+from the voice-modulation pass, and added section-divider walls to Lvl_test
+=================================================================
+- User ran the (Live Coding, not a full rebuild - so Synthesis apparently
+  linked fine without needing one) build and hit a real C2664 in
+  jinzzaVoiceTestWidget.cpp: the local AddSliderRow() helper's out-param was
+  typed `UTextBlock*&`, but PitchValueText/RobotValueText/EchoValueText are
+  `TObjectPtr<UTextBlock>` members - same TObjectPtr-vs-raw-pointer-reference
+  mismatch already hit and fixed once before in jinzzaCustomizationWidget.cpp,
+  just missed here. Fixed by retyping the parameter to
+  `TObjectPtr<UTextBlock>&`.
+- User asked for partition walls in Lvl_test, "a wall with only one side
+  open using cubes in each section", to visually distinguish each zone.
+  Added a low (220 tall, 30 thick) divider between every pair of adjacent
+  zones (9 dividers for the 10 zones), each built from 2 SM_Cube segments
+  (LevelPrototyping kit, corner-pivoted 100x100x100 - confirmed via
+  get_actor_bounds before scripting the rest) covering 300 of the 600-unit
+  span each, leaving the other 300 open so the corridor stays fully
+  walkable - which side is open alternates per divider for a slight zigzag.
+  Used the unreal-mcp ProgrammaticToolset (a sandboxed Python script that
+  calls other tools) to place all 18 pieces in one round-trip instead of 18
+  separate calls - verified two segments' bounds afterward to confirm the
+  math landed exactly as intended before saving. All 18 live in a
+  "SectionDividers" outliner folder. Documented in Lvl_Test_README.txt per
+  [[test-level-convention]].
+- [ ] Still not compiled/playtested by this session for the divider change
+  (it's pure level-editor placement, no C++, so nothing to compile - but
+  please PIE Lvl_test and walk the corridor to confirm the zigzag reads
+  well and doesn't feel awkward; happy to adjust widths/heights/alternation
+  pattern).
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - build fix confirmed
+working, replaced the zigzag dividers with proper U-shaped exhibit booths
+=================================================================
+- Good news buried in the user's report: the Live Coding build (not a full
+  rebuild) got all the way to Module.jinzza.cpp and only failed on the
+  TObjectPtr/UTextBlock*& type error - meaning the new "Synthesis" Build.cs
+  dependency from the voice-modulation pass linked fine via Live Coding,
+  no full rebuild was actually needed after all.
+- User asked to "list each test actor as a single character" - asked a
+  clarifying question rather than guessing between two very different
+  builds (a single-letter sign vs. spawning NPC mannequins); the actual
+  answer was neither - it meant keep the actors arranged in a single
+  straight line. Found the one actor not on it: BP_BasketballHoop was
+  offset to Y=300 (paired with the Basketball's Y=0) - recentered it to
+  Y=0 like everything else.
+- Replaced the previous zigzag section-divider walls (which partially
+  blocked the main walkway between zones) with a proper U-shaped booth per
+  zone instead, per explicit follow-up feedback that dividers weren't what
+  was wanted. Removed all 18 old divider pieces, added 40 new ones: each
+  zone's prop/kiosk now sits at the mouth of its own booth (back wall + 2
+  side arms, alternating which side of the centerline it's built on) built
+  from SM_Cube segments the same way as before. Critically, the booths sit
+  entirely to one side (+Y or -Y) of the Y=0 centerline the actors are on -
+  the centerline itself is never touched by a booth wall, so the corridor
+  stays 100% walkable in a straight line the whole way, satisfying both
+  asks (single line of actors + U-shaped wrapping) at once rather than
+  trading one off against the other.
+- Verified the corner-pivot math against actual get_actor_bounds calls on
+  one +Y-side and one -Y-side booth before saving (a mistake in the -Y
+  branch's back-wall offset was caught and fixed *before* running the
+  batch, not after - see the two script revisions in this session's tool
+  history) - both came back exactly as designed.
+- Used the ProgrammaticToolset again (delete 18 + move 1 + create 40, all
+  in one script) rather than ~60 individual tool round-trips.
+- Updated Lvl_Test_README.txt's dividers section to describe the booths
+  instead, per [[test-level-convention]].
+- [ ] Not playtested by this session (pure level editing, nothing to
+  compile) - please PIE Lvl_test and walk the row to confirm the booths
+  read well and the alternating side doesn't feel too busy; easy to adjust
+  booth depth/width/height or make the alternation consistent (always same
+  side) if preferred.
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - revised the exhibit
+booths per follow-up feedback: all face the same way now, actors sit at the
+booth's center (not the mouth), floor widened
+=================================================================
+- User feedback on the alternating booths: make them all face the same
+  direction, and move each actor to the center of its U instead of the
+  mouth/entrance; also asked to widen the corridor ("vertical space" - the
+  Y axis in a top-down view - "too cramped", extend the floor).
+- Removed the 40 alternating-side booth pieces and rebuilt 40 new ones, all
+  opening toward -Y now (uniform direction) instead of alternating. Booths
+  also grew (half-width 100->120, mouth gap 50->80, depth 300->400) for
+  the requested "more room" feel. Moved every zone's prop/kiosk AND its
+  sign from Y=0 (the old centerline) to Y=280 (the new booth's vertical
+  center) - X and each actor's own Z were left untouched. Widened the
+  floor's Y extent from -500..500 to -500..600 to comfortably contain the
+  now-deeper booths with margin to spare.
+- Also fixed the one actor that had drifted off the single-line arrangement
+  from last time: BP_BasketballHoop was still at its pre-previous-session
+  Y=300 in one intermediate step - confirmed it's now at Y=280 with
+  everything else.
+- Hit and fixed a real unreal-mcp gotcha while doing this (now recorded in
+  memory): ActorTools.set_actor_transform's `xform` does NOT actually
+  implement "unset fields = don't change" for existing actors, despite that
+  being its documented behavior. A follow-up call that only included
+  `rotation` (meaning to leave location alone) reset every affected sign's
+  location to (0,0,0); a separate call that only included `location` earlier
+  in the same session had already silently reset rotation to identity the
+  same way (harmless there only because those actors' rotation was already
+  0). Caught via get_actor_transform verification before saving - re-fixed
+  by resending the FULL transform (location+rotation+scale together) on
+  every affected sign, then re-verified all 8 signs + 9 actors before
+  saving. Nothing was left broken, but always pass the complete transform
+  on this call from now on - see [[unreal-mcp-gotchas]] item 9.
+- Used the ProgrammaticToolset for the whole rebuild + reposition pass
+  again (delete 40, extend floor, create 40, move 9 actors, move 8 signs,
+  fix the rotation regression, in a handful of script round-trips instead
+  of 60+ individual calls).
+- Updated Lvl_Test_README.txt to describe the final design and its two
+  prior iterations, per [[test-level-convention]].
+- [ ] Not playtested by this session (pure level editing, nothing to
+  compile) - please PIE Lvl_test and walk it; the exhibits now require a
+  short step to the +Y side of the centerline to reach, confirm that reads
+  well and the booths don't feel too deep/shallow.
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - third revision of
+Lvl_test's exhibit booths: doubled width (forced a full re-space of every
+zone), everything now faces its booth's open side, added a real material
+=================================================================
+- User asked for 3 things: double the U-booths' left/right width, make
+  signs and actors face the direction each booth opens, and improve visuals
+  with simpler materials - explicitly scoped to Lvl_test.
+- Doubling booth_half_width (120->240) meant the arms would overlap the
+  neighboring zone's at the old 460-unit spacing (needed >540 clearance,
+  had 460) - re-spaced every zone to 700 units apart instead, which
+  cascaded into recomputing every prop/kiosk/sign position, the floor's
+  full X and Y extent, and all 40 booth pieces from scratch.
+- Facing: signs now yaw=-90 (face -Y, the booth's open mouth). Generic
+  props (Bat/Boombox/Megaphone/Basketball/Hoop/StunGun/JumpPad) also
+  yaw=-90. Kiosks (Wardrobe) are yaw=+90 instead - AjinzzaWardrobeKiosk's
+  own Label sub-component has a fixed +180 relative yaw baked into its
+  C++ constructor, so +90 on the actor nets the same effective -Y-facing
+  label as everything else, not a literal copy of the -90 value.
+- Materials: created Content/JINZZA/Level/MI_ExhibitBoothWall, a
+  MaterialInstanceConstant off the LevelPrototyping kit's M_FlatCol
+  (flat neutral gray, Roughness 0.75, Metallic 0) via MaterialInstanceTools,
+  and applied it as an OverrideMaterials[0] on all 40 booth SM_Cube pieces -
+  replaces whatever busier default material SM_Cube ships with. Verified
+  the OverrideMaterials property format on one throwaway test cube first
+  (plain asset path string in the array, not a {refPath:...} wrapper -
+  same convention as the very first prop-sound session) before committing
+  to all 40, and verified one real piece's material read back correctly
+  after the real run too.
+- Re-verified everything (floor bounds, one booth's geometry+material, an
+  actor, a kiosk, a sign) via get_actor_bounds/get_actor_transform/
+  get_properties before saving - all matched the intended math, including
+  confirming zero overlap between adjacent zones' booth arms at the new
+  700 spacing.
+- Updated Lvl_Test_README.txt (spacing note, zone descriptions, the
+  Exhibit-booths section) per [[test-level-convention]] - now documents
+  all three design iterations for context.
+- [ ] Not playtested by this session (pure level/asset editing, nothing to
+  compile) - please PIE Lvl_test and walk it. Worth specifically checking:
+  the wider booths read as roomier rather than cavernous, the flat gray
+  material actually looks calmer than before, and every sign/kiosk label is
+  legible from the walkway (the rotation math was verified by number, not
+  by eye - this session cannot render/see the level).
+- Changes are NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - composite prop
+meshes, filled out every remaining zone (10-15), Korean translation of
+all Lvl_test signage, 5 named sections
+=================================================================
+- User asked for 4 things, all scoped to Lvl_test: (1) combine multiple
+  Engine basic shapes into better approximate prop meshes instead of a
+  single primitive each, (2) add every prop/function not yet in the test
+  map - explicitly "don't leave out any props or functions", (3) divide
+  the level into sections, (4) write all in-level text in Korean.
+- Composite meshes: added child StaticMeshComponents via PrimitiveTools to
+  5 Blueprints' CDOs (BP_Bat, BP_Boombox, BP_Megaphone, BP_BasketballHoop,
+  BP_StunGun) - e.g. Bat got a thicker "Barrel" cylinder near the top,
+  Boombox got two speaker cylinders + a handle cube, Megaphone got a
+  handle cylinder, BasketballHoop got a backboard cube + a pole cylinder
+  down to the ground, StunGun got a barrel cylinder + a grip cube. All 5
+  Blueprints compiled successfully (had to use the .BP_Name.BP_Name object
+  path form for compile_blueprint, not just .BP_Name). Basketball itself
+  left as a plain sphere - already accurate. Saved.
+- Missing zones filled in: confirmed via search_subclasses that
+  AjinzzaRoomSettingsKiosk, AjinzzaFriendInviteKiosk, AjinzzaStartMatchKiosk,
+  and the brand-new AjinzzaVoiceTestKiosk are all now compiled/spawnable
+  (VoiceTest had been a reserved-but-unplaced slot in the prior session).
+  Placed all 4 as new zones 10-13, plus two LevelPrototyping-kit
+  Interactable examples (BP_DoorFrame, BP_WobbleTarget) as zones 14-15
+  with their own signs since they don't self-label. Level now has all 15
+  known testable features/props represented, none left out.
+- Re-spacing: rather than re-laying out all 15 zones, only moved what
+  actually needed to move - retired/rebuilt booths for zones 5-8 and added
+  new ones for 10-15 (X = 2800..9800, still 700 apart), extended the floor
+  to X: -700..10200, and repositioned the 3 props (Boombox-steal, StunGun,
+  JumpPad) plus the Emote Wheel sign that shifted zone numbers. Caught and
+  fixed a bug where the first pass moved those 3 props but left their
+  TextRenderActor signs behind at the old positions - re-verified via
+  get_actor_transform before saving.
+- Sections: added 5 TextRenderActor header signs on the Y=0 corridor
+  centerline (yaw=180, larger WorldSize=40) - 구역 A 소음 소품 (zones 1-3),
+  B 이동 (4,6,7,8), C 감정표현 (5), D 키오스크 & 로비 기능 (9-13),
+  E 레벨 프로토타이핑 (14-15).
+- Korean text: rewrote every existing zone sign, the welcome sign, and the
+  Wardrobe kiosk's Label to Korean with explicit zone numbers; new kiosks'
+  Labels and the 2 new prop signs were authored in Korean from the start.
+- Font risk (flagged, not silently assumed fine): the project's only
+  Korean UFont, SacheonUju-Regular_Font, has FontCacheType=Runtime (the
+  Slate/UMG pipeline), not the "Offline Cached" bitmap format
+  TextRenderComponent has traditionally required. Assigned it to all 16
+  TextRenderComponents and all 5 kiosk Label components anyway (nothing
+  else exists to try), but this session cannot render the level and could
+  NOT visually confirm the Korean glyphs actually display on these 3D
+  world-space signs - documented as a caveat in Lvl_Test_README.txt.
+  UMG/Slate menus elsewhere already use this font successfully; the risk
+  is specific to TextRenderComponent.
+- Verified with get_actor_transform/get_properties spot-checks (sign
+  repositions, kiosk transform+label text, door snap-to-ground height,
+  header sign text) before calling save_assets.
+- Updated Lvl_Test_README.txt: full rewrite of the zone list (1-15), the
+  5 sections, the composite-mesh note, and the font caveat above.
+- [ ] Not playtested by this session (pure Blueprint/level editing, no C++
+  changes, nothing needed compiling for this pass specifically). Please
+  PIE Lvl_test and check: the new composite prop shapes actually read
+  better than single primitives, all 15 zones/signs are reachable and not
+  overlapping, and - most importantly - whether the Korean text on the 3D
+  signs renders correctly or shows blank/tofu glyphs (see font risk above).
+- Changes are NOT committed.
+
+=================================================================
 NOTES
 =================================================================
 - Section 16 of the doc flags these as still-undecided design details to
