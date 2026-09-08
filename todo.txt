@@ -1468,6 +1468,68 @@ all Lvl_test signage, 5 named sections
 - Changes are NOT committed.
 
 =================================================================
+DONE THIS SESSION (2026-09-08, continued, by Claude) - root-caused the
+Korean sign font risk to a confirmed engine limitation and built the fix's
+C++ half
+=================================================================
+- User reported the Korean text isn't showing up in Lvl_test and asked
+  whether noob-game's copy of the SacheonUju font could be used instead.
+- Checked noob-game's font files directly: every one of them
+  (SacheonUju-Regular_Font.uasset, SacheonUju-Regular.uasset,
+  SacheonUjuOTF-Regular.uasset) is a ~130-byte Git LFS pointer, not real
+  data - same dead end as [[fkey-icon-lfs-pointer]]. Not usable.
+- Instead traced the actual root cause in the UE 5.8 engine source
+  (Engine/Source/Runtime/Engine/Private/Components/TextRenderComponent.cpp,
+  FTextRenderSceneProxy::CreateRenderThreadResources, ~line 729): when the
+  assigned Font's FontCacheType is Runtime, the function returns
+  immediately and builds zero mesh - "Runtime fonts can't currently be
+  used here as they use the font cache from Slate application which can
+  only be used on the game thread." This is a hard, confirmed engine
+  limitation, not a maybe - TextRenderComponent categorically cannot
+  render this project's only Korean font. See [[korean-font-textrender-risk]].
+- Checked whether re-importing as an Offline Cached font was feasible: the
+  original source file (SacheonUju-Regular.ttf/.otf) was imported from
+  E:\Downloads\사천우주체\SacheonUju\ on a different machine - no E: drive
+  exists here, and the embedded font bytes inside the existing FontFace
+  .uasset aren't exposed through any reflected property this session can
+  read, so reconstructing/re-importing it wasn't possible this session.
+- Landed on the real fix: UTextRenderComponent can't render this font, but
+  UMG/Slate already does (used successfully by every menu widget) - so
+  world-space signs need to move from TextRenderComponent to a
+  UWidgetComponent showing a small UMG widget instead.
+- Confirmed via engine source (WidgetComponent.cpp's Plane geometry-mode
+  vertex build, TangentZ=(1,0,0)) that a UWidgetComponent's readable face
+  points along its own local +X axis - same facing math as everything
+  else in Lvl_test, so the existing yaw=-90-faces-(-Y) convention carries
+  over unchanged to the new sign actors.
+- Built the C++ half: UjinzzaWorldSignWidget (UUserWidget with a
+  BindWidgetOptional TextBlock named SignText + SetSignText, mirrors
+  UjinzzaInteractionPromptWidget's pattern) and AjinzzaWorldSignActor (AActor
+  wrapping a World-space UWidgetComponent, with editable SignText/
+  SignWidgetClass/SignSize properties, pushing text into the widget from
+  OnConstruction/PostEditChangeProperty/BeginPlay so it stays live in both
+  editor and PIE).
+- [ ] NOT YET COMPILED - these are brand-new files, needs a real rebuild
+  (Live Coding won't pick up new classes), not just Live Coding.
+- [ ] NOT YET WIRED INTO THE LEVEL - blocked on a manual step only the user
+  can do: author WBP_WorldSign (parent = JinzzaWorldSignWidget) with one
+  TextBlock named "SignText", font = SacheonUju-Regular_Font, centered,
+  auto-wrap, then compile/save it. Once that exists, the next session
+  should replace Lvl_test's 16 standalone TextRenderActor signs with
+  AjinzzaWorldSignActor instances (spawn + set SignText/SignWidgetClass/
+  transform per instance, same positions/rotations as today).
+- [ ] Also flagged, not yet actioned: the 5 kiosk Label components
+  (Wardrobe/RoomSettings/FriendInvite/StartMatch/VoiceTest) have the exact
+  same TextRenderComponent-Runtime-font problem, baked into the shared
+  AjinzzaInteractableKiosk-family C++ classes - meaning kiosk labels are
+  also blank in Lvl_Lobby, not just Lvl_test. Same WidgetComponent fix
+  would apply but touches 5 gameplay classes, not just test-level
+  dressing - user hasn't confirmed whether to fold this in yet.
+- Changes committed and pushed this round: the two new class pairs only
+  (jinzzaWorldSignWidget.h/.cpp, jinzzaWorldSignActor.h/.cpp). No level or
+  Blueprint asset changes this round.
+
+=================================================================
 NOTES
 =================================================================
 - Section 16 of the doc flags these as still-undecided design details to
