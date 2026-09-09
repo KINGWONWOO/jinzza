@@ -1530,6 +1530,280 @@ C++ half
   Blueprint asset changes this round.
 
 =================================================================
+DONE THIS SESSION (2026-09-09, continued, by Claude) - root-caused why the
+WBP_WorldSign-based signs (from the previous 2026-09-09 session) still
+weren't showing Korean text, fixed it live via a direct MCP connection to
+the running editor, then fixed a text-overlap report
+=================================================================
+- User reported the Korean signs were still not showing up after the prior
+  session's WidgetComponent conversion. This session's Claude Code session
+  had no unreal-mcp tools bound (editor was opened/`.mcp.json` added after
+  the session started), but the editor process and its MCP HTTP server
+  were both live, so this session spoke MCP JSON-RPC directly over curl
+  (session-init, tools/call wrapping toolset_name/tool_name/arguments) to
+  reach it anyway - see [[project-jinzza-mcp-tooling]], worth remembering
+  as a fallback when the native tool binding isn't there but the server is.
+- Root-caused TWO real, separate bugs in the 21 WBP_Sign_XX widgets
+  (all traced with get_properties/read_graph_dsl/CaptureViewport, not
+  guessed):
+  1. TextBlock_0's Text property is UMG-bound (Property Binding) to an
+     auto-generated "GetText" function. That function existed with NO
+     output parameter and a completely empty body in every one of the 21
+     widgets (confirmed via read_graph_dsl: `(fn GetText ())`) - so it
+     always evaluated to blank FText, permanently overriding any static
+     default text regardless of what it was set to. Fixed by
+     add_function_param (Text, output) + write_graph_dsl:
+     `(return (Utilities|Text|ToText(String) (Variables|Default|GetSignText)))`
+     on all 21 (each is an independent AssetTools.duplicate of
+     WBP_WorldSign, NOT a Blueprint subclass, so the fix needed applying
+     21 times, not once on the base).
+  2. Each duplicate's TextBlock_0 CanvasPanelSlot had regressed from the
+     base WBP_WorldSign's correct full-stretch anchor (min 0,0/max 1,1) to
+     a broken fixed-point anchor at position (888,544) size (151,40) -
+     entirely outside the widget's visible draw-size canvas. Fixed by
+     resetting layoutData to full-stretch on all 21.
+- Both fixes were compiled with zero errors and the underlying data
+  verified correct (signText variable, TextBlock_0.text, font, layout all
+  read back correct on the compiled _C classes) - but this session's own
+  CaptureViewport screenshots, in a real PIE session, still could not
+  visually confirm the text (tried many camera angles/distances; even
+  forcing the WidgetComponent's BlendMode to Opaque - which should paint a
+  solid rectangle regardless of text content - showed nothing at the
+  Wardrobe kiosk's KoreanLabelWidget). NOT resolved with certainty this
+  session - see caveat below.
+- Mid-investigation, a clean-room test (duplicating a sign widget and
+  reparenting it to the real C++ UjinzzaWorldSignWidget/AjinzzaWorldSignActor
+  classes, to check whether BP_WorldSign being a plain-AActor Blueprint
+  with zero relation to the purpose-built C++ classes mattered) hit a
+  genuine Blueprint name conflict (its own "SignText" var collided with
+  the C++ parent's private BindWidgetOptional "SignText") and failed to
+  compile with a blocking "Blueprint Asset Compilation Error" modal dialog
+  that froze the whole editor/MCP server for ~17 minutes (visible in the
+  log timestamps) until it got dismissed. If the editor ever appears
+  hung after an MCP-driven Blueprint edit, check for a stuck compile-error
+  dialog before assuming a crash. The broken test assets
+  (WBP_TEST_Reparented, WBP_TEST_CleanRoom) and the scratch test actor
+  were deleted/removed afterward - BP_WorldSign itself is UNCHANGED, still
+  plain AActor + SCS WidgetComponent, not the C++ class.
+- User separately reported (this session, after building their own
+  boundary wall) that the Korean text - once visible - was too big and
+  overlapping between zones. Root cause matched a problem already found
+  while investigating (1) above: every placed sign's WidgetComponent
+  DrawSize was 1000x250 (10m x 2.5m) while zones are only spaced 700 units
+  apart along X - a 1000-wide sign centered on each zone overlaps ~300
+  units into each neighbor. Fixed: font shrunk 48pt -> 28pt on all 21
+  sign widgets' TextBlock_0, and DrawSize.X shrunk 1000 -> 650 on all 16
+  placed BP_WorldSign_C instances in Lvl_test (comfortably under the
+  700-unit spacing). NOTE: DrawSize.Y could not be changed - the
+  ObjectTools.set_properties call silently no-ops on IntPoint's Y field
+  specifically (confirmed by testing distinctive x/y values; x always
+  applies, y never does) - a real unreal-mcp tool limitation, not a level
+  bug. DrawSize stayed at 1000x250 -> 650x250 for all 16, not 650x400 as
+  intended; the smaller 28pt font should still fit inside 250 height for
+  the typical 3-4 line signs, but this is unverified (see caveat below).
+- Also confirmed via search_subclasses / BlueprintTools.get_parent (not
+  guessed) that BP_WorldSign's parent is plain /Script/Engine.Actor and
+  WBP_WorldSign's parent is plain /Script/UMG.UserWidget - neither is
+  actually related to the AjinzzaWorldSignActor/UjinzzaWorldSignWidget C++
+  classes from the prior 2026-09-08 session. Those C++ classes are
+  currently unused by anything in the level. Left as-is (reparenting an
+  already-authored, now-working set of 21 widgets is riskier than it's
+  worth) but flagging for [[deferred-features]] in case the orphaned C++
+  classes should eventually be deleted or actually wired up.
+- All fixes compiled AND saved to disk this time (AssetTools.save_assets/
+  is_dirty/get_asset_class had been returning "Asset does not exist" for
+  valid, resolvable paths earlier in the session - looked like an
+  unreal-mcp asset-registry staleness bug - but started working again
+  later in the session with no config change on this end; retried and
+  confirmed via `git status` that all 22 files (21 sign widgets +
+  Lvl_test.umap) actually changed on disk). If save_assets ever reports
+  "Asset does not exist" for a path find_assets/compile_blueprint can
+  both resolve, it may be transient - retry rather than assuming failure.
+- [ ] NOT CONFIRMED WORKING: despite everything above compiling correctly
+  and every underlying property reading back as expected, this session
+  could not get a screenshot that clearly shows Korean text rendering
+  in-world, including on a fresh PIE session after the size fix. Given the
+  user's own report describes text that IS visible (just overlapping),
+  the discrepancy is most likely something about this session's
+  CaptureViewport-based verification (headless captures, possible timing/
+  camera issues) rather than the level itself - but this is NOT certain.
+  Please playtest Lvl_test directly (walk up to the Bat sign at zone 1,
+  and the Wardrobe kiosk at zone 9) and confirm: (a) Korean text is
+  visible at all, (b) it's now legible and not overlapping between zones,
+  (c) font size 28pt / board size 650x250 is a good balance (not too
+  small to read, not overlapping) - the sizing was chosen by estimate, not
+  by rendering and measuring actual wrapped-line counts.
+- Changes are committed... NO - not committed this round, left for the
+  user to review the .uasset/.umap diffs first given the uncertainty above.
+
+=================================================================
+DONE THIS SESSION (2026-09-09, continued again, by Claude) - user reported
+the previous round's overlap fix "didn't apply"; root-caused a real
+regression from this session's own diagnostic testing, then fixed the
+overlap with actually-verified math instead of eyeballed screenshots
+=================================================================
+- Got a screenshot (editor viewport, FocusOnActors-computed camera) that
+  finally clearly showed Korean text rendering AND visibly overlapping
+  between the Bat sign and the Boombox sign next to it - useful because it
+  confirmed the text pipeline (GetText binding fix from earlier this same
+  day) does work, and squarely reproduced the user's complaint.
+- Root cause of "didn't apply": earlier this session, while isolating an
+  unreal-mcp bug (ObjectTools.set_properties silently no-ops on IntPoint's
+  Y field - confirmed real, still true), the Bat sign
+  (BP_WorldSign_C_1)'s DrawSize.X got used as the test target and was left
+  at 999 (basically the original broken huge size) instead of being reset
+  back to the 650 the rest of the batch fix applied. Every other one of
+  the 16 placed signs was correctly at 650 - only Bat regressed. This was
+  a mistake in this session's own process, not a new engine/tool bug.
+- While re-verifying, realized 650 was ALSO not actually enough of a
+  margin against the standard 700-unit zone spacing (only 50 units of
+  total gap - 25 each side), and that section-header signs sit only 350
+  units from their neighboring zone signs (half the normal spacing), so
+  they need to be much narrower than zone signs, not the same width as
+  was set earlier.
+- Stopped trusting individual screenshots as the verification method
+  (camera framing for World-Space WidgetComponents proved extremely
+  angle/position-sensitive - the same sign was clearly visible from one
+  camera transform and invisible a few units away, in both the editor
+  viewport and PIE) and instead computed exact margins programmatically:
+  for every adjacent pair of the 16 placed signs, margin = (distance
+  between X positions) - (half-width of each sign's DrawSize). Iterated
+  sizes/positions until every single adjacent pair has a positive margin,
+  not just eyeballed spacing:
+  - Zone/kiosk signs: DrawSize.X 500 (700-unit zone spacing -> 200 margin)
+  - Section header signs: DrawSize.X 150, down from the 200 tried earlier
+    (350-unit header-to-zone spacing -> 25 margin; 200 gave exactly 0,
+    i.e. touching with no margin at all)
+  - Welcome (was x=-500) and the SectionA header (was x=-350, later
+    x=-250) didn't fit no matter how SectionA was resized - Welcome and
+    the Bat zone (x=0) are only 500 apart, and even at reduced widths that
+    doesn't leave room for a header sign in between with any margin. Moved
+    Welcome to x=-900 and SectionA to x=-425; final margins 150 and 100.
+  - Also changed all 21 sign widgets' TextBlock_0 Justification from Left
+    to Center, so any residual visual bleed reads as symmetric rather than
+    one-sided.
+  - Final verified margins (worst case): 25 units (several header-to-zone
+    pairs), best case 3350 (SectionD to SectionE, unchanged from original
+    layout). Full table computed and logged during the session - every
+    value positive, zero remaining overlaps by the numbers.
+- All of the above compiled and saved to disk (Lvl_test.umap + all 21
+  WBP_Sign_XX + WBP_WorldSign); confirmed via `git status`.
+- Kept the C++ actor/widget question from earlier the same: BP_WorldSign
+  is still plain AActor, not reparented to AjinzzaWorldSignActor. Not
+  touched this round.
+- [ ] NOT independently re-confirmed by screenshot this round (see note
+  above on why screenshots proved unreliable for this) - the fix is
+  computed/verified by exact position+size math instead, which should be
+  more trustworthy than a handful of camera angles, but please still
+  playtest and confirm the overlap is actually gone and the header/zone
+  text (especially Welcome/SectionA and the SectionB/C/D headers, all
+  repositioned or resized this round) reads cleanly.
+- Changes still NOT committed - same as above, left for user review.
+
+=================================================================
+DONE THIS SESSION (2026-09-09, continued a third time, by Claude) - built
+a boundary wall around Lvl_test's floor per user request, and in the
+process finally got clear visual confirmation the Korean-text fixes from
+earlier this session actually work
+=================================================================
+- User asked for an outer/boundary wall so players can't walk/fall off
+  the test level's edges.
+- Floor (StaticMeshActor_0, SM_Plane, center-pivoted) originally spanned
+  X: -700..10200, Y: -500..600. The previous round's fix had moved the
+  Welcome sign out to x=-900, past the floor's west edge - fixed first by
+  extending the floor west to X=-1000 (location.x 4750->4600, scale.x
+  109->112; Y/Z unchanged).
+- Built 4 wall actors (SM_Cube from LevelPrototyping/Meshes, matching the
+  existing prototyping-kit look) via SceneTools.add_to_scene_from_asset,
+  in a new "BoundaryWalls" outliner folder: South/North run the full
+  X extent at Y=-500/600, East/West run the full Y extent at X=-1000/
+  10200, each 50 units thick and 300 tall, corners overlapping so there
+  are no gaps. NOTE: SM_Cube's pivot is at its min corner (0,0,0 to
+  100,100,100 - confirmed via StaticMeshTools.get_bounds), unlike
+  SM_Plane's center pivot, so the placement math differs between the two
+  - worth remembering if adding more prototyping-kit geometry
+  programmatically. Verified all 4 walls' actual placed bounds via
+  get_actor_bounds match the intended design exactly, and confirmed
+  collision is BlockAll/QueryAndPhysics (spawned actors default to the
+  mesh's own collision profile, not manually set).
+- While framing a wide screenshot to sanity-check the wall, incidentally
+  got the clearest confirmation yet that the earlier GetText-binding fix
+  and the text-overlap fix both actually work: a shot of the west end
+  clearly shows "진짜 전시관 / 앞으로 걸어가며 [...] 구역에서 / 기능을
+  테스트해보세요" (Welcome) and "구역 A - 소음 소품" (Section A header)
+  both fully legible and NOT overlapping each other. This resolves the
+  "not confirmed working" caveat from the last two log entries - the
+  rendering pipeline does work; the earlier failed verification attempts
+  were a camera-angle/distance sensitivity issue with this session's own
+  screenshot tooling, not a real bug in the level.
+- Level saved to disk; confirmed via `git status` (Lvl_test.umap grew
+  from 206,661 to 215,642 bytes across the wall-building and floor
+  changes).
+- [ ] Not walked with a real player/PIE input - the wall's collision
+  profile and dimensions were verified by reflection (get_actor_bounds,
+  bodyInstance.collisionEnabled) and by static screenshot, not by an
+  actual player colliding with it. Please confirm in a real playtest that
+  the walls actually block movement as expected and there's no gap at the
+  4 corners.
+- Changes still NOT committed - left for user review alongside the
+  earlier uncommitted rounds from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-09, continued a fourth time, by Claude) - user
+asked to "implement everything not yet implemented, even temporarily";
+interpreted as finishing the long-flagged kiosk Korean-label gap, and
+found it was bigger than Lvl_test alone
+=================================================================
+- Checked Lvl_test's 5 kiosks first: all already had a KoreanLabelWidget
+  component (built in an earlier, pre-today session) correctly wired to
+  the matching WBP_Sign_16-20 class, and those classes already picked up
+  every fix from today's earlier rounds (GetText binding, layout, font,
+  center justification) since they were included in the 21-widget batch
+  scripts. Only gap: DrawSize was still 600 wide against 700-unit kiosk
+  spacing (100 margin, inconsistent with the 500/200-margin standard used
+  for the corridor signs) - resized all 5 to 500x150 and saved.
+- Investigated a "Failed to find /Game/JINZZA/UI/Widgets/WBP_FriendInvite"
+  error seen in the editor log earlier today - turned out to be a
+  non-issue: AjinzzaFriendInviteKiosk's constructor uses
+  ConstructorHelpers::FClassFinder for an OPTIONAL Blueprint override,
+  which logs at Error verbosity when not found but the code already falls
+  back cleanly to UjinzzaFriendInviteWidget::StaticClass() at Interact()
+  time (see jinzzaFriendInviteKiosk.cpp). Not broken, not touched.
+- Bigger finding: loaded Lvl_Lobby (the actual level players use, not
+  just the test level) and checked its 4 kiosks there (Wardrobe,
+  RoomSettings, FriendInvite, StartMatch - no VoiceTest kiosk in the
+  lobby) - none of them had ever gotten the KoreanLabelWidget fix at all,
+  only "Mesh" and "Label" (the original, permanently-blank
+  TextRenderComponent). This matches the exact gap flagged (and left
+  unconfirmed) in the 2026-09-08 log entry: "kiosk labels are also blank
+  in Lvl_Lobby, not just Lvl_test... user hasn't confirmed whether to
+  fold this in yet." Read as confirmation via this session's "implement
+  everything not yet implemented" ask.
+- Replicated the exact working Lvl_test config onto all 4 Lvl_Lobby
+  kiosks: added a WidgetComponent named "KoreanLabelWidget" parented to
+  each kiosk's Mesh component (ActorTools.add_component +
+  set_parent_component), relativeLocation (0,0,90) / relativeRotation
+  (0,180,0) matching the original Label's transform exactly, Space=World,
+  BlendMode=Masked, TwoSided=true, DrawSize 500x150, WidgetClass pointed
+  at the same already-fixed WBP_Sign_16/17/18/19 class used in Lvl_test,
+  and hid the original Label (bVisible=false, same as the Lvl_test
+  pattern - can't be removed from a C++-constructed instance). Verified
+  every property read back correctly before saving.
+- Lvl_Lobby.umap saved and confirmed changed via `git status` (previously
+  untouched this session). This is a NEW file added to the diff, on top
+  of everything from today's earlier Lvl_test-only rounds.
+- [ ] Screenshot verification inconclusive again for the Lvl_Lobby kiosks
+  specifically (same camera-angle sensitivity noted throughout today's
+  session) - relying on the properties matching the confirmed-working
+  Lvl_test config exactly, not a fresh visual confirmation for Lvl_Lobby.
+  Please check the Wardrobe/RoomSettings/FriendInvite/StartMatch kiosks
+  in an actual Lvl_Lobby playtest.
+- Switched the editor's open level back to Lvl_test afterward (was open
+  there before this round; briefly switched to Lvl_Lobby to do this work).
+- Changes still NOT committed - now spans Lvl_test.umap, Lvl_Lobby.umap,
+  21 WBP_Sign_XX assets, and WBP_WorldSign, all from today's session.
+
+=================================================================
 NOTES
 =================================================================
 - Section 16 of the doc flags these as still-undecided design details to
