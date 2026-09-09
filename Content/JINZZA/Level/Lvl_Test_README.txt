@@ -81,48 +81,64 @@ its body cylinder plus a barrel cylinder and a grip cube. Swap these out for rea
 once they exist; nothing else needs to change. (Basketball itself was left as a plain
 sphere - already an accurate shape.)
 
-Note on Korean text and fonts (2026-09-08): all TextRenderComponents in this level
-(zone/section/welcome signs) and all kiosk Label components now have their Font property
-set to /Game/JINZZA/Fonts/SacheonUju-Regular_Font, the project's only Korean font asset.
-CAVEAT: this UFont asset has FontCacheType = Runtime, which is the Slate/UMG font
-pipeline; TextRenderComponent historically expected an "Offline Cached" bitmap UFont. This
-session could not visually verify in a running editor/PIE session whether Runtime-cached
-fonts render correctly on 3D world-space TextRenderComponents in UE 5.8 - if the Korean
-text on these signs appears blank/missing glyphs/tofu boxes when you actually look at the
-level, that's the likely cause. (The UMG/Slate UI text pipeline elsewhere in the project
-already uses this same font successfully - this risk is specific to world-space
-TextRenderActor/TextRenderComponent signs, not menus/HUDs.)
+Note on Korean text and fonts (RESOLVED 2026-09-09): the CAVEAT below was confirmed true -
+a viewport capture showed the 16 standalone signs rendering as blank "Tt" placeholder
+icons, not Korean glyphs, because TextRenderComponent cannot render a Runtime-cached
+composite UFont (only "Offline Cached" bitmap UFonts work, and baking one needs Unreal's
+native font-import step, which has no unreal-mcp equivalent). Fix: every piece of Korean
+text in this level now goes through UMG/Slate instead of TextRenderComponent:
+  - The 16 standalone signs are BP_WorldSign actors (World Space WidgetComponent, see
+    "Exhibit booths" above).
+  - The 5 kiosk labels (Wardrobe/RoomSettings/FriendInvite/StartMatch/VoiceTest) each got
+    a SECOND WidgetComponent ("KoreanLabelWidget") added directly onto the existing C++
+    kiosk actor instance in the level (no C++ change or recompile needed - see
+    [[unreal-mcp-gotchas]] gotcha #11), parented to Mesh at the same relative transform the
+    old Label had. The original Label TextRenderComponent is still there but hidden
+    (bVisible=false) since it can't be removed from a C++-constructed instance.
+All 21 signs are separate small widget classes (/Game/JINZZA/UI/Widgets/Signs/WBP_Sign_XX_*)
+each with their own Korean text baked into the class default, rather than one shared class -
+see [[unreal-mcp-gotchas]] gotcha #10 for why.
 
 Note on lighting (fixed 2026-09-08): this level had no DirectionalLight or SkyLight at all
 until now - it would have PIE'd essentially pitch black. Added both, matching Lvl_Lobby's
 DirectionalLight rotation (Pitch -50, Yaw 20).
 
-Exhibit booths (2026-09-08, fourth and current revision - see below for earlier ones):
-every zone's prop/kiosk and its sign sit together at Y=280, the CENTER of a U-shaped booth
-(a back wall + two side arms, open toward the main corridor at Y=0). All 15 booths open
-the same direction (toward -Y) - the corridor at Y=0 and below stays a clear,
-uninterrupted walkway the full length of the level, and every zone's booth is a short walk
-to the +Y side of it. Every prop/kiosk/sign is also rotated to yaw=-90 so it visually
-faces back out through the booth's open mouth (kiosks like Wardrobe/RoomSettings/
-FriendInvite/StartMatch/VoiceTest are yaw=+90 instead, since their own Label sub-component
-has a fixed +180 relative rotation baked into the C++ constructor - net effect is the same
--Y-facing label).
+Exhibit booths (2026-09-09, fifth and current revision - see below for earlier ones):
+the U-shaped booth walls (back wall + two side arms per zone) were removed. Each zone's
+prop/kiosk now sits in the open at Y=280 with a single non-functional door-frame prop
+(BP_DoorFrame_Decor, in the "ZoneDoorBackdrops" outliner folder) standing behind it at
+Y=460, X = zone centerline - 30 (matching the scale/pose of the original hand-placed
+"Zone14_Door2" reference instance the user built, scale 0.75, yaw=0). BP_DoorFrame_Decor
+is a duplicate of BP_DoorFrame (LevelPrototyping Interactable/Door kit) with its entire
+EventGraph (BeginPlay/overlap detection/Open/CloseDoor timeline) deleted - it keeps only
+the UserConstructionScript "Set Mesh" logic that assembles the door frame's visual mesh,
+so it looks identical to a working door but has no interact/open logic or collision
+response. Zones are still spaced 700 units apart along X, from X=0 (zone 1) through
+X=9800 (zone 15); every prop/kiosk/sign is still rotated to face -Y as before.
 
-Booths are built from SM_Cube segments (LevelPrototyping kit, corner-pivoted - back wall
-is 2 segments, each side arm is 1), 30 units thick, 220 tall, with the two side arms 240
-units either side of the zone's centerline (480 apart total) and 400 deep. All booth
-pieces carry a shared MI_ExhibitBoothWall material instance (Content/JINZZA/Level/
-MI_ExhibitBoothWall, a flat-color instance of the LevelPrototyping kit's M_FlatCol - light
-neutral gray, no grid texture). Zones are spaced 700 units apart along X, from X=0 (zone 1)
-through X=9800 (zone 15). The floor spans X: -700..10200, Y: -500..600. All booth pieces
-live in the "ExhibitBooths" outliner folder; the material instance is a plain content
-asset, not inside the level.
-
-This is the fourth pass at this design: dividers between zones (blocked the walkway) ->
+This is the fifth pass at this design: dividers between zones (blocked the walkway) ->
 alternating-side booths with actors on the old Y=0 centerline -> uniform-direction booths
-with actors centered inside them -> this version, which adds zones 10-15 (RoomSettings/
-FriendInvite/StartMatch/VoiceTest kiosks + Door/WobbleTarget prototyping examples), section
-header signs, Korean translation of every sign, and composite prop meshes.
+with actors centered inside them -> fourth pass added zones 10-15, section header signs,
+Korean translation, and composite prop meshes -> this version, which replaces the
+U-shaped booth walls with a decorative door standing behind each zone's actor, and fixes
+the Korean sign text (see below).
+
+Korean text fix (2026-09-09): the U-shaped wall removal correlated with also fixing the
+long-standing Korean rendering bug described below. All 16 standalone signs (welcome +
+5 section headers + zones 1-8, 14, 15) were converted from TextRenderActor to a new
+BP_WorldSign actor (Content/JINZZA/Level/BP_WorldSign) - a World Space WidgetComponent
+hosting a small UMG widget (Content/JINZZA/UI/Widgets/WBP_WorldSign, one TextBlock bound
+to a SignText variable, Sacheon Uju font). Since unreal-mcp has no tool to author a
+Widget Blueprint's visual tree, each sign is a separate duplicate of WBP_WorldSign
+(Content/JINZZA/UI/Widgets/Signs/WBP_Sign_XX_Name) with its own SignText baked into the
+class default, rather than one shared class driven by a per-instance variable (a
+cross-blueprint variable/function-call node could not be created via the available
+graph-editing tools against a not-yet-open Blueprint class - if that limitation is ever
+lifted, this could be collapsed back to one shared widget class). NOTE: the 5 kiosk
+Label sub-components (Wardrobe/RoomSettings/FriendInvite/StartMatch/VoiceTest) are still
+plain C++ TextRenderComponents and were NOT converted - they still won't render Korean
+text until either re-imported as an Offline bitmap font or their C++ Label component is
+swapped for a WidgetComponent (deferred - see [[deferred-features]]).
 
 Convention going forward: whenever a new testable feature is added to the project, add a
 new numbered zone here for it (prop/actor + a TextRenderActor sign in Korean, same pattern
