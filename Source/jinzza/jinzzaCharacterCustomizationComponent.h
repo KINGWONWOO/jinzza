@@ -6,6 +6,9 @@
 #include "Components/ActorComponent.h"
 #include "jinzzaCharacterCustomizationComponent.generated.h"
 
+class UMaterialInstanceDynamic;
+class UStaticMeshComponent;
+
 /**
  * Applies the local player's saved appearance (UjinzzaGameUserSettings::GetHeadStyle/HairColor/
  * TopStyle/EyebrowsStyle/EyesStyle) to the owning character. This is the
@@ -22,6 +25,12 @@
  * client-local cosmetic refresh, called from BeginPlay and again whenever the player changes
  * something in UjinzzaCustomizationWidget (opened from the main menu or from
  * AjinzzaWardrobeKiosk in the lobby - both write to the same UjinzzaGameUserSettings).
+ *
+ * Head/HairColor now have real (placeholder) content to apply, on the same M_Face_Master/
+ * "FaceIndex" contract UjinzzaDisguiseComponent already uses (slot 0 of GetMesh(), so a round
+ * disguise assigned later simply overwrites this base look - see that class comment) plus a
+ * lazily-created hair mesh socketed to the skeleton's "Head" socket, tinted via M_Hair_Master's
+ * "HairColor" param. Top/Eyebrows/Eyes still have no matching content and stay no-ops.
  */
 UCLASS(ClassGroup = (Party), meta = (BlueprintSpawnableComponent))
 class JINZZA_API UjinzzaCharacterCustomizationComponent : public UActorComponent
@@ -34,4 +43,14 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> DynamicFaceMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UStaticMeshComponent> HairMeshComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> DynamicHairMaterial;
 };
