@@ -20,6 +20,7 @@
 #include "jinzzaLobbyGameState.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "Sound/SoundBase.h"
 
 void UjinzzaRoomSettingsWidget::BuildWidgetTree()
 {
@@ -81,7 +82,13 @@ void UjinzzaRoomSettingsWidget::BuildWidgetTree()
 	}
 
 	ApplyButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("ApplyButton"), FText::FromString(TEXT("Apply")));
-	ButtonRow->AddChildToHorizontalBox(ApplyButton);
+	if (UHorizontalBoxSlot* ApplySlot = ButtonRow->AddChildToHorizontalBox(ApplyButton))
+	{
+		ApplySlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+	}
+
+	StartGameButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("StartGameButton"), FText::FromString(TEXT("Start Game")));
+	ButtonRow->AddChildToHorizontalBox(StartGameButton);
 }
 
 void UjinzzaRoomSettingsWidget::NativeOnInitialized()
@@ -180,6 +187,12 @@ void UjinzzaRoomSettingsWidget::NativeOnInitialized()
 	{
 		CloseButton->OnClicked.AddDynamic(this, &UjinzzaRoomSettingsWidget::OnCloseClicked);
 	}
+
+	if (StartGameButton)
+	{
+		StartGameButton->OnClicked.AddDynamic(this, &UjinzzaRoomSettingsWidget::OnStartGameClicked);
+		StartGameButton->SetVisibility(bEditable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	}
 }
 
 void UjinzzaRoomSettingsWidget::OnApplyClicked()
@@ -220,4 +233,29 @@ void UjinzzaRoomSettingsWidget::OnApplyClicked()
 void UjinzzaRoomSettingsWidget::OnCloseClicked()
 {
 	RemoveFromParent();
+}
+
+void UjinzzaRoomSettingsWidget::OnStartGameClicked()
+{
+	if (!bEditable)
+	{
+		return;
+	}
+
+	APlayerController* OwningPC = GetOwningPlayer();
+	if (!OwningPC || !OwningPC->IsLocalController() || !OwningPC->HasAuthority())
+	{
+		return;
+	}
+
+	// TEMP placeholder confirm sound - matches AjinzzaStartMatchKiosk::Interact, swap for real SFX later.
+	if (USoundBase* ConfirmSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/UISounds/LobbyPannelOpen__cut_1sec_.LobbyPannelOpen__cut_1sec_")))
+	{
+		UGameplayStatics::PlaySound2D(OwningPC, ConfirmSound);
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->ServerTravel(TEXT("/Game/JINZZA/Level/Lvl_Game"));
+	}
 }

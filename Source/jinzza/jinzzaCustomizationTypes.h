@@ -29,3 +29,18 @@ enum class EJinzzaHairColor : uint8
 	Red,
 	Blue
 };
+
+/**
+ * Placeholder accessory options for the Customization screen's Accessories tab - same "no real
+ * item art yet" placeholder convention as EJinzzaCustomizationStyle, but with an explicit None
+ * (an accessory slot can be empty; Head/Top can't). Once real accessory items exist, replace
+ * this with whatever per-item list makes sense, same migration note as EJinzzaCustomizationStyle.
+ */
+UENUM(BlueprintType)
+enum class EJinzzaAccessoryStyle : uint8
+{
+	None,
+	StyleA,
+	StyleB,
+	StyleC
+};

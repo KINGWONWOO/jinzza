@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaCharacterPreviewCapture.h"
+#include "jinzzaGameUserSettings.h"
+#include "jinzzaCustomizationApply.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/PointLightComponent.h"
@@ -14,8 +16,13 @@ AjinzzaCharacterPreviewCapture::AjinzzaCharacterPreviewCapture()
 
 	PreviewMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("PreviewMesh"));
 	RootComponent = PreviewMesh;
+	PreviewMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	static ConstructorHelpers::FObjectFinder<USkeletalMesh> MannequinFinder(TEXT("/Game/JINZZA/Characters/Mannequins/Meshes/SK_Mannequin.SK_Mannequin"));
+	// Same mesh the real playable character (BP_FirstPersonCharacter) uses, so the preview has
+	// the same "Head" socket and material slot layout that JinzzaCustomization::ApplyToMesh
+	// relies on - see that file's comment. Was SK_Mannequin (the old UE4 mannequin, no matching
+	// socket) before this preview was reused for the Customization screen.
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> MannequinFinder(TEXT("/Game/JINZZA/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
 	if (MannequinFinder.Succeeded())
 	{
 		PreviewMesh->SetSkeletalMesh(MannequinFinder.Object);
@@ -50,4 +57,15 @@ void AjinzzaCharacterPreviewCapture::BeginPlay()
 	// bCaptureEveryFrame (set in the constructor) already keeps this updating - an explicit
 	// CaptureScene() call here is redundant and logs an "inefficiency" warning.
 	Capture->TextureTarget = RenderTarget;
+
+	RefreshAppearance();
+}
+
+void AjinzzaCharacterPreviewCapture::RefreshAppearance()
+{
+	if (UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get())
+	{
+		JinzzaCustomization::ApplyToMesh(PreviewMesh, this, DynamicFaceMaterial, HairMeshComponent,
+			DynamicHairMaterial, AccessoryMeshComponent, DynamicAccessoryMaterial, *Settings);
+	}
 }

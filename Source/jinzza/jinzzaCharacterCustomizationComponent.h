@@ -26,11 +26,14 @@ class UStaticMeshComponent;
  * something in UjinzzaCustomizationWidget (opened from the main menu or from
  * AjinzzaWardrobeKiosk in the lobby - both write to the same UjinzzaGameUserSettings).
  *
- * Head/HairColor now have real (placeholder) content to apply, on the same M_Face_Master/
- * "FaceIndex" contract UjinzzaDisguiseComponent already uses (slot 0 of GetMesh(), so a round
- * disguise assigned later simply overwrites this base look - see that class comment) plus a
- * lazily-created hair mesh socketed to the skeleton's "Head" socket, tinted via M_Hair_Master's
- * "HairColor" param. Top/Eyebrows/Eyes still have no matching content and stay no-ops.
+ * Head/HairColor/Accessory now have real (placeholder) content to apply, on the same
+ * M_Face_Master/"FaceIndex" contract UjinzzaDisguiseComponent already uses (slot 0 of GetMesh(),
+ * so a round disguise assigned later simply overwrites this base look - see that class comment)
+ * plus lazily-created hair/accessory meshes socketed to the skeleton's "Head" socket, tinted via
+ * M_Hair_Master's "HairColor" param. Top/Eyebrows/Eyes still have no matching content and stay
+ * no-ops. The actual material-swap/socket-mesh work is shared with the Customization screen's
+ * live preview via JinzzaCustomization::ApplyToMesh (jinzzaCustomizationApply.h) - see that
+ * file's comment for the full contract, including the deferred Steam-avatar-on-face plan.
  */
 UCLASS(ClassGroup = (Party), meta = (BlueprintSpawnableComponent))
 class JINZZA_API UjinzzaCharacterCustomizationComponent : public UActorComponent
@@ -53,4 +56,10 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> DynamicHairMaterial;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UStaticMeshComponent> AccessoryMeshComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> DynamicAccessoryMaterial;
 };

@@ -128,6 +128,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Settings|Customization")
 	void SetEyesStyle(EJinzzaCustomizationStyle NewValue);
 
+	UFUNCTION(BlueprintPure, Category = "Settings|Customization")
+	EJinzzaAccessoryStyle GetAccessoryStyle() const;
+	UFUNCTION(BlueprintCallable, Category = "Settings|Customization")
+	void SetAccessoryStyle(EJinzzaAccessoryStyle NewValue);
+
 	// --- Gameplay / accessibility ---
 	UFUNCTION(BlueprintPure, Category = "Settings|Gameplay")
 	bool GetSubtitlesEnabled() const;
@@ -202,6 +207,9 @@ private:
 
 	UPROPERTY(config)
 	EJinzzaCustomizationStyle EyesStyle = EJinzzaCustomizationStyle::StyleA;
+
+	UPROPERTY(config)
+	EJinzzaAccessoryStyle AccessoryStyle = EJinzzaAccessoryStyle::None;
 
 	UPROPERTY(config)
 	bool bSubtitlesEnabled = false;

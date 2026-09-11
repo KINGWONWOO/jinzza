@@ -56,6 +56,7 @@ void UjinzzaGameUserSettings::SetToDefaults()
 	TopStyle = EJinzzaCustomizationStyle::StyleA;
 	EyebrowsStyle = EJinzzaCustomizationStyle::StyleA;
 	EyesStyle = EJinzzaCustomizationStyle::StyleA;
+	AccessoryStyle = EJinzzaAccessoryStyle::None;
 }
 
 void UjinzzaGameUserSettings::ApplySettings(bool bCheckForCommandLineOverrides)
@@ -101,6 +102,9 @@ void UjinzzaGameUserSettings::SetTopStyle(EJinzzaCustomizationStyle NewValue) { 
 
 EJinzzaCustomizationStyle UjinzzaGameUserSettings::GetEyebrowsStyle() const { return EyebrowsStyle; }
 void UjinzzaGameUserSettings::SetEyebrowsStyle(EJinzzaCustomizationStyle NewValue) { EyebrowsStyle = NewValue; }
+
+EJinzzaAccessoryStyle UjinzzaGameUserSettings::GetAccessoryStyle() const { return AccessoryStyle; }
+void UjinzzaGameUserSettings::SetAccessoryStyle(EJinzzaAccessoryStyle NewValue) { AccessoryStyle = NewValue; }
 
 EJinzzaCustomizationStyle UjinzzaGameUserSettings::GetEyesStyle() const { return EyesStyle; }
 void UjinzzaGameUserSettings::SetEyesStyle(EJinzzaCustomizationStyle NewValue) { EyesStyle = NewValue; }

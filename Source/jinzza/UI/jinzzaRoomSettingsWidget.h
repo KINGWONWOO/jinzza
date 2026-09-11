@@ -42,6 +42,10 @@ protected:
 	UFUNCTION()
 	void OnCloseClicked();
 
+	/** Host-only, mirrors AjinzzaStartMatchKiosk::Interact exactly - server-travels everyone to Lvl_Game. */
+	UFUNCTION()
+	void OnStartGameClicked();
+
 private:
 	void BuildWidgetTree();
 
@@ -76,4 +80,7 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UButton> CloseButton;
+
+	UPROPERTY()
+	TObjectPtr<UButton> StartGameButton;
 };
