@@ -12,7 +12,7 @@ class UjinzzaVoiceTestWidget;
 
 /**
  * A physical, walk-up-to prop for the exhibition test level (Lvl_test) that opens the same
- * UjinzzaVoiceTestWidget the main menu's bottom-right panel uses - both are just separate
+ * UjinzzaVoiceTestWidget the main menu's Voice Test button uses - both are just separate
  * instances of the same self-contained widget, nothing kiosk-specific lives on the widget class
  * itself. Mirrors AjinzzaWardrobeKiosk's shape exactly (see that class).
  */

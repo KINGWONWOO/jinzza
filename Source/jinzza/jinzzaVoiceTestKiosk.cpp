@@ -63,11 +63,15 @@ void AjinzzaVoiceTestKiosk::Interact(APlayerController* Interactor)
 
 		TWeakObjectPtr<AjinzzaVoiceTestKiosk> WeakThis(this);
 		TWeakObjectPtr<APlayerController> WeakInteractor(Interactor);
-		ActiveWidget->OnNativeDestruct.AddLambda([WeakThis, WeakInteractor](UUserWidget*)
+		ActiveWidget->OnBackRequested.AddLambda([WeakThis, WeakInteractor]()
 		{
 			if (AjinzzaVoiceTestKiosk* Kiosk = WeakThis.Get())
 			{
-				Kiosk->ActiveWidget = nullptr;
+				if (Kiosk->ActiveWidget)
+				{
+					Kiosk->ActiveWidget->RemoveFromParent();
+					Kiosk->ActiveWidget = nullptr;
+				}
 			}
 			AjinzzaVoiceTestKiosk::ExitKioskUIMode(WeakInteractor.Get());
 		});

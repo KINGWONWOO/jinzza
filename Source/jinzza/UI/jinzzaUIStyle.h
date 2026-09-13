@@ -75,6 +75,54 @@ namespace JinzzaUI
 	/** Crimson-tinted button for destructive/warning actions (Quit, Leave Room). */
 	UButton* MakeWarningButton(UWidgetTree* Tree, FName Name, const FText& Label, float FontSize = 18.f);
 
+	/** Pastel-tinted pill button matching the NOOB-GAME reference main menu's button column (see
+	 * docs/Unreal_Game_Noob-main .../Doc/Images/MainMenu.png) - same T_ButtonPill shape as
+	 * MakePrimaryButton/etc. but with a caller-supplied tint per button instead of the shared noir
+	 * palette, plus a small white circular icon-slot badge to the left of the label standing in for
+	 * NOOB's per-button icon (controller/gear/magnifier/power) until real icon art exists - swap
+	 * the badge for a UImage at that point. Fallback used only for main-menu buttons with no
+	 * matching NOOB-GAME source art (see MakeNoobIconButton) - every other panel keeps the noir
+	 * MakePrimaryButton/MakeSecondaryButton/MakeWarningButton look. */
+	UButton* MakeMenuActionButton(UWidgetTree* Tree, FName Name, const FText& Label, const FLinearColor& TintColor, float FontSize = 20.f);
+
+	/** Main-menu button built from an actual NOOB-GAME button image (a fully baked pill + border +
+	 * icon PNG from the reference project's own UI source folder - e.g. T_ButtonHost, imported
+	 * from .../Unreal_Game_Noob-main/기획/자료/Menu/Hostbutton.png - see jinzzaMainMenuWidget.cpp
+	 * for the full set), drawn at the image's own aspect ratio rather than nine-sliced since the
+	 * icon's position within the art is fixed. The label sits to the right of the baked icon (an
+	 * invisible spacer reserves that space) rather than centered, matching NOOB-GAME's own text
+	 * placement. Hover/press feedback is a brightness tint of the same single baked image, since
+	 * there's only one piece of source art per button (no separate hover/press art in NOOB-GAME's
+	 * source folder either). Falls back to MakeMenuActionButton's plain tinted pill if TexturePath
+	 * fails to load (e.g. the asset was never imported), so a missing texture degrades gracefully
+	 * instead of producing an invisible button. */
+	UButton* MakeNoobIconButton(UWidgetTree* Tree, FName Name, const FText& Label, const TCHAR* TexturePath, const FLinearColor& FallbackTintColor, float Height = 88.f, float FontSize = 20.f);
+
+	/** Generic circular icon button shell: a solid-tinted circle (plain FSlateRoundedBoxBrush at
+	 * radius = half the diameter, no source art needed for the circle itself) wrapping IconContent
+	 * (centered, may be null for a blank circle), with a caption label below the circle rather than
+	 * beside it. The button's own style brush is fully transparent (ESlateBrushDrawType::NoDrawType)
+	 * - the visible circle is a child UBorder, not the button background - so the caption sits on
+	 * the panel behind it with no button-colored rectangle showing through. Shared by
+	 * MakeNoobCircleIconButton (icon = an image) and callers that build a from-primitives icon
+	 * widget directly (e.g. MakeMaskIcon/MakeMicIcon below) - see jinzzaMainMenuWidget.cpp. */
+	UButton* MakeCircleIconButton(UWidgetTree* Tree, FName Name, const FText& Label, UWidget* IconContent, const FLinearColor& TintColor, float Diameter = 88.f, float FontSize = 15.f);
+
+	/** Circular icon button built from a NOOB-GAME sourced icon image (aspect-fit within the
+	 * circle, not stretched to a square) - see MakeCircleIconButton for the shared shell. Falls
+	 * back to a blank tinted circle (no icon) if TexturePath fails to load. */
+	UButton* MakeNoobCircleIconButton(UWidgetTree* Tree, FName Name, const FText& Label, const TCHAR* TexturePath, const FLinearColor& TintColor, float Diameter = 88.f, float FontSize = 15.f);
+
+	/** Simple masquerade-mask icon (a rounded bar "face" with two dark eye-hole cutouts) built
+	 * entirely from FSlateRoundedBoxBrush primitives - no source art needed. Evokes JINZZA's
+	 * "Imitator" disguise premise directly, unlike any borrowed NOOB-GAME art; used for the
+	 * Customize button and the top-left logo badge. */
+	UWidget* MakeMaskIcon(UWidgetTree* Tree, FName Name, float Size, const FLinearColor& MaskColor);
+
+	/** Simple microphone icon (a capsule head over a thin stand and base) built entirely from
+	 * FSlateRoundedBoxBrush primitives - no source art needed. Used for the Voice Test button. */
+	UWidget* MakeMicIcon(UWidgetTree* Tree, FName Name, float Size, const FLinearColor& MicColor);
+
 	/** Rounded, semi-opaque panel background with a faint border. */
 	UBorder* MakePanelBackground(UWidgetTree* Tree, FName Name);
 

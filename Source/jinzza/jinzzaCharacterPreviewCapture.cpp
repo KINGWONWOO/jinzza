@@ -1,11 +1,14 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaCharacterPreviewCapture.h"
+#include "jinzzaGameUserSettings.h"
+#include "jinzzaCustomizationApply.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "Components/PointLightComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/SkeletalMesh.h"
+#include "Animation/AnimSequence.h"
 #include "UObject/ConstructorHelpers.h"
 
 AjinzzaCharacterPreviewCapture::AjinzzaCharacterPreviewCapture()
@@ -14,11 +17,30 @@ AjinzzaCharacterPreviewCapture::AjinzzaCharacterPreviewCapture()
 
 	PreviewMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("PreviewMesh"));
 	RootComponent = PreviewMesh;
+	PreviewMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	static ConstructorHelpers::FObjectFinder<USkeletalMesh> MannequinFinder(TEXT("/Game/JINZZA/Characters/Mannequins/Meshes/SK_Mannequin.SK_Mannequin"));
-	if (MannequinFinder.Succeeded())
+	// Same mesh the real playable character (BP_FirstPersonCharacter) uses, so the preview
+	// actually matches what a live pawn looks like. Was SKM_Manny_Simple (the Mannequin) until
+	// the real character was reskinned to the seal - this preview is a separate hardcoded
+	// ConstructorHelpers reference (not read from the live character class), so it had to be
+	// updated here too or it would silently keep showing the old Mannequin forever.
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> PreviewMeshFinder(TEXT("/Game/JINZZA/Characters/seal/SKM_Seal.SKM_Seal"));
+	if (PreviewMeshFinder.Succeeded())
 	{
-		PreviewMesh->SetSkeletalMesh(MannequinFinder.Object);
+		PreviewMesh->SetSkeletalMesh(PreviewMeshFinder.Object);
+	}
+
+	// Single-node looping Idle so the preview isn't frozen in bind pose - same stopgap
+	// AjinzzaCharacter's real Mesh component uses until a proper AnimBP exists (see
+	// jinzzaCharacter.cpp's history) - not driven by an AnimBlueprint since this preview never
+	// moves/jumps, just idles.
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> IdleAnimFinder(TEXT("/Game/JINZZA/Characters/seal/SKM_Seal_Anim_Armature_Idle.SKM_Seal_Anim_Armature_Idle"));
+	if (IdleAnimFinder.Succeeded())
+	{
+		PreviewMesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);
+		PreviewMesh->AnimationData.AnimToPlay = IdleAnimFinder.Object;
+		PreviewMesh->AnimationData.bSavedLooping = true;
+		PreviewMesh->AnimationData.bSavedPlaying = true;
 	}
 
 	FillLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("FillLight"));
@@ -50,4 +72,15 @@ void AjinzzaCharacterPreviewCapture::BeginPlay()
 	// bCaptureEveryFrame (set in the constructor) already keeps this updating - an explicit
 	// CaptureScene() call here is redundant and logs an "inefficiency" warning.
 	Capture->TextureTarget = RenderTarget;
+
+	RefreshAppearance();
+}
+
+void AjinzzaCharacterPreviewCapture::RefreshAppearance()
+{
+	if (UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get())
+	{
+		JinzzaCustomization::ApplyToMesh(PreviewMesh, this, DynamicFaceMaterial, HairMeshComponent,
+			DynamicHairMaterial, AccessoryMeshComponent, DynamicAccessoryMaterial, *Settings);
+	}
 }

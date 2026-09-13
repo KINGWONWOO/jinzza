@@ -19,9 +19,13 @@ class USourceEffectSimpleDelayPreset;
  * loopback only - no networking) and play it back live through adjustable pitch/robot/echo DSP,
  * so the player can hear what a disguised voice sounds like before the real proximity-voice
  * system (EOS Voice Chat, design doc section 11, Week 6 - see [[eos-voice-chat-plan]]) exists.
- * Opened two places: embedded always-visible in the main menu's bottom-right corner, and popped
- * up from AjinzzaVoiceTestKiosk in the exhibition test level - both just construct an instance,
- * nothing kiosk-specific lives in this class.
+ * Opened two places: via a button in the main menu (shown as a central UjinzzaMainMenuWidget
+ * switcher page, same pattern as Settings/Customization), and popped up from
+ * AjinzzaVoiceTestKiosk in the exhibition test level (as a viewport overlay) - both just
+ * construct an instance, nothing kiosk-specific lives in this class. OnBackRequested fires on
+ * Close; the main menu binds it to switch back to its buttons page, AjinzzaVoiceTestKiosk binds
+ * it to remove this widget from the viewport - see UjinzzaSettingsWidget for the identical
+ * pattern.
  *
  * Three sliders (Pitch/Robot/Echo) can be dragged directly, live - no Apply button needed. Three
  * template buttons (Cave/Helium/Robot) jump all three sliders to a preset combination in one
@@ -45,6 +49,8 @@ class JINZZA_API UjinzzaVoiceTestWidget : public UUserWidget
 public:
 	virtual void NativeOnInitialized() override;
 	virtual void NativeDestruct() override;
+
+	FSimpleMulticastDelegate OnBackRequested;
 
 protected:
 	UFUNCTION()

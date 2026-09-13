@@ -35,10 +35,18 @@ AjinzzaCharacter::AjinzzaCharacter()
 	FirstPersonMesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
 	FirstPersonMesh->SetCollisionProfileName(FName("NoCollision"));
 
-	// Create the Camera Component	
+	// Create the Camera Component. Attached to the capsule (not a mesh bone/socket) so its
+	// position/orientation never depends on a specific skeleton's bone-local axis convention -
+	// the old FirstPersonMesh "head" socket attachment baked in an offset/rotation
+	// (FVector(-2.8,5.89,0) / FRotator(0,90,-90)) that only made sense for the original Mannequin
+	// head bone's particular local frame; swapping to any other skeleton (e.g. a from-scratch
+	// rig with default bone roll) would silently point the camera in an arbitrary direction.
+	// A per-character eye height still belongs on the character (capsule half-height varies per
+	// Blueprint), so RelativeLocation.Z is a sane default here and expected to be overridden per-
+	// Blueprint the same way CapsuleHalfHeight/CapsuleRadius already are.
 	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("First Person Camera"));
-	FirstPersonCameraComponent->SetupAttachment(FirstPersonMesh, FName("head"));
-	FirstPersonCameraComponent->SetRelativeLocationAndRotation(FVector(-2.8f, 5.89f, 0.0f), FRotator(0.0f, 90.0f, -90.0f));
+	FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent());
+	FirstPersonCameraComponent->SetRelativeLocationAndRotation(FVector(0.0f, 0.0f, 80.0f), FRotator::ZeroRotator);
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
 	FirstPersonCameraComponent->bEnableFirstPersonFieldOfView = true;
 	FirstPersonCameraComponent->bEnableFirstPersonScale = true;

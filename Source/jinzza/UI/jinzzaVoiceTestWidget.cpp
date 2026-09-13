@@ -119,7 +119,7 @@ void UjinzzaVoiceTestWidget::BuildWidgetTree()
 		RobotSlot->SetSize(ESlateSizeRule::Fill);
 	}
 
-	CloseButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Close")));
+	CloseButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Back")));
 	if (UVerticalBoxSlot* CloseSlot = JinzzaUI::AddSpaced(Stack, CloseButton, 20.f))
 	{
 		CloseSlot->SetHorizontalAlignment(HAlign_Right);
@@ -183,7 +183,11 @@ void UjinzzaVoiceTestWidget::NativeDestruct()
 
 void UjinzzaVoiceTestWidget::OnCloseClicked()
 {
-	RemoveFromParent();
+	// Unlike the kiosk popup (destroyed on close), the main menu keeps this widget alive as a
+	// switcher page across Back navigation - stop the mic capture explicitly so it doesn't keep
+	// running silently in the background after leaving the page.
+	StopListening();
+	OnBackRequested.Broadcast();
 }
 
 void UjinzzaVoiceTestWidget::EnsureEffectChain()

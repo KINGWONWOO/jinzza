@@ -35,6 +35,7 @@ namespace
 		Page_Buttons = 0,
 		Page_Settings = 1,
 		Page_Customization = 2,
+		Page_VoiceTest = 3,
 	};
 
 	constexpr float FadeInDuration = 0.35f;
@@ -64,7 +65,7 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 	WidgetTree->RootWidget = Background;
 
 	// RootOverlay holds the page Switcher plus the logo badge, so the badge stays on screen no
-	// matter which switcher page (Buttons/Settings/Customization) is active.
+	// matter which switcher page (Buttons/Settings/Customization/VoiceTest) is active.
 	UOverlay* RootOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("RootOverlay"));
 	Background->SetContent(RootOverlay);
 
@@ -75,8 +76,10 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 		SwitcherSlot->SetVerticalAlignment(VAlign_Fill);
 	}
 
-	// TEMP placeholder company logo (top-left corner) - the user will supply the real logo later;
-	// swap this badge for a UImage pointed at that texture when it exists.
+	// Top-left company logo badge: a gold-tinted mask icon (JinzzaUI::MakeMaskIcon, built from
+	// primitives, no source art) instead of a plain "LOGO" text placeholder - the mask directly
+	// evokes the "Imitator" disguise premise the whole game is built around, giving the badge real
+	// identity until a real logo asset exists.
 	USizeBox* LogoBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("LogoBox"));
 	LogoBox->SetWidthOverride(84.f);
 	LogoBox->SetHeightOverride(84.f);
@@ -91,67 +94,115 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 	LogoBadge->SetHorizontalAlignment(HAlign_Center);
 	LogoBadge->SetVerticalAlignment(VAlign_Center);
 	LogoBox->AddChild(LogoBadge);
-	LogoBadge->SetContent(JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("LogoText"), FText::FromString(TEXT("LOGO"))));
+	LogoBadge->SetContent(JinzzaUI::MakeMaskIcon(WidgetTree, TEXT("LogoMaskIcon"), 48.f, JinzzaUI::Color_Accent));
 
-	// Bottom-right voice-modification test panel - a self-contained nested widget, same pattern as
-	// SettingsWidget/CustomizationWidget above.
-	VoiceTestWidget = WidgetTree->ConstructWidget<UjinzzaVoiceTestWidget>(UjinzzaVoiceTestWidget::StaticClass(), TEXT("VoiceTestWidget"));
-	if (UOverlaySlot* VoiceTestSlot = RootOverlay->AddChildToOverlay(VoiceTestWidget))
-	{
-		VoiceTestSlot->SetHorizontalAlignment(HAlign_Right);
-		VoiceTestSlot->SetVerticalAlignment(VAlign_Bottom);
-		VoiceTestSlot->SetPadding(FMargin(24.f));
-	}
-
-	// Page 0: the button-list page. ButtonsPageRoot is the whole page (fade target); its content
-	// is centered in a fixed-width column via a Size Box.
+	// Page 0: the button-list page. ButtonsPageRoot is the whole page (fade target).
 	UOverlay* ButtonsPage = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("ButtonsPageRoot"));
 	ButtonsPageRoot = ButtonsPage;
 
-	USizeBox* CenterBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ButtonsCenterBox"));
-	CenterBox->SetWidthOverride(420.f);
-	if (UOverlaySlot* CenterSlot = ButtonsPage->AddChildToOverlay(CenterBox))
+	// Branding column (title/divider/status) sits top-right, per user request - distinct from the
+	// small top-left LogoBox above (that's the company logo corner badge, not the game title).
+	USizeBox* BrandingBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BrandingBox"));
+	BrandingBox->SetWidthOverride(360.f);
+	if (UOverlaySlot* BrandingSlot = ButtonsPage->AddChildToOverlay(BrandingBox))
 	{
-		CenterSlot->SetHorizontalAlignment(HAlign_Center);
-		CenterSlot->SetVerticalAlignment(VAlign_Center);
+		BrandingSlot->SetHorizontalAlignment(HAlign_Right);
+		BrandingSlot->SetVerticalAlignment(VAlign_Top);
+		BrandingSlot->SetPadding(FMargin(0.f, 32.f, 48.f, 0.f));
 	}
 
-	UVerticalBox* ButtonsStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ButtonsStack"));
-	CenterBox->AddChild(ButtonsStack);
+	UVerticalBox* BrandingStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BrandingStack"));
+	BrandingBox->AddChild(BrandingStack);
 
-	auto AddSpaced = [ButtonsStack](UWidget* Child, float TopPadding = 12.f)
+	UTextBlock* TitleText = JinzzaUI::MakeTitleText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("JINZZA")), 44);
+	TitleText->SetJustification(ETextJustify::Right);
+	JinzzaUI::AddSpaced(BrandingStack, TitleText, 0.f);
+
+	// Korean tagline directly under the title - "Find the Real One", the game's own concept in one
+	// line, so the logo lockup reads as more than just a wordmark. Uses the same SacheonUju font
+	// every other Korean string in this project already relies on (kiosk signs, etc.), so there's
+	// no tofu-glyph risk.
+	UTextBlock* TaglineText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("TaglineText"), FText::FromString(TEXT("진짜를 찾아라")), true);
+	TaglineText->SetJustification(ETextJustify::Right);
+	JinzzaUI::AddSpaced(BrandingStack, TaglineText, 2.f);
+
+	if (UVerticalBoxSlot* DividerSlot = JinzzaUI::AddSpaced(BrandingStack, JinzzaUI::MakeDivider(WidgetTree, TEXT("TitleDivider")), 8.f))
 	{
-		if (UVerticalBoxSlot* Slot = ButtonsStack->AddChildToVerticalBox(Child))
-		{
-			Slot->SetHorizontalAlignment(HAlign_Fill);
-			Slot->SetPadding(FMargin(0.f, TopPadding, 0.f, 0.f));
-		}
-	};
-
-	AddSpaced(JinzzaUI::MakeTitleText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("JINZZA")), 48), 0.f);
-	AddSpaced(JinzzaUI::MakeDivider(WidgetTree, TEXT("TitleDivider")));
+		DividerSlot->SetHorizontalAlignment(HAlign_Right);
+	}
 
 	StatusText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("StatusText"), FText::GetEmpty(), true);
-	AddSpaced(StatusText, 10.f);
+	StatusText->SetJustification(ETextJustify::Right);
+	JinzzaUI::AddSpaced(BrandingStack, StatusText, 10.f);
+
+	// Left button column - Host/Settings/Quit - and right button column - Customize/Voice Test -
+	// both anchored to the bottom of the screen. Reworked this round to match JINZZA's own
+	// established noir courtroom/interrogation theme (see JinzzaUI's header comment) rather than
+	// NOOB-GAME's cute pastel look used in earlier rounds: Host/Settings/Quit are back to
+	// JinzzaUI::MakePrimaryButton/MakeSecondaryButton/MakeWarningButton - the exact same noir pill
+	// buttons every other jinzza screen (Settings/Customization/kiosks) already uses, instead of
+	// the imported NOOB pill art. (T_ButtonHost/T_ButtonSettings/T_ButtonQuit/T_ButtonCustomize are
+	// now unused content assets, left in place rather than deleted.)
+	USizeBox* ButtonsLeftBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ButtonsLeftBox"));
+	if (UOverlaySlot* ButtonsLeftSlot = ButtonsPage->AddChildToOverlay(ButtonsLeftBox))
+	{
+		ButtonsLeftSlot->SetHorizontalAlignment(HAlign_Left);
+		ButtonsLeftSlot->SetVerticalAlignment(VAlign_Bottom);
+		ButtonsLeftSlot->SetPadding(FMargin(64.f, 0.f, 0.f, 64.f));
+	}
+
+	// Dark noir panel (JinzzaUI::MakePanelBackground - the same "room wall" surface Settings/
+	// Customization use) behind the button column, replacing last round's light NOOB-toned
+	// parchment note-card now that the buttons themselves are noir again - a light card behind
+	// dark noir buttons would clash the same way the pastel buttons clashed with the dark page
+	// background before that.
+	UBorder* ButtonsLeftPanel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("ButtonsLeftPanel"));
+	ButtonsLeftPanel->SetPadding(FMargin(28.f, 24.f, 28.f, 24.f));
+	ButtonsLeftBox->AddChild(ButtonsLeftPanel);
+
+	UVerticalBox* ButtonsLeftStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ButtonsLeftStack"));
+	ButtonsLeftPanel->SetContent(ButtonsLeftStack);
 
 	HostButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("HostButton"), FText::FromString(TEXT("Host Game")));
-	AddSpaced(HostButton, 24.f);
+	JinzzaUI::AddSpaced(ButtonsLeftStack, HostButton, 0.f);
 
 	SettingsButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("SettingsButton"), FText::FromString(TEXT("Settings")));
-	AddSpaced(SettingsButton);
+	JinzzaUI::AddSpaced(ButtonsLeftStack, SettingsButton);
 
 	QuitButton = JinzzaUI::MakeWarningButton(WidgetTree, TEXT("QuitButton"), FText::FromString(TEXT("Quit")));
-	AddSpaced(QuitButton);
+	JinzzaUI::AddSpaced(ButtonsLeftStack, QuitButton);
 
-	// Customization button sits on the right side of the page, independent of the centered
-	// button column above, so it doesn't get mixed in with Host/Settings/Quit's stack.
-	CustomizationButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CustomizationButton"), FText::FromString(TEXT("Customize")));
-	if (UOverlaySlot* CustomizeSlot = ButtonsPage->AddChildToOverlay(CustomizationButton))
+	USizeBox* ButtonsRightBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ButtonsRightBox"));
+	if (UOverlaySlot* ButtonsRightSlot = ButtonsPage->AddChildToOverlay(ButtonsRightBox))
 	{
-		CustomizeSlot->SetHorizontalAlignment(HAlign_Right);
-		CustomizeSlot->SetVerticalAlignment(VAlign_Center);
-		CustomizeSlot->SetPadding(FMargin(0.f, 0.f, 48.f, 0.f));
+		ButtonsRightSlot->SetHorizontalAlignment(HAlign_Right);
+		ButtonsRightSlot->SetVerticalAlignment(VAlign_Bottom);
+		ButtonsRightSlot->SetPadding(FMargin(0.f, 0.f, 64.f, 64.f));
 	}
+
+	// Same noir panel as ButtonsLeftPanel above.
+	UBorder* ButtonsRightPanel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("ButtonsRightPanel"));
+	ButtonsRightPanel->SetPadding(FMargin(28.f, 24.f, 28.f, 24.f));
+	ButtonsRightBox->AddChild(ButtonsRightPanel);
+
+	UVerticalBox* ButtonsRightStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ButtonsRightStack"));
+	ButtonsRightPanel->SetContent(ButtonsRightStack);
+
+	// Customize and Voice Test are circular icon buttons (JinzzaUI::MakeCircleIconButton) with
+	// purpose-built icons instead of NOOB-GAME's cat/headphones art: a masquerade mask
+	// (JinzzaUI::MakeMaskIcon, crimson - the "guilty"/Imitator accent) directly evokes the
+	// Imitator disguise premise for Customize, and a microphone (JinzzaUI::MakeMicIcon, gold - the
+	// "judge" accent) for Voice Test - both built from plain rounded-box primitives, no source art
+	// needed, so there's no dependency on finding an on-theme asset that doesn't exist.
+	UWidget* MaskIcon = JinzzaUI::MakeMaskIcon(WidgetTree, TEXT("CustomizationMaskIcon"), 40.f, JinzzaUI::Color_TextPrimary);
+	CustomizationButton = JinzzaUI::MakeCircleIconButton(WidgetTree, TEXT("CustomizationButton"), FText::FromString(TEXT("Customize")), MaskIcon, JinzzaUI::Color_AccentAlt);
+	if (UVerticalBoxSlot* ButtonSlot = JinzzaUI::AddSpaced(ButtonsRightStack, CustomizationButton, 0.f)) { ButtonSlot->SetHorizontalAlignment(HAlign_Center); }
+
+	// Voice Test button - opens VoiceTestWidget as a central switcher page (Page_VoiceTest),
+	// same pattern as Settings/Customization, rather than the old always-visible corner panel.
+	UWidget* MicIcon = JinzzaUI::MakeMicIcon(WidgetTree, TEXT("VoiceTestMicIcon"), 40.f, JinzzaUI::Color_Background);
+	VoiceTestButton = JinzzaUI::MakeCircleIconButton(WidgetTree, TEXT("VoiceTestButton"), FText::FromString(TEXT("Voice Test")), MicIcon, JinzzaUI::Color_Accent);
+	if (UVerticalBoxSlot* ButtonSlot = JinzzaUI::AddSpaced(ButtonsRightStack, VoiceTestButton, 20.f)) { ButtonSlot->SetHorizontalAlignment(HAlign_Center); }
 
 	Switcher->AddChild(ButtonsPage);
 
@@ -163,6 +214,10 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 	// Page 2: Customization, same nested-widget pattern as Settings above.
 	CustomizationWidget = WidgetTree->ConstructWidget<UjinzzaCustomizationWidget>(UjinzzaCustomizationWidget::StaticClass(), TEXT("CustomizationWidget"));
 	Switcher->AddChild(CustomizationWidget);
+
+	// Page 3: VoiceTest, same nested-widget pattern as Settings/Customization above.
+	VoiceTestWidget = WidgetTree->ConstructWidget<UjinzzaVoiceTestWidget>(UjinzzaVoiceTestWidget::StaticClass(), TEXT("VoiceTestWidget"));
+	Switcher->AddChild(VoiceTestWidget);
 }
 
 void UjinzzaMainMenuWidget::NativeOnInitialized()
@@ -191,6 +246,11 @@ void UjinzzaMainMenuWidget::NativeOnInitialized()
 		CustomizationButton->OnClicked.AddDynamic(this, &UjinzzaMainMenuWidget::OnCustomizationClicked);
 	}
 
+	if (VoiceTestButton)
+	{
+		VoiceTestButton->OnClicked.AddDynamic(this, &UjinzzaMainMenuWidget::OnVoiceTestClicked);
+	}
+
 	if (SettingsWidget)
 	{
 		SettingsWidget->OnBackRequested.AddUObject(this, &UjinzzaMainMenuWidget::ShowButtonsPage);
@@ -199,6 +259,11 @@ void UjinzzaMainMenuWidget::NativeOnInitialized()
 	if (CustomizationWidget)
 	{
 		CustomizationWidget->OnBackRequested.AddUObject(this, &UjinzzaMainMenuWidget::ShowButtonsPage);
+	}
+
+	if (VoiceTestWidget)
+	{
+		VoiceTestWidget->OnBackRequested.AddUObject(this, &UjinzzaMainMenuWidget::ShowButtonsPage);
 	}
 
 	if (Switcher)
@@ -320,6 +385,15 @@ void UjinzzaMainMenuWidget::OnCustomizationClicked()
 	if (Switcher)
 	{
 		Switcher->SetActiveWidgetIndex(Page_Customization);
+		PlayPanelOpenSound(this);
+	}
+}
+
+void UjinzzaMainMenuWidget::OnVoiceTestClicked()
+{
+	if (Switcher)
+	{
+		Switcher->SetActiveWidgetIndex(Page_VoiceTest);
 		PlayPanelOpenSound(this);
 	}
 }

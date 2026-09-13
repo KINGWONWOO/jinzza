@@ -1814,3 +1814,972 @@ NOTES
   - 2-judge mode's vote/interview rules
   - "Candidate vote" mode for choosing who is the Real One - full flow
     (who votes when, how it stays hidden from the judge)
+
+=================================================================
+DONE THIS SESSION (2026-09-12, by Claude) - reworked the main menu's
+button layout to match the reference NOOB-GAME main menu, and moved
+Voice Test from an always-visible corner panel to a button next to
+Customize that opens in the central switcher panel
+=================================================================
+- User asked: place the main menu UI exactly the same as in NOOB-GAME,
+  and add a separate Voice Test button below the Customize button at the
+  bottom right that opens the voice test panel in the central UI window.
+- Looked at docs/Unreal_Game_Noob-main .../Doc/Images/MainMenu.png (the
+  reference project's actual main menu screenshot) since NoobGame's
+  MainMenu.cpp/.h only handles the Quit button in code - all its layout
+  lives in a Designer-authored WBP_MainMenu the repo doesn't expose as
+  text. That screenshot shows: 3D scene + logo on the left, and a single
+  vertical stack of pill-shaped icon buttons (Host/Settings/Credits/Quit)
+  anchored to the right edge, lower-half of the screen.
+- jinzza's C++-built UjinzzaMainMenuWidget::BuildWidgetTree previously
+  split this into a centered column (Title/Divider/Status/Host/Settings/
+  Quit) plus one lone right-side Customize button. Reworked to match the
+  reference structurally: a centered "BrandingBox" (Title/Divider/
+  StatusText, standing in for NOOB's logo art since jinzza has no
+  equivalent scene yet) plus one unified bottom-right vertical
+  "ButtonsRightBox" column (HAlign_Right/VAlign_Bottom, 64px padding)
+  holding Host -> Settings -> Customize -> Voice Test -> Quit in that
+  order - Voice Test now sits directly below Customize, both anchored at
+  the bottom right, per the request. Button pill shape/styling is
+  unchanged (JinzzaUI::MakePrimaryButton/MakeSecondaryButton/
+  MakeWarningButton already use T_ButtonPill sourced from NOOB-GAME's own
+  UI art per jinzzaUIStyle.h's header comment, just retinted - so the
+  buttons already matched NOOB-GAME's look before this session; only the
+  page layout/positioning changed).
+- Voice Test used to be an always-visible UjinzzaVoiceTestWidget instance
+  docked in the main menu's bottom-right corner (RootOverlay child,
+  outside the page Switcher). Removed that; VoiceTestWidget is now built
+  as Page_VoiceTest (index 3) in the same UWidgetSwitcher as Settings/
+  Customization, opened via the new VoiceTestButton exactly like
+  OnSettingsClicked/OnCustomizationClicked already do.
+- UjinzzaVoiceTestWidget previously had no way back to a host menu except
+  RemoveFromParent() on its Close button - fine when popped up standalone
+  from AjinzzaVoiceTestKiosk (added straight to viewport), but wrong now
+  that the main menu keeps it alive as a persistent switcher-page child:
+  RemoveFromParent would have yanked it out of the Switcher entirely.
+  Gave it the exact OnBackRequested FSimpleMulticastDelegate pattern
+  UjinzzaSettingsWidget/UjinzzaCustomizationWidget already use: Close
+  button now calls StopListening() (so a live mic capture doesn't keep
+  running silently after leaving the page - the old RemoveFromParent path
+  didn't need this since NativeDestruct's own StopListening call covered
+  it) then broadcasts OnBackRequested. Main menu binds that to
+  ShowButtonsPage; AjinzzaVoiceTestKiosk rewired from an OnNativeDestruct
+  lambda to an OnBackRequested lambda that calls RemoveFromParent itself -
+  copied AjinzzaWardrobeKiosk's binding exactly (see that class), so both
+  kiosks that share this widget-lifecycle pattern now do it identically.
+  Relabeled the button "Close" -> "Back" to match Settings/Customization's
+  wording now that it's also a switcher-page back button, not just a
+  popup dismiss.
+- Files touched: jinzzaMainMenuWidget.h/.cpp, jinzzaVoiceTestWidget.h/
+  .cpp, jinzzaVoiceTestKiosk.cpp/.h (comment only).
+- [ ] NOT compile-checked this session - the live Unreal MCP connection
+  was available (list_toolsets/describe_toolset/GetLogEntries all
+  responded), but this editor session has no LogLiveCoding entries and no
+  LogCompile-style category registered, meaning Live Coding isn't active
+  this session and there's no exposed console-command/build-trigger tool
+  to force a recompile. Please rebuild (Live Coding compile or editor
+  restart) and check for compile errors before trusting this code.
+- [ ] NOT playtested - could not start PIE and click through Host ->
+  Settings -> Customize -> Voice Test -> Quit to confirm the new layout
+  looks right and the Voice Test page opens/returns correctly, since the
+  C++ hasn't been compiled yet this session (see above). Please playtest
+  the full button flow, including that leaving the Voice Test page while
+  "Speak & Listen" is active actually stops the mic capture.
+- [ ] The bottom-right column's exact position/padding (64px from each
+  edge) and BrandingBox's centered placement are a reasonable C++-tree
+  approximation of the NOOB-GAME screenshot, not a pixel-measured match -
+  there's still no Designer-authored WBP_MainMenu to lay this out
+  precisely (see BuildWidgetTree's own comment on that). Adjust padding
+  values directly in jinzzaMainMenuWidget.cpp if the placement looks off
+  next to the reference screenshot.
+- Changes NOT committed - left for user review.
+
+=================================================================
+DONE THIS SESSION (2026-09-12, continued, by Claude) - restyled the main
+menu's button column with per-button pastel colors/icon-badges to match
+NOOB-GAME's actual look (not just its layout), and moved the title off
+dead-center to mirror where NOOB's logo sits
+=================================================================
+- Follow-up to this session's earlier layout-only pass: user asked to
+  also design/style the buttons like NOOB-GAME (not just position them)
+  and reposition the title.
+- Added JinzzaUI::MakeMenuActionButton (jinzzaUIStyle.h/.cpp) - a new,
+  separate helper alongside MakePrimaryButton/MakeSecondaryButton/
+  MakeWarningButton, NOT a change to those (they're used across Settings/
+  Customization/RoomSettings/etc. and stay noir-themed). Reuses the exact
+  same T_ButtonPill-backed MakeRoundedButtonStyle/nine-slice machinery,
+  but takes a caller-supplied tint per button instead of the fixed noir
+  palette, and wraps the label in a HorizontalBox with a small white
+  circular "icon-slot" badge to its left - standing in for NOOB's actual
+  per-button icon (game controller/gear/magnifier/power) since there's no
+  icon art in the project yet. Hover/press shades are derived from the
+  caller's tint via LerpUsingHSV toward white/black rather than hand-
+  picked, since this helper takes an arbitrary palette instead of a fixed
+  set of colors.
+- UjinzzaMainMenuWidget's 5 button-column buttons (Host/Settings/
+  Customize/Voice Test/Quit) now each get a distinct pastel tint approximating
+  NOOB-GAME's reference screenshot palette: mint (Host), lavender
+  (Settings), pink (Customize), peach (Voice Test - NOOB has no 5th
+  button to match, picked a color that fits the set), coral-red (Quit,
+  closest to NOOB's own red Quit pill). Bumped ButtonsRightBox from 320
+  to 340 wide to fit the icon badge + label comfortably.
+- Moved BrandingBox (Title/Divider/StatusText) from dead-center to
+  HAlign_Left/VAlign_Center with 96px left padding, so "JINZZA" sits on
+  the left mirroring where NOOB's big "Noob!" logo sits in its own main
+  menu scene (left-of-center, clear of the right button column) - it's
+  no longer competing for the same screen center the button column used
+  to touch. Left it distinct from the small top-left LogoBox (that one's
+  the company-logo corner placeholder, not the game title).
+- Files touched: jinzzaUIStyle.h/.cpp (new helper only, no existing
+  function signatures changed), jinzzaMainMenuWidget.cpp (button
+  construction calls + BrandingBox alignment).
+- [ ] Still NOT compile-checked or playtested - same tooling gap as the
+  earlier entry this session (no Live Coding / build-trigger available
+  via the live MCP connection this session). Please rebuild and eyeball
+  the button column against docs/Unreal_Game_Noob-main .../Doc/Images/
+  MainMenu.png before trusting the look.
+- [ ] The 5 pastel tint values and icon-badge size/spacing are
+  hand-picked approximations of the screenshot, not color-picked from the
+  actual image pixels - nudge FLinearColor values directly in
+  jinzzaMainMenuWidget.cpp if they read off compared to the reference.
+- [ ] Icon badges are still just plain white circles (no icon glyph
+  inside) since there's no real icon art asset for Host/Settings/
+  Customize/Voice Test/Quit in the project - flagging this explicitly
+  rather than faking icons with Unicode glyphs, which risks tofu boxes
+  with the project's Korean font. Swap MakeMenuActionButton's IconBadge
+  for a UImage once real icon textures exist.
+- Changes NOT committed - left for user review alongside the earlier
+  uncommitted round from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-12, continued a third time, by Claude) -
+imported NOOB-GAME's own button art and rebuilt the main menu buttons
+from it, and moved the layout to: title top-right, Host/Settings/Quit
+bottom-left, Customize/Voice Test bottom-right
+=================================================================
+- User asked to reposition again (title top-right; Host/Settings/Quit
+  bottom-left; Customize/Voice Test bottom-right) and pushed back on the
+  earlier hand-picked-color approximation, asking "use the design exactly
+  as it is from noob-game" and whether Claude could actually see the
+  noob-game assets. Answer: yes - found the reference project's actual
+  raw source art (not just the compiled .uasset/WBP) under
+  docs/Unreal_Game_Noob-main .../기획/자료/Menu/ (a Korean-named
+  "planning/materials" folder of PNGs used before import), viewed them
+  directly, and used them.
+- Found and viewed the individual per-button PNGs: Hostbutton.png (mint
+  pill, game-controller line icon), SettingButton.png (lavender pill,
+  gear icon), QuitButton.png (pink pill, power icon), FindButton.png
+  (light-blue pill, magnifying-glass icon - the "크레딧"/Credits button).
+  Each is a single fully-baked image (pill shape + border ring + icon all
+  composited together), not a separate background+icon layered asset.
+- Imported all 4 directly into /Game/JINZZA/UI/Textures via the live
+  Unreal MCP TextureTools.import_file (same folder as the existing
+  T_ButtonPill/T_NotePanel, which per jinzzaUIStyle.h's own header
+  comment were already sourced from this same noob-game UI folder) as
+  T_ButtonHost, T_ButtonSettings, T_ButtonQuit, T_ButtonCustomize (the
+  Find/Credits art repurposed for Customize, since jinzza has no Credits
+  screen and this was the only leftover NOOB source button once Host/
+  Settings/Quit were accounted for). Confirmed each import's actual
+  pixel size via TextureTools.get_size (~2700-2730 x ~711-722, aspect
+  ratio ~3.78-3.84:1) and saved all 4 to disk.
+- Added JinzzaUI::MakeNoobIconButton (jinzzaUIStyle.h/.cpp) - draws the
+  baked image as a plain (non-nine-slice) Image brush at its own aspect
+  ratio, rather than tinting a generic pill, since the icon's fixed
+  position in the art would be broken by nine-slice stretching. The
+  label sits in a HorizontalBox with an invisible left spacer (22% of
+  the button's width) reserving the baked icon's footprint, left-aligned
+  rather than centered - matches NOOB's own text placement, not
+  jinzza's previous centered-text buttons. Hover/press feedback is a
+  brightness tint of the same single image (there's no separate hover/
+  press art in NOOB's source folder either). Falls back to last
+  session's MakeMenuActionButton (plain tinted pill) if the texture
+  fails to load, so a missing/deleted asset degrades gracefully. Kept
+  MakeMenuActionButton itself untouched/still in use for Voice Test,
+  which has no NOOB-GAME source art to draw from at all (NOOB has no
+  voice feature) - flagged clearly in both functions' comments so this
+  one remaining gap doesn't get lost.
+- Reworked UjinzzaMainMenuWidget::BuildWidgetTree's page-0 layout again:
+  BrandingBox (Title/Divider/StatusText, all right-justified) moved from
+  centered/left to top-right (32px top / 48px right padding). Split the
+  single bottom-right button column into ButtonsLeftBox (Host, Settings,
+  Quit - MakeNoobIconButton, HAlign_Left per-slot so each keeps its own
+  baked image's exact aspect ratio instead of being stretched to match
+  its siblings) at bottom-left (64px left/bottom padding), and
+  ButtonsRightBox (Customize - MakeNoobIconButton, HAlign_Right; Voice
+  Test - MakeMenuActionButton, default Fill since nine-slice pills
+  stretch cleanly) at bottom-right (64px right/bottom padding) - Voice
+  Test stays directly below Customize as in the last round.
+- Files touched: jinzzaUIStyle.h/.cpp (new MakeNoobIconButton, existing
+  MakeMenuActionButton untouched), jinzzaMainMenuWidget.h/.cpp (layout +
+  class comment). Plus 4 new content assets: T_ButtonHost/T_ButtonSettings/
+  T_ButtonQuit/T_ButtonCustomize under /Game/JINZZA/UI/Textures.
+- [ ] Still NOT compile-checked or playtested this session - same
+  tooling gap as earlier (no Live Coding/build-trigger exposed via the
+  live MCP connection). The 4 texture imports themselves ARE verified
+  live (import_file succeeded, get_size returned real pixel dimensions,
+  save_assets returned true) - only the new C++ (MakeNoobIconButton,
+  the BuildWidgetTree rewrite) is unverified. Please rebuild before
+  trusting this.
+- [ ] The 22%-of-width icon-spacer fraction and 88px button height are
+  estimated from eyeballing the reference PNGs, not measured pixel-exact
+  from the source art's actual icon bounding box - nudge
+  MakeNoobIconButton's spacer fraction in jinzzaUIStyle.cpp if the label
+  reads too close to or too far from the icon once visible in-editor.
+- [ ] Voice Test's plain-tint fallback (no matching NOOB source art) is
+  the one remaining visual gap in "use the design exactly as it is from
+  noob-game" - there is no NOOB-GAME voice-related button to copy from.
+  Flagging rather than fabricating a fake "NOOB-sourced" icon for it.
+- Changes NOT committed (both the C++ and the new content assets) - left
+  for user review alongside earlier uncommitted rounds from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-12, continued a fourth time, by Claude) -
+added a light NOOB-toned "note-card" panel behind each button column,
+scoped to just the main menu, after confirming scope with the user
+=================================================================
+- User said the UI/screen design still looked "so different" from
+  NOOB-GAME and asked to exclude the background but match the design.
+  Since jinzza's whole UI (Settings/Customization/kiosks, not just this
+  menu) uses a deliberate dark noir-interrogation-room palette
+  established many sessions ago, and NOOB's actual screen background is
+  a full 3D chalkboard/room scene jinzza has no equivalent for, this was
+  ambiguous enough (and high enough blast radius, if read as "re-theme
+  the whole game") to ask rather than guess. Asked two questions; user
+  picked: (1) a light/warm panel behind just the button area (not the
+  whole screen, not the 3D scene), and (2) main-menu-only scope - the
+  noir theme stays everywhere else in the game.
+- Realized JinzzaUI::MakeNoteBackground (jinzzaUIStyle.cpp) already
+  existed for exactly this - a warm parchment nine-slice card brush
+  built from NOOB-GAME's own MemoYellow.png sticky-note source art
+  (imported as T_NotePanel in an earlier session, per jinzzaUIStyle.h's
+  own header comment) - but had never actually been called by any widget
+  yet. No new asset import needed.
+- Wrapped both ButtonsLeftStack (Host/Settings/Quit) and
+  ButtonsRightStack (Customize/Voice Test) in their own
+  MakeNoteBackground panel (28px side/bottom padding, 40px top padding -
+  extra top clearance for the note art's baked washi-tape overlay) inside
+  ButtonsLeftBox/ButtonsRightBox, so the pastel NOOB-sourced buttons now
+  sit on a light NOOB-toned card instead of directly on jinzza's near-
+  black page background. Did NOT touch Color_Background/Color_Panel or
+  any other screen - Settings, Customization, RoomSettings, and every
+  lobby kiosk keep the exact same dark noir look as before.
+- Files touched: jinzzaMainMenuWidget.h/.cpp only (no jinzzaUIStyle
+  changes needed this round - MakeNoteBackground was reused as-is).
+- [ ] Still NOT compile-checked or playtested (same live-MCP tooling gap
+  as every round today - no Live Coding/build-trigger exposed). Please
+  rebuild and check in-editor.
+- [ ] MakeNoteBackground's nine-slice source art (T_NotePanel, 1088x960)
+  has margins sized for a card noticeably larger than these button
+  columns will end up being once laid out (~330-390px wide) - the
+  fold/tape details may look a little compressed at that size since this
+  wasn't checked against a live render. Adjust ButtonsLeftPanel/
+  ButtonsRightPanel's padding in jinzzaMainMenuWidget.cpp, or give
+  MakeNoteBackground a size-aware margin scale, if it looks off.
+- Changes NOT committed - left for user review alongside earlier
+  uncommitted rounds from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-12, continued a fifth time, by Claude) - fixed
+a real compile error the user reported from an actual rebuild attempt
+=================================================================
+- User ran the actual build (UnrealBuildTool via Live Coding/editor
+  rebuild) and got 4x C4458 errors in jinzzaMainMenuWidget.cpp - this
+  project treats warnings as errors. Cause: BuildWidgetTree() is a method
+  of UjinzzaMainMenuWidget, which inherits (via UUserWidget) a protected
+  member UWidget::Slot (TObjectPtr<UPanelSlot>) - the 4 local
+  `if (UVerticalBoxSlot* Slot = JinzzaUI::AddSpaced(...))` lines added
+  two rounds ago (for Host/Settings/Quit/Customize's HAlign_Left/Right
+  fix) shadowed that inherited member. JinzzaUI::AddSpaced itself uses
+  the same local name "Slot" internally but is a free namespace function,
+  not a UWidget-derived class method, so it doesn't shadow anything and
+  was never the problem.
+- Renamed all 4 to ButtonSlot (lines calling AddSpaced for HostButton/
+  SettingsButton/QuitButton/CustomizationButton) - no functional change,
+  compile-error-only fix.
+- This is the first REAL compiler feedback all session (every earlier
+  round's "not compile-checked" caveat was because no Live Coding/build-
+  trigger was exposed via the live MCP connection) - worth remembering
+  that this project's own toolchain treats warnings as errors, so
+  variable-shadowing a base UWidget/UUserWidget member is a hard build
+  break here, not just a lint warning.
+- [ ] Still can't independently re-verify this specific fix compiles
+  clean (still no exposed compile/build-trigger tool this session) -
+  please rebuild again and confirm both these 4 errors are gone AND no
+  new ones surface elsewhere in the same file.
+
+=================================================================
+DONE THIS SESSION (2026-09-12, continued a sixth time, by Claude) - made
+Customize and Voice Test circular icon buttons using real NOOB-GAME icon
+art, instead of wide pills
+=================================================================
+- User asked to make "the UI elements and customization buttons" (and
+  voice test too) circular with icons, plus something about "screen
+  contrast position" that wasn't clear enough to act on confidently -
+  flagged that part back to the user rather than guessing (see chat).
+- Found more usable NOOB-GAME source icons in the same 기획/자료/Menu
+  folder: ComboBoxCheckedCat.png / ComboBoxCheckedDog.png (small, already
+  square/icon-shaped character-face tiles, used in NOOB for its own
+  cat/dog character-select combo box - picked Cat as a clean, on-theme
+  "customize your look" icon) and OptionAudioIcon.png (headphones + a
+  sound-wave speech bubble, used in NOOB's own audio settings - closest
+  real match for "voice" NOOB has, even though it's a busier illustration
+  than the cat icon rather than a single clean glyph).
+- Imported both via the live MCP TextureTools.import_file into
+  /Game/JINZZA/UI/Textures as T_IconCustomize (50x50) and T_IconVoiceTest
+  (648x433, notably wider than tall) and saved them.
+- Added JinzzaUI::MakeNoobCircleIconButton (jinzzaUIStyle.h/.cpp): a
+  transparent-style UButton (so no rectangular background shows through)
+  whose visible content is a VerticalBox of [a solid-tinted circular
+  UBorder containing the icon UImage, aspect-fit to ~62% of the circle's
+  diameter rather than stretched to a square - matters for
+  T_IconVoiceTest's non-square aspect ratio - then a caption UTextBlock
+  below the circle]. Caption uses dark warm text (not the light pill text
+  MakeNoobIconButton/MakeMenuActionButton use) since these sit on the
+  light MakeNoteBackground panel from the previous round, not a colored
+  pill. Falls back to a blank tinted circle (no icon) if the texture path
+  fails to load.
+- Rewired CustomizationButton and VoiceTestButton in
+  UjinzzaMainMenuWidget::BuildWidgetTree to use this instead of
+  MakeNoobIconButton (Customize) / MakeMenuActionButton (Voice Test) -
+  both now HAlign_Center in ButtonsRightStack (a circle+caption doesn't
+  have a "pill edge" worth flush-aligning the way the wide pills do).
+  T_ButtonCustomize (the Find/Credits pill art repurposed for Customize
+  two rounds ago) is now an unused content asset - left in place rather
+  than deleted, noted in the code comment. MakeMenuActionButton itself is
+  still alive as MakeNoobIconButton's own fallback path, not dead code.
+- Files touched: jinzzaUIStyle.h/.cpp (new MakeNoobCircleIconButton),
+  jinzzaMainMenuWidget.h/.cpp (Customize/VoiceTest construction + both
+  class-level and inline comments updated to match). Plus 2 new content
+  assets: T_IconCustomize, T_IconVoiceTest.
+- [ ] Still NOT compile-checked or playtested this session in the sense
+  of a full clean rebuild - only fixed a real compile error the user
+  reported from their own rebuild attempt (a UWidget::Slot member-shadow
+  C4458, unrelated to this round's changes). This round's new code
+  (MakeNoobCircleIconButton) has not itself been through an actual build
+  yet - please rebuild and check for errors before trusting it, same
+  caveat as every round today.
+- [ ] User's "adjust the screen contrast position" ask was not acted on
+  this round - genuinely unclear whether it meant text/element contrast,
+  panel positioning, or something else; asked the user to clarify rather
+  than guess and touch unrelated layout.
+
+=================================================================
+DONE THIS SESSION (2026-09-12, continued a seventh time, by Claude) -
+fixed a second real compile error from the user's rebuild
+=================================================================
+- User rebuilt again and got 2x C2039 errors in jinzzaUIStyle.cpp:
+  UImage has no SetHorizontalAlignment/SetVerticalAlignment - that API
+  only exists on UBorder (controls how the border's CONTENT is aligned
+  inside it), not as a generic UWidget/UImage method. Mistake was in
+  MakeNoobCircleIconButton's icon-centering code from last round.
+- Fix: removed the invalid Icon->SetHorizontalAlignment/SetVerticalAlignment
+  calls, and instead set Circle (the UBorder wrapping the icon)'s own
+  HorizontalAlignment/VerticalAlignment to Center instead of Fill - since
+  UBorder's alignment properties control how its child content is laid
+  out inside it, this achieves the same "center the aspect-fit icon
+  inside the circle without stretching it" result the Fill+Icon-alignment
+  approach was trying (and failing to compile) for.
+- Worth remembering for future C++-built UMG work in this project: only
+  certain container widgets (UBorder, UOverlay's slots, etc.) expose
+  content-alignment; UImage/UTextBlock don't have their own
+  SetHorizontalAlignment/SetVerticalAlignment - alignment for those has
+  to come from whatever they're placed inside (a slot, or a UBorder like
+  here).
+- [ ] Still not independently re-verified by an actual rebuild this
+  session - please rebuild again and confirm this specific error is gone.
+
+=================================================================
+DONE THIS SESSION (2026-09-12, continued an eighth time, by Claude) -
+reversed the NOOB-GAME pastel button styling back to JINZZA's own
+established noir theme, per user request to "match the game concept"
+=================================================================
+- User asked to improve the main menu button/logo design to better match
+  the game's own concept. Read this as confirmation the multi-round NOOB-
+  GAME pastel-pill experiment (this whole session, several rounds) never
+  actually fit JINZZA's own documented identity - JinzzaUI's own header
+  comment has said "dark noir-interrogation-room palette... crimson
+  guilty / gold judge accents... fitting the game's courtroom/social-
+  deduction theme" since before this session started. Treated this as
+  returning to the project's own pre-existing design intent, not a new
+  speculative direction - didn't ask for confirmation on this part.
+- Host/Settings/Quit: reverted from JinzzaUI::MakeNoobIconButton (baked
+  NOOB pill art) back to MakePrimaryButton/MakeSecondaryButton/
+  MakeWarningButton - the exact same noir buttons every other jinzza
+  screen (Settings/Customization/kiosks) already uses. Removed the
+  per-slot HAlign_Left overrides that existed only to protect the NOOB
+  art's aspect ratio - text-based buttons go back to default Fill
+  (uniform column width), matching this project's original pre-NOOB
+  button-column behavior.
+- ButtonsLeftPanel/ButtonsRightPanel: swapped from JinzzaUI::
+  MakeNoteBackground (light NOOB-sourced parchment card, added 3 rounds
+  ago specifically to stop pastel buttons clashing with the dark page)
+  back to MakePanelBackground (the same dark "room wall" panel Settings/
+  Customization use) - now that the buttons are noir again, a light card
+  behind them would clash the same way pastel-on-dark did before.
+- Customize/Voice Test: replaced JinzzaUI::MakeNoobCircleIconButton's
+  NOOB-sourced icon textures (cat face, headphones) with purpose-built
+  icons that actually mean something for THIS game - added
+  JinzzaUI::MakeMaskIcon (a masquerade mask: rounded bar + 2 dark eye-hole
+  cutouts) for Customize, directly evoking the "Imitator" disguise
+  premise the whole game is built around, and JinzzaUI::MakeMicIcon
+  (capsule head + stand + base) for Voice Test - both built from plain
+  FSlateRoundedBoxBrush primitives, no source art dependency at all.
+  Refactored the shared circle-button shell out into a new
+  JinzzaUI::MakeCircleIconButton(IconContent as a UWidget*, not a
+  texture path) that both MakeNoobCircleIconButton (still used nowhere
+  in this file anymore, but kept - not dead code, still a valid public
+  API) and the new primitive icons build on top of. Customize tinted
+  Color_AccentAlt (crimson/"guilty"), Voice Test tinted Color_Accent
+  (gold/"judge") - reusing the project's own established color-to-
+  meaning mapping instead of arbitrary tints.
+- Top-left logo badge: replaced the plain "LOGO" text placeholder with
+  the same MakeMaskIcon (gold-tinted) - gives the badge actual thematic
+  identity pending a real logo asset, rather than a generic word.
+- Title block: added a Korean tagline "진짜를 찾아라" (the game's own
+  Korean title, "Find the Real One") directly under "JINZZA", using the
+  same SacheonUju font every other Korean string in the project already
+  relies on - no new font/tofu-glyph risk.
+- Files touched: jinzzaUIStyle.h/.cpp (MakeCircleIconButton extracted,
+  MakeMaskIcon/MakeMicIcon added, MakeNoobCircleIconButton refactored to
+  call the shared shell), jinzzaMainMenuWidget.h/.cpp (button/logo/title
+  construction + class comment rewritten to describe the noir reversal).
+  T_ButtonHost/T_ButtonSettings/T_ButtonQuit/T_ButtonCustomize/
+  T_IconCustomize/T_IconVoiceTest (all imported in earlier rounds today)
+  are now unused content assets - left in place, not deleted, in case
+  a future round wants NOOB-style art again.
+- [ ] Not compile-checked or playtested this round - please rebuild.
+  New API surface this round (MakeCircleIconButton, MakeMaskIcon,
+  MakeMicIcon) hasn't been through an actual build yet.
+- [ ] The user's second, larger ask this same message - a 3D background
+  scene in Lvl_MainMenu showing the player's customized character, with
+  a camera move toward it and "about three glowing effects" appearing
+  alternately as it approaches - was NOT started this round. It's a
+  materially different kind of work (level content, camera/cinematics,
+  VFX) with real ambiguity (does the camera or the character move? what
+  exactly triggers each of the three glows?) that's worth getting right
+  before investing in Sequencer/actor work - see chat for how this was
+  handled (asked the user, or a plan was proposed - check the next log
+  entry/session for what actually happened).
+
+=================================================================
+DONE THIS SESSION (2026-09-12, continued a ninth time, by Claude) - built
+the main menu's 3D background scene: a customized character, a looping
+camera push-in, and three alternating camera-flash lights
+=================================================================
+- Second half of the user's "button/logo + background" request. Given
+  real ambiguity (does the camera or character move? what do "three
+  glowing effects" actually look like? does it play once or loop?) and
+  that this is level/camera/VFX content rather than a quick UI tweak,
+  asked the user first instead of guessing: confirmed (1) the CAMERA
+  dollies in toward a FIXED character, (2) the three glows are
+  camera-flash style (police-lineup/mugshot vibe), and (3) the whole
+  thing loops continuously as ambient menu background, not a one-shot
+  intro.
+- New actor AjinzzaMenuBackgroundCharacter (.h/.cpp): a plain
+  USkeletalMeshComponent (SKM_Manny_Simple, same mesh/socket layout the
+  real character and the Customization-screen preview both use) that
+  calls the EXACT SAME JinzzaCustomization::ApplyToMesh helper
+  AjinzzaCharacterPreviewCapture/UjinzzaCharacterCustomizationComponent
+  already use, reading the local player's saved UjinzzaGameUserSettings
+  - so "make the character look customized accordingly" reuses the
+  project's one existing customization pipeline rather than inventing a
+  parallel one. Unlike AjinzzaCharacterPreviewCapture, this one is
+  rendered directly by the main viewport camera (no SceneCapture/render-
+  target indirection) since it needs to be seen as part of the 3D scene
+  behind the UI, not piped into a small UMG Image. KNOWN LIMITATION
+  (matches AjinzzaCharacterPreviewCapture's own existing tradeoff, not a
+  new regression): no AnimBlueprint assigned, so it shows reference pose,
+  not an idle animation.
+- New actor AjinzzaMenuCameraRig (.h/.cpp): owns the UCameraComponent
+  actually used as the menu's view target, plus 3 UPointLightComponents
+  (FlashLightA/B/C) positioned left/center/right around the character.
+  Tick() computes a repeating 0-1 LoopAlpha over an editable
+  CycleDuration (default 7s), eases the camera from a far relative-X
+  offset to a near one (FarOffsetX/NearOffsetX, both EditAnywhere) for
+  the push-in, and fires each flash light as a short triangular
+  intensity pulse (0 -> FlashPeakIntensity -> 0) centered at 3 different
+  fractions of the loop (0.45/0.70/0.93) via SetIntensity each tick -
+  since they're 3 different lights at 3 different positions firing at 3
+  different times, they read as "alternating," not a single simultaneous
+  flash. The loop wraps (camera snaps back to Far) right as the third
+  flash's decay covers the cut, so the reset isn't visually jarring.
+  Explicitly set SetMobility(Movable) on all 3 lights in the constructor
+  since runtime SetIntensity calls need a movable light, regardless of
+  whatever a light component's class default happens to be.
+- Wired both into AjinzzaMenuPlayerController::BeginPlay via a new
+  SetupMenuBackgroundScene() private method: TActorIterator-finds an
+  existing instance of each (same "hand-place OR auto-spawn" pattern
+  AjinzzaCharacterPreviewCapture already established), auto-spawns one
+  of each at fixed default transforms if neither exists (character at
+  world (500,0,0) facing back toward the origin; camera rig root at
+  (0,0,150) facing the character) so this works immediately without any
+  manual per-level placement, and calls SetViewTarget on the camera rig
+  so it's what the player actually sees instead of the level's default
+  camera/PlayerStart.
+- Deliberately did NOT hand-place these into Lvl_MainMenu via the live
+  Unreal MCP scene tools even though that connection is available this
+  session - add_to_scene_from_class needs the class already known to the
+  RUNNING editor process, which only happens after the user's next
+  successful C++ build picks up these brand-new UCLASS types. Auto-spawn
+  from BeginPlay sidesteps that entirely - the feature activates itself
+  the moment the rebuild succeeds, no follow-up MCP step needed.
+- Files added: jinzzaMenuBackgroundCharacter.h/.cpp,
+  jinzzaMenuCameraRig.h/.cpp. Files touched:
+  jinzzaMenuPlayerController.h/.cpp (SetupMenuBackgroundScene). No
+  Build.cs changes needed (Camera/PointLight components are both in the
+  Engine module, already a public dependency; UBT auto-globs new
+  Source/jinzza/*.cpp files, no per-file registration in this project).
+- [ ] NOT compile-checked or playtested at all this round - this is
+  brand new C++ (2 new Actor classes + PlayerController wiring), the
+  largest single chunk of new code this whole session, and the most
+  likely to have a mistake the compiler will catch (this session already
+  hit 2 real compile errors on smaller changes). Please rebuild FIRST,
+  fix whatever the compiler flags, then playtest specifically: does the
+  background character actually appear behind the menu buttons, does the
+  camera visibly push in, do the 3 flashes fire in sequence without all
+  flashing at once, and does the loop reset look acceptable (not a
+  jarring pop)?
+- [ ] FarOffsetX/NearOffsetX/CycleDuration/FlashPeakIntensity/the flash
+  lights' RelativeLocation and the two actors' spawn transforms are ALL
+  first-guess numbers, never seen rendered - expect to need to tune these
+  in the editor (they're EditAnywhere on AjinzzaMenuCameraRig, or edit
+  the SpawnActor call sites in jinzzaMenuPlayerController.cpp for the
+  starting transforms) once you can actually see it in PIE.
+- [ ] Not verified whether Lvl_MainMenu already has its own camera/
+  lighting setup that might conflict visually (e.g. a Lightmass-baked
+  scene, a different PlayerStart-driven default camera, existing
+  Directional/Sky light making the flash pulses hard to notice) - was not
+  able to inspect the level's existing actors this round (ran out of
+  round budget after landing on the confirmed spec) - worth checking
+  before assuming this looks right on the first try.
+- Changes NOT committed - left for user review alongside every other
+  uncommitted round from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-13, by Claude) - rigged the seal
+(/Game/JINZZA/Characters/seal) into a real animated SkeletalMesh and made
+it the game's actual playable character, replacing the Mannequin
+=================================================================
+- Starting point: the seal was a plain StaticMesh (tripo_convert_...,
+  Tripo3D export - 4 textures, 1 material, no bones). Checked every
+  Unreal MCP tool available (SkeletalMeshTools/StaticMeshTools/AssetTools/
+  the sandboxed ProgrammaticToolset script) - none can export mesh
+  geometry out of the engine or auto-generate a skeleton in-editor,
+  and SkeletalMeshTools.import_file requires bones+skin weights already
+  in the source file. So rigging had to happen outside Unreal, and the
+  ONE step I had no tool for was getting the mesh out - asked the user to
+  do a single Content Browser Asset Actions > Export to
+  Saved/SealRigging/seal_source.fbx, then did everything else myself.
+- Found (but did NOT use) an existing Mixamo-based pattern in this
+  project: Content/Characters/Cat and Racccoon both have Mixamo-rigged
+  SkeletalMeshes (SK_Cat/SKM_Cat, SK_RacNPC/SKM_RacNPC) with anim names
+  like "AM_Defeat_UEMixamo_Montage" - clearly the user's own prior
+  workflow for exactly this "give a creature a skeleton" problem. Didn't
+  reuse it here because Mixamo's auto-rigger wants a biped-ish
+  marker layout (chin/wrists/elbows/knees/groin) and the seal has no legs
+  at all (round blob body + 2 flippers) - judged a custom rig would fit
+  the actual silhouette better than faking Mixamo markers on a shape it
+  wasn't designed for. Neither Cat nor Dog were ever wired into
+  DefaultPawnClass anywhere (grepped all GameModes) - they're unused
+  reference/prep assets, not live content.
+- Wrote Saved/SealRigging/rig_seal.py - a headless Blender 4.3 script
+  (found installed at "C:\Program Files\Blender Foundation\Blender 4.3")
+  that: imports the exported FBX, reads the mesh's own bounds, builds a
+  9-bone chain sized to those bounds (root/pelvis/spine_01/spine_02/
+  neck_01/head + flipper_l/flipper_r + tail_01), skins it via Blender's
+  automatic-weights parenting, procedurally keyframes 3 animations
+  (Idle/Walk/Jump - hand-authored, NOT mocap, since there's no motion
+  source for a creature like this), and exports Saved/SealRigging/
+  seal_rigged.fbx. Ran it via `blender.exe --background --python` - the
+  Blender-units bounds it logged (0.986 x 0.767 x 0.939 m) matched
+  Unreal's own StaticMeshTools.get_bounds for the original mesh almost
+  exactly, confirming the cm<->m round-trip didn't scale anything wrong.
+- Imported the rigged FBX via SkeletalMeshTools.import_file into
+  /Game/JINZZA/Characters/seal as SKM_Seal (create_physics_asset=True,
+  import_animations=True) - produced SKM_Seal, SKM_Seal_Skeleton,
+  SKM_Seal_PhysicsAsset, and 3 AnimSequences (..._Anim_Armature_Idle/
+  Walk/Jump). Re-pointed the mesh's one material slot at the seal's own
+  existing tripo_mat_05d07882 (import_materials was False, so this was
+  needed - otherwise the slot would've been empty). Verified via
+  SkeletalMeshTools.get_bone_names (all 9 bones present),
+  get_vertex_count (1500, matches the original), and get_bounds (extent
+  ~49x38x47cm, matching the original static mesh's bounds) - the skinned
+  mesh is geometrically the same seal at the same scale, not a distorted
+  or rescaled copy. CaptureAssetImage thumbnail confirmed it renders
+  correctly in bind pose with the right material.
+- Replaced the character: /Game/JINZZA/FirstPerson/Blueprints/
+  BP_FirstPersonCharacter is the actual DefaultPawnClass both
+  jinzzaGameGameMode.cpp and jinzzaLobbyGameMode.cpp construct from (not
+  the similarly-named copy under ExternalFile/, and not the unused Cat/
+  Dog Blueprints) - this is a real replacement of the live character, not
+  a parallel unused variant. Via ObjectTools get/set_properties on the
+  Blueprint's CDO subobjects: CharacterMesh0.SkeletalMeshAsset -> SKM_Seal
+  (was SKM_Manny_Simple); cleared AnimClass (was ABP_Unarmed, which is
+  built for the Mannequin skeleton and would just silently fail to bind
+  to this one); set AnimationMode -> AnimationSingleNode with
+  AnimationData.AnimToPlay -> the baked Idle sequence, looping, as a
+  stopgap so the character isn't frozen in a T-pose (a real speed-driven
+  AnimBP idle/walk/jump state machine is NOT built yet - see gaps below).
+  Adjusted CollisionCylinder (CapsuleComponent) from HalfHeight
+  96/Radius 34 (adult-Mannequin-sized) to HalfHeight 47/Radius 45 to
+  roughly match the seal's actual ~94cm height, and CharacterMesh0's
+  RelativeLocation.Z from -96 to -47 to match (mesh feet at capsule
+  bottom, same convention the Mannequin setup used). RelativeRotation
+  reset to (0,0,0) from the Mannequin's (0,-90,0) quirk - UNVERIFIED
+  whether the seal's forward-facing axis actually lines up correctly;
+  this is a single yaw value to fix in the editor if the seal turns out
+  to face sideways.
+- Found and fixed a real regression this change would otherwise cause:
+  JinzzaCustomization::ApplyToMesh (jinzzaCustomizationApply.cpp) always
+  loaded M_Face_Master and force-assigned it to material slot 0 for the
+  Head-style customization feature, unconditionally. That's fine for the
+  Mannequin (slot 0 is a dedicated face material there) but the seal has
+  exactly ONE material slot for its whole-body skin - this would have
+  silently replaced the seal's actual textured skin with the generic
+  placeholder face material the instant RefreshCustomization() ran at
+  BeginPlay. Added a guard (Mesh->GetNumMaterials() > 1) so the face-
+  material override only applies to meshes that actually have a separate
+  face slot, matching the existing DoesSocketExist() guard style already
+  in that function for hair/accessories. UjinzzaDisguiseComponent's round-
+  disguise face swap (jinzzaDisguiseComponent.cpp) did NOT need a fix -
+  it dynamically instances whatever material is ALREADY in slot 0 rather
+  than force-loading a different one, so it stays harmless on a single-
+  slot mesh (sets a "FaceIndex" param that just won't exist on the
+  seal's material, which is a no-op, not a crash).
+  Hair/accessory socket-mesh attachment (same file) already no-ops
+  safely via DoesSocketExist("Head") - the seal's skeleton has no Head
+  socket (only bones), so those two customization slots correctly do
+  nothing rather than erroring.
+- Deliberately left FirstPersonMesh (the arms-only mesh visible to the
+  local player in first-person view) untouched - still the Mannequin
+  arms. The seal has no hands/arms to reuse for holding/using props, and
+  building seal-flipper first-person view art is real new content, not a
+  wiring change - out of scope for this round. Known visual mismatch:
+  a player will see human hands holding props while playing as the seal
+  in first person.
+- Verified via the live Unreal MCP connection: reloaded/rebuilt nothing
+  needed (this was pure data/Blueprint wiring, no C++ changes needed
+  except the customization guard, which the running editor picked up -
+  no explicit rebuild trigger was available or needed since Live Coding
+  wasn't invoked this round). Confirmed via ObjectTools.get_properties
+  that the CDO's CharacterMesh0 actually holds SkeletalMeshAsset=SKM_Seal,
+  bVisible=true, bHiddenInGame=false, and the correct offset - this is
+  ground-truth from the engine's own reflection system, not just "I set
+  it and assumed it stuck". Ran a real PIE session in Lvl_Lobby and
+  confirmed via SceneTools.find_actors that BP_FirstPersonCharacter_C
+  actually spawns there with no new LogBlueprint/LogScript errors
+  (the only compile errors present are pre-existing, unrelated broken
+  legacy Blueprints - BP_HIdeActor, AIC_Classic, BP_NoobGameCharacter's
+  missing parent class - that predate this session entirely).
+- [ ] NOT visually confirmed in a screenshot. Spent a large chunk of this
+  round trying to get a clean in-viewport render of the live character
+  (top-down and angled shots, in PIE and in-editor) and kept missing:
+  once through furniture at world origin, once inside the level's roof,
+  once out past the map in an unlit exterior backdrop area. Ruled out one
+  false alarm along the way (a humanoid shape in an early shot was the
+  untouched FirstPersonMesh rendering unfiltered in the editor preview,
+  not a bug in the seal setup - confirmed by hiding it and reshooting).
+  Never actually got a clean frame of the seal body itself rendering
+  in-world, animated or otherwise - everything above is verified at the
+  property/data level (correct asset assigned, correct bones/vertex
+  count/bounds, no errors) but NOT eyeballed. Please open Lvl_Lobby (or
+  Lvl_test) in PIE yourself and check: does the seal actually render
+  where the player spawns, does it face the right direction (the yaw
+  reset from -90 to 0 is a guess), does Idle look reasonable rather than
+  exploded/inverted from the automatic weight painting, and is the scale/
+  capsule size (47 half-height/45 radius) reasonable to move around with.
+- [ ] Walk/Jump AnimSequences exist (baked by the Blender script) but
+  are NOT wired into any state machine - only Idle plays, as a static
+  single-node loop, regardless of actual movement speed. Building a real
+  ABP_Seal (speed-driven Idle<->Walk blend, Jump on falling) is the
+  natural next step once the baked animations themselves are confirmed
+  to look acceptable - no point building a state machine around
+  animations that might need re-baking.
+- [ ] All 3 animations are hand-keyframed procedural guesses (head bob/
+  flipper sway for Idle, body-rock+flipper-flap for Walk, squash-stretch
+  for Jump) with first-guess timing/magnitude values, never seen played
+  back. Expect to retune once visible.
+- [ ] Bone placement (fractions of mesh height: pelvis 12%, chest 62%,
+  neck 80%, head 90%, flippers at 50% height/8% width-inset) was a
+  best-effort guess from bounding-box math alone - no visual iteration
+  was possible in a headless Blender run. If the automatic weight
+  painting produced bad deformation anywhere (likely candidate: the
+  flippers, since Blender's heat-map auto-weights can bleed between
+  nearby bones on a mesh with no clear joint geometry), that's a re-rig,
+  not a quick fix - would need re-running rig_seal.py with adjusted bone
+  fractions, or manual weight painting in Blender.
+- [ ] Capsule/mesh scale (47/45, chosen as roughly half the seal's own
+  93.5cm bounds) is unverified against actual gameplay feel - doorways,
+  prop-interaction trace distances (InteractTraceDistance is still
+  300cm, untouched), and camera height for third-person visibility of
+  other players may all need retuning now that the default character is
+  much shorter/wider than the Mannequin it replaced.
+- Files touched: jinzzaCustomizationApply.cpp (single-material-slot
+  guard). New content: Saved/SealRigging/rig_seal.py (kept in Saved/,
+  not Content/ - it's a build tool, not a game asset),
+  /Game/JINZZA/Characters/seal/SKM_Seal(+_Skeleton/_PhysicsAsset) and 3
+  AnimSequences. Blueprint-only change (no .uasset diff visible in git
+  status for source, but BP_FirstPersonCharacter.uasset itself changed):
+  CharacterMesh0 and CollisionCylinder default properties on
+  BP_FirstPersonCharacter.
+- Changes NOT committed - left for user review alongside every other
+  uncommitted round from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-13, continued, by Claude) - fixed why actual
+gameplay still showed the old character, not the seal
+=================================================================
+- User reported: in real gameplay, they still saw "the existing first-
+  person character" rather than the seal. Root cause: AjinzzaCharacter
+  has TWO skeletal meshes - GetMesh()/CharacterMesh0 (what other players
+  see, which I swapped to the seal last round) and a completely separate
+  FirstPersonMesh ("arms", only ever visible to the owning/local player -
+  SetOnlyOwnerSee(true)). GetMesh() has SetOwnerNoSee(true) hardcoded in
+  jinzzaCharacter.cpp's constructor, so the local player was NEVER going
+  to see the seal body I swapped last round - only other players were.
+  FirstPersonMesh was still SKM_Manny_Simple, untouched, which is
+  EXACTLY what the user was describing. This was flagged as a known
+  gap in last round's log but under-scoped as a cosmetic "human hands"
+  issue - it's actually the only mesh a solo playtester ever sees of
+  themselves.
+- Worse: FirstPersonCameraComponent was attached to FirstPersonMesh's
+  "head" BONE (FirstPersonCameraComponent->SetupAttachment(FirstPersonMesh,
+  FName("head"))), with a hardcoded relative offset/rotation
+  (FVector(-2.8,5.89,0) / FRotator(0,90,-90)) tuned specifically for the
+  Mannequin head bone's particular local-axis convention. My from-scratch
+  Blender rig's head bone has no reason to share that convention (default
+  Blender bone roll, never hand-tuned to match Epic's Mannequin rig) - so
+  simply swapping FirstPersonMesh to the seal too would likely have
+  pointed the camera in an arbitrary/wrong direction, not just shown the
+  wrong mesh. Could not verify the actual bone-local orientation
+  numerically or visually this session (same screenshot-tooling
+  friction as last round), so rather than guess-fix rotation numbers,
+  changed the architecture to not depend on bone orientation at all:
+  jinzzaCharacter.cpp - FirstPersonCameraComponent now attaches to
+  GetCapsuleComponent() (native default relative location (0,0,80),
+  identity rotation) instead of a mesh bone/socket. This is a base-class
+  change affecting the shared camera rig for any future character too,
+  not just the seal - judged worth it since the old socket-based
+  approach was fragile for ANY non-Mannequin skeleton, not just this one.
+- Set FirstPersonMesh's SkeletalMeshAsset -> SKM_Seal (matching
+  CharacterMesh0) on BP_FirstPersonCharacter's CDO - AnimClass
+  (ABP_FP_Copy, a "copy pose from GetMesh()" AnimBP, not a locomotion
+  state machine) was left alone since it should keep working now that
+  both meshes share the same skeleton (Skeleton_Seal) - LeaderPoseComponent
+  was confirmed None on this component, so ABP_FP_Copy's copy-pose node
+  is genuinely how the two meshes stayed in sync, not a leader-pose link.
+- Overrode FirstPersonCameraComponent's RelativeLocation on the
+  BP_FirstPersonCharacter CDO to (0,0,37) - roughly where the seal's own
+  head bone sits relative to capsule center, given the capsule's 47
+  half-height from last round (mesh origin at capsule bottom, head bone
+  at ~90% of the seal's ~93.7cm height per rig_seal.py's bone fractions).
+  RelativeRotation reset to identity (the stored (0,90,-90) override was
+  a leftover for the now-removed bone-socket attachment and would be
+  meaningless/wrong relative to the capsule).
+- [ ] CRITICAL: the camera reattachment (jinzzaCharacter.cpp) is a C++
+  constructor change - it will NOT take effect until an actual rebuild
+  happens (Live Coding or full recompile). Until then the game is still
+  running the OLD compiled behavior (camera on FirstPersonMesh's "head"
+  socket) even though FirstPersonMesh's mesh asset is now the seal - so
+  DO NOT retest until after rebuilding, or the camera will likely be
+  broken/facing a wrong direction (mid-fix state, worse than either
+  finished state). Please rebuild, then retest: does the camera sit at a
+  sensible eye height and face forward correctly, and does the local
+  player's own view look reasonable now (whether that means seeing seal
+  flippers/body, or effectively nothing if FirstPersonMesh ends up mostly
+  out of frame - either is fine, just needs eyeballing).
+- [ ] RelativeLocation Z=37 and the C++ default Z=80 are both first-guess
+  numbers from bounding-box math, never visually confirmed - same
+  screenshot-tooling issue as last round blocked verification again this
+  round. Expect to need to nudge this once actually visible.
+- [ ] Did not investigate whether FirstPersonMesh being visible (rather
+  than hidden) will look good/bad up close now that it's the seal's own
+  head mesh at close range to camera - a small creature's head geometry
+  sitting right at/near the camera could clip into view awkwardly in a
+  way a human arms-rig (deliberately modeled thin/out of the way) doesn't.
+  If it looks bad, the quick fix is hiding FirstPersonMesh entirely
+  (bVisible=false on the Blueprint CDO) rather than re-rigging anything.
+- Files touched: jinzzaCharacter.cpp (camera attachment). Blueprint-only:
+  BP_FirstPersonCharacter's First Person Mesh (SkeletalMeshAsset) and
+  First Person Camera (RelativeLocation/RelativeRotation) CDO properties.
+- Changes NOT committed - left for user review alongside every other
+  uncommitted round from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-13, continued again, by Claude) - found why
+the character "sometimes doesn't show up" (not a bug - bOwnerNoSee is
+working as designed) and fixed the actual bug (preview/mirror still
+showed the old Mannequin)
+=================================================================
+- User reported testing in Lvl_Lobby: character sometimes doesn't show
+  up, and doesn't reflect in a mirror. Investigated by inspecting live
+  PIE actors directly (get_properties on the actually-spawned pawn, not
+  just the CDO) rather than guessing again.
+- "Sometimes doesn't show up" traced to AjinzzaCharacter's constructor:
+  GetMesh()->SetOwnerNoSee(true) is unconditional, hardcoded, and
+  predates this whole seal effort entirely - the locally-controlling
+  player was NEVER going to see their own third-person body (seal or
+  Mannequin, doesn't matter), only other players/other views do. User
+  confirmed this themselves after I explained it: pressing F8 (PIE's
+  default eject-to-spectator bind) shows the character fine, because
+  ejecting drops the "owned camera" context bOwnerNoSee checks against.
+  This is expected behavior, unchanged by anything this session - NOT a
+  regression, just unfamiliar-looking because it's the first time this
+  project's character has been small/distinctive enough to notice.
+- The mirror complaint WAS a real bug, but not where I initially went
+  looking. First checked BP_Mirror (a real SceneCaptureComponent2D-based
+  mirror prop) - confirmed via get_referencers it only exists in
+  Lvl_test, next to a completely separate, pre-existing pawn
+  (BP_CustomizationTest, parented straight to engine ACharacter, not
+  AjinzzaCharacter - shares none of my code) - a dead end, and said so
+  before digging further, since guessing wrong here would waste another
+  round the way last round's screenshot chase did.
+- User clarified they meant Lvl_Lobby, which has no BP_Mirror prop at
+  all - the actual "mirror" was AjinzzaCharacterPreviewCapture: the live
+  preview actor for UjinzzaCustomizationWidget's Customization screen
+  (and reusable as an ambient level preview). Found it because its own
+  header comment literally says "same mesh the real playable character
+  uses" - but it's a SEPARATE hardcoded ConstructorHelpers reference to
+  SKM_Manny_Simple, not something that reads the live character class,
+  so swapping BP_FirstPersonCharacter's mesh to the seal earlier this
+  session never touched this at all - it silently kept showing the old
+  Mannequin. Same exact hardcoded-Mannequin pattern existed in
+  AjinzzaMenuBackgroundCharacter (the main-menu 3D background character)
+  - fixed both for consistency even though only the Customization one
+  was reported, since leaving the main menu showing the wrong character
+  would just be the next confusing report.
+- Fixed both (jinzzaCharacterPreviewCapture.cpp, jinzzaMenuBackgroundCharacter.cpp):
+  swapped the hardcoded SKM_Manny_Simple ConstructorHelpers reference to
+  SKM_Seal, and added a single-node looping Idle animation (same stopgap
+  pattern as the real character's Mesh component) so neither preview is
+  frozen in bind pose - previously neither had ANY animation assigned at
+  all (an existing, separately-known gap, not something I introduced).
+- [ ] NOT rebuilt or retested this round - two more C++ files changed
+  (jinzzaCharacterPreviewCapture.cpp, jinzzaMenuBackgroundCharacter.cpp),
+  needs a rebuild before the Customization screen preview or the main-
+  menu background will actually show the seal. Please rebuild, then
+  check: does the Customization screen's left-side preview show the
+  seal now (with Idle playing, not frozen), and does the main menu
+  background character too.
+- [ ] Did NOT verify whether there's some OTHER literal "mirror" object
+  the user meant beyond BP_Mirror and the preview-capture system - asked
+  for clarification once already this round (which is how the actual bug
+  got found), going with the preview-capture fix as the best match for
+  "in lobby ... mirror" given the Wardrobe Kiosk (lobby-accessible) opens
+  exactly this Customization screen. If this still isn't what they meant,
+  next step is asking exactly which UI element/prop shows the reflection.
+- Files touched: jinzzaCharacterPreviewCapture.cpp/.h (no .h change
+  needed, just .cpp), jinzzaMenuBackgroundCharacter.cpp.
+- Changes NOT committed - left for user review alongside every other
+  uncommitted round from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-13, continued yet again, by Claude) - user
+reported "nothing shows up, only a small orb, SKM_Seal is applied but
+looks like a broken mannequin" after rebuilding. Re-rigged the seal with
+robust skinning and found/worked around a real Unreal 5.4+ First Person
+rendering incompatibility. Content-only changes this round, no C++.
+=================================================================
+- Root-caused the "broken mannequin blob" report to the skinning method,
+  not the rig layout: rig_seal.py originally used Blender's automatic
+  heat-map weight painting (bpy.ops.object.parent_set(type='ARMATURE_AUTO')),
+  which can fail badly on AI-generated mesh topology (non-manifold
+  geometry, disconnected islands - both common in Tripo3D output). A
+  static/bind-pose render (the asset thumbnail I checked last round)
+  looks fine regardless of bad weights, since bind pose has zero bone-
+  induced deformation by definition - the distortion only shows once
+  ANY bone moves off rest pose, e.g. during the baked Idle loop, which
+  is exactly what gameplay (and my own earlier screenshot attempts,
+  unknowingly) exercises.
+- Rewrote rig_seal.py's skinning step: replaced automatic heat-map
+  weights with deterministic nearest-bone-segment RIGID skinning (each
+  vertex 100% weighted to whichever bone's head-to-tail line segment
+  it's closest to, computed directly in Python rather than trusting
+  Blender's heat-map solver). Trade-off: visible faceting/seams at bone
+  boundaries instead of smooth blending (no bone-to-bone weight
+  blending at all) - deliberately favoring robustness over smoothness
+  given the failure mode being fixed. Vertex counts per bone after
+  re-running (root 66, pelvis 74, spine_01 52, spine_02 111, neck_01 62,
+  head 33, flipper_l 116, flipper_r 103, tail_01 83) - no bone got zero
+  vertices, which the earlier heat-map version didn't even log.
+- Deleted and re-imported SKM_Seal (+ PhysicsAsset + all 3 AnimSequences)
+  from the re-rigged FBX, reusing the existing SKM_Seal_Skeleton (bone
+  names/hierarchy unchanged, so animations/skeleton compat carries over
+  cleanly). Had to re-point BP_FirstPersonCharacter's CharacterMesh0 and
+  First Person Mesh SkeletalMeshAsset properties afterward, since
+  deleting the old SKM_Seal package invalidated the Blueprint's existing
+  saved object reference - straightforward but easy to miss (verified
+  explicitly via get_properties after, not just assumed).
+- Separately, and unexpectedly: even with the improved rig, the LOCAL
+  PLAYER's own first-person view (First Person Mesh) still showed
+  NOTHING - not distorted, literally invisible, while third-person
+  (CharacterMesh0, what other players/the mirror-preview system see)
+  rendered correctly. Chased this via a proper controlled A/B test using
+  CaptureEditorImage (captures the actual live PIE window, unlike
+  CaptureViewport's virtual-camera captures which this whole multi-round
+  saga kept getting fooled by nearby room furniture) - confirmed:
+  Mannequin + First Person Mesh's original settings = renders correctly
+  (visible arm in frame); ONLY the SkeletalMeshAsset swapped to
+  SKM_Seal, all other settings identical = renders nothing, not even
+  with a bare engine default material (WorldGridMaterial) in place of
+  the seal's own material, which rules out a material-usage-flag
+  problem. This isolates the failure specifically to
+  FirstPersonPrimitiveType::FirstPerson rendering (Unreal 5.4+'s newer
+  "First Person Rendering" feature - separate FOV/scale compositing
+  pass so close-up view-model meshes don't clip into the near plane) -
+  it works for the Mannequin but silently fails to render a from-
+  scratch custom skeleton. Could NOT fully root-cause this within this
+  round's budget (no visibility into whatever this newer, less-
+  documented Epic feature specifically requires - bone
+  count/naming/LOD setup are the remaining suspects, untested).
+- Given the seal has no hands/arms to show anyway, sidestepped the
+  problem rather than keep fighting an engine feature I can't fully
+  diagnose: set First Person Mesh's bVisible=false on
+  BP_FirstPersonCharacter's CDO (still correctly assigned SKM_Seal and
+  FirstPersonPrimitiveType=FirstPerson/FOV/Scale all restored to their
+  working defaults, in case a future session figures out the real
+  incompatibility - just not rendering it for now). This is a
+  deliberate, common FPS convention (no visible own-body in first
+  person), not a bug - confirmed via CaptureEditorImage that the
+  resulting view is clean (normal lit room, no black screen, no
+  distortion), not broken.
+- Noticed but did NOT chase down: recurring
+  "LogSkinnedMeshComp: Warning: GetSocketInfoByName(head): No
+  SkeletalMesh for Component(First Person Mesh)" log spam throughout
+  this round, consistently tagged "/Engine/Transient.World_10" - this
+  world number never changed across many PIE start/stop cycles this
+  round, strongly suggesting it's the Content Browser's persistent
+  Blueprint-thumbnail preview actor (stuck in a stale state from when
+  SKM_Seal was deleted+recreated mid-round), NOT the real PIE gameplay
+  world - real PIE worlds are freshly numbered (UEDPIE_0_...) each run.
+  Treated as separate, likely-harmless noise from my own asset
+  delete/recreate operations, not evidence about the real invisibility
+  bug - but flagging in case it turns out to matter (e.g. a stuck/corrupt
+  thumbnail render for BP_FirstPersonCharacter in the Content Browser -
+  if the icon looks wrong, try right-click > Asset Actions >
+  regenerate thumbnail, or just ignore it).
+- [ ] NOT visually confirmed whether the new rigid-weighted Idle/Walk/
+  Jump animations look acceptable on the third-person mesh (the part
+  other players/the mirror-preview actually see) - only confirmed the
+  BIND POSE renders correctly again (CaptureAssetImage) and that the
+  live third-person mesh is correctly assigned/visible via direct
+  property checks. Expect visible faceting/seams at bone boundaries
+  (spine segments, flipper bases) given the rigid-skinning trade-off -
+  please eyeball this in an actual multiplayer test or via F8-eject.
+- [ ] The real fix for First Person Mesh (figuring out what
+  FirstPersonPrimitiveType::FirstPerson actually needs from a custom
+  skeleton, or building a proper dedicated first-person view-model for
+  the seal) is still open - it's just hidden/sidestepped, not solved.
+  If a visible first-person body/flippers is wanted later, worth
+  researching UE 5.4/5.5's First Person Rendering feature requirements
+  directly (Epic's own docs/release notes) rather than more trial and
+  error - this round spent a lot of budget on inconclusive experiments
+  (material swap, camera settings) before settling on the workaround.
+- Files touched: Saved/SealRigging/rig_seal.py (skinning rewrite, re-
+  run, not itself a game asset). Content-only changes: SKM_Seal (+
+  PhysicsAsset + 3 AnimSequences, deleted and recreated),
+  BP_FirstPersonCharacter's CharacterMesh0/First Person Mesh/First
+  Person Camera CDO properties. No C++ changed this round - no rebuild
+  needed before retesting.
+- Changes NOT committed - left for user review alongside every other
+  uncommitted round from today.

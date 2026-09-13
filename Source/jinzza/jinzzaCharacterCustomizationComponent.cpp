@@ -2,7 +2,10 @@
 
 #include "jinzzaCharacterCustomizationComponent.h"
 #include "jinzzaGameUserSettings.h"
+#include "jinzzaCustomizationApply.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/Character.h"
+#include "Components/SkeletalMeshComponent.h"
 
 void UjinzzaCharacterCustomizationComponent::BeginPlay()
 {
@@ -21,13 +24,19 @@ void UjinzzaCharacterCustomizationComponent::RefreshCustomization()
 		return;
 	}
 
-	if (!UjinzzaGameUserSettings::Get())
+	UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get();
+	if (!Settings)
 	{
 		return;
 	}
 
-	// No real head/hair/top/eyebrow/eye meshes or materials exist yet (see
-	// jinzzaCustomizationTypes.h) - this is where swapping them in belongs once they do, reading
-	// UjinzzaGameUserSettings::Get()->GetHeadStyle()/GetHairColor()/GetTopStyle()/
-	// GetEyebrowsStyle()/GetEyesStyle().
+	const ACharacter* OwningCharacter = Cast<ACharacter>(GetOwner());
+	USkeletalMeshComponent* Mesh = OwningCharacter ? OwningCharacter->GetMesh() : nullptr;
+	if (!Mesh)
+	{
+		return;
+	}
+
+	JinzzaCustomization::ApplyToMesh(Mesh, GetOwner(), DynamicFaceMaterial, HairMeshComponent,
+		DynamicHairMaterial, AccessoryMeshComponent, DynamicAccessoryMaterial, *Settings);
 }

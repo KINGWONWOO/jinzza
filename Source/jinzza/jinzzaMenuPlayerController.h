@@ -25,6 +25,11 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	/** Finds (or auto-spawns, if none is hand-placed) the background character and camera rig for
+	 * the main menu's 3D backdrop, and possesses the camera rig as the view target - see
+	 * AjinzzaMenuBackgroundCharacter/AjinzzaMenuCameraRig. */
+	void SetupMenuBackgroundScene();
+
 	UPROPERTY()
 	TObjectPtr<UUserWidget> MainMenuWidget;
 };
