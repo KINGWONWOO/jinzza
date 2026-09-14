@@ -41,6 +41,25 @@ private:
 	void AssignRoles();
 	void TryStartRound();
 
+	/** Shows/hides zone geometry and teleports players for NewPhase (design doc section 8-6 /
+	 * 13-4's BP_ZoneTeleportTrigger concept, implemented centrally here instead of as per-zone
+	 * placed actors). Zones are matched by Actor Tag ("Zone.<Name>", shared by a zone's dressing,
+	 * PlayerStarts, and - for Interview - its seat markers), not by class, so no new Blueprint
+	 * class is required per zone. */
+	void UpdateZoneForPhase(EJinzzaRoundPhase NewPhase);
+
+	static FName GetZoneTagForPhase(EJinzzaRoundPhase Phase);
+
+	/** Placeholder stand-in for the real judge-picks-a-candidate targeting system (design doc's
+	 * "1대1 면담 대상 지정", decided during Free Time 2 - not built yet, Week 7). Auto-pairs the
+	 * Judge with the first non-Judge PartyPlayerState so the interview room/forced-seating is
+	 * exercisable today; replace the candidate lookup here once real target designation exists. */
+	void EnterInterviewZone();
+	void ExitInterviewZone();
+
 	bool bRoundStarted = false;
 	FTimerHandle RoundStartGraceTimerHandle;
+
+	TWeakObjectPtr<APawn> SeatedJudgePawn;
+	TWeakObjectPtr<APawn> SeatedCandidatePawn;
 };

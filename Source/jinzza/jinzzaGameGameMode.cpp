@@ -5,12 +5,17 @@
 #include "jinzzaGameGameState.h"
 #include "jinzzaPartyPlayerState.h"
 #include "jinzzaRoundPhaseSubsystem.h"
+#include "jinzzaAuditionCurtain.h"
 #include "jinzza.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
 #include "UObject/ConstructorHelpers.h"
 #include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 AjinzzaGameGameMode::AjinzzaGameGameMode()
 {
@@ -93,6 +98,201 @@ void AjinzzaGameGameMode::OnRoundPhaseEntered(EJinzzaRoundPhase NewPhase)
 	{
 		AssignRoles();
 	}
+
+	UpdateZoneForPhase(NewPhase);
+}
+
+FName AjinzzaGameGameMode::GetZoneTagForPhase(EJinzzaRoundPhase Phase)
+{
+	switch (Phase)
+	{
+	case EJinzzaRoundPhase::SelfIntroduction:
+		return TEXT("Zone.SelfIntro");
+	case EJinzzaRoundPhase::QuestionTime:
+		return TEXT("Zone.Question");
+	case EJinzzaRoundPhase::FreeTime1:
+	case EJinzzaRoundPhase::FreeTime2:
+	case EJinzzaRoundPhase::Interview:
+		// Interview is reached FROM FreeTime by teleport only, same level, no separate "home"
+		// zone of its own (design doc 8-6) - FreeTime stays the zone the majority of players are
+		// in for this phase too.
+		return TEXT("Zone.FreeTime");
+	case EJinzzaRoundPhase::MidEvaluation:
+	case EJinzzaRoundPhase::FinalDecision:
+	case EJinzzaRoundPhase::RoundComplete:
+		return TEXT("Zone.Evaluation");
+	case EJinzzaRoundPhase::None:
+	case EJinzzaRoundPhase::RoleAssignment:
+	default:
+		return TEXT("Zone.Lobby");
+	}
+}
+
+void AjinzzaGameGameMode::UpdateZoneForPhase(EJinzzaRoundPhase NewPhase)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	// Leaving Interview (to any other phase) releases whoever was seated there.
+	if (NewPhase != EJinzzaRoundPhase::Interview)
+	{
+		ExitInterviewZone();
+	}
+
+	static const FName AllZoneTags[] = {
+		TEXT("Zone.Lobby"), TEXT("Zone.SelfIntro"), TEXT("Zone.Question"),
+		TEXT("Zone.FreeTime"), TEXT("Zone.Interview"), TEXT("Zone.Evaluation")
+	};
+
+	const FName HomeZoneTag = GetZoneTagForPhase(NewPhase);
+	// Interview is layered ON TOP OF FreeTime (same level, teleport-only per design doc 8-6), not
+	// a replacement for it - most players stay in FreeTime while the Judge+candidate pair step
+	// into Interview.
+	const bool bShowInterviewZone = (NewPhase == EJinzzaRoundPhase::Interview);
+
+	for (const FName& Tag : AllZoneTags)
+	{
+		const bool bVisible = (Tag == HomeZoneTag) || (bShowInterviewZone && Tag == TEXT("Zone.Interview"));
+
+		TArray<AActor*> ZoneActors;
+		UGameplayStatics::GetAllActorsWithTag(GetWorld(), Tag, ZoneActors);
+		for (AActor* ZoneActor : ZoneActors)
+		{
+			if (ZoneActor)
+			{
+				ZoneActor->SetActorHiddenInGame(!bVisible);
+				ZoneActor->SetActorEnableCollision(bVisible);
+			}
+		}
+	}
+
+	// Self-intro curtain: rises only for the duration of that phase.
+	TArray<AActor*> Curtains;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AjinzzaAuditionCurtain::StaticClass(), Curtains);
+	for (AActor* CurtainActor : Curtains)
+	{
+		if (AjinzzaAuditionCurtain* Curtain = Cast<AjinzzaAuditionCurtain>(CurtainActor))
+		{
+			(NewPhase == EJinzzaRoundPhase::SelfIntroduction) ? Curtain->Open() : Curtain->Close();
+		}
+	}
+
+	if (NewPhase == EJinzzaRoundPhase::Interview)
+	{
+		// Interview only moves the designated pair - everyone else stays put in FreeTime.
+		EnterInterviewZone();
+		return;
+	}
+
+	// Every other phase moves everyone to the phase's home zone.
+	AjinzzaGameGameState* JinzzaGameState = GetGameState<AjinzzaGameGameState>();
+	if (!JinzzaGameState)
+	{
+		return;
+	}
+
+	TArray<AActor*> ZonePlayerStarts;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), HomeZoneTag, ZonePlayerStarts);
+	ZonePlayerStarts.RemoveAll([](AActor* A) { return !A || !A->IsA<APlayerStart>(); });
+	if (ZonePlayerStarts.Num() == 0)
+	{
+		return;
+	}
+
+	int32 Index = 0;
+	for (APlayerState* PS : JinzzaGameState->PlayerArray)
+	{
+		APlayerController* PC = PS ? PS->GetPlayerController() : nullptr;
+		APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+		if (!Pawn)
+		{
+			continue;
+		}
+
+		AActor* Spot = ZonePlayerStarts[Index % ZonePlayerStarts.Num()];
+		Pawn->TeleportTo(Spot->GetActorLocation(), Spot->GetActorRotation());
+		++Index;
+	}
+}
+
+void AjinzzaGameGameMode::EnterInterviewZone()
+{
+	AjinzzaGameGameState* JinzzaGameState = GetGameState<AjinzzaGameGameState>();
+	if (!JinzzaGameState)
+	{
+		return;
+	}
+
+	AjinzzaPartyPlayerState* Judge = nullptr;
+	AjinzzaPartyPlayerState* Candidate = nullptr; // TODO(Week 7): use the real judge-designated interview target once that system exists.
+	for (APlayerState* PS : JinzzaGameState->PlayerArray)
+	{
+		AjinzzaPartyPlayerState* PartyPS = Cast<AjinzzaPartyPlayerState>(PS);
+		if (!PartyPS)
+		{
+			continue;
+		}
+		if (PartyPS->ServerRole == EJinzzaPartyRole::Judge)
+		{
+			Judge = PartyPS;
+		}
+		else if (!Candidate && PartyPS->ServerRole != EJinzzaPartyRole::None)
+		{
+			Candidate = PartyPS;
+		}
+	}
+
+	if (!Judge || !Candidate)
+	{
+		return;
+	}
+
+	TArray<AActor*> JudgeSeats, CandidateSeats;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("Zone.Interview.Seat.Judge"), JudgeSeats);
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("Zone.Interview.Seat.Candidate"), CandidateSeats);
+	if (JudgeSeats.Num() == 0 || CandidateSeats.Num() == 0)
+	{
+		return;
+	}
+
+	auto SeatPawn = [](APlayerState* PS, AActor* Seat) -> APawn*
+	{
+		APlayerController* PC = PS ? PS->GetPlayerController() : nullptr;
+		ACharacter* Character = PC ? Cast<ACharacter>(PC->GetPawn()) : nullptr;
+		if (!Character || !Seat)
+		{
+			return nullptr;
+		}
+		Character->TeleportTo(Seat->GetActorLocation(), Seat->GetActorRotation());
+		if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+		{
+			Move->DisableMovement();
+		}
+		return Character;
+	};
+
+	SeatedJudgePawn = SeatPawn(Judge, JudgeSeats[0]);
+	SeatedCandidatePawn = SeatPawn(Candidate, CandidateSeats[0]);
+}
+
+void AjinzzaGameGameMode::ExitInterviewZone()
+{
+	auto Unseat = [](TWeakObjectPtr<APawn>& SeatedPawn)
+	{
+		if (ACharacter* Character = Cast<ACharacter>(SeatedPawn.Get()))
+		{
+			if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+			{
+				Move->SetMovementMode(MOVE_Walking);
+			}
+		}
+		SeatedPawn = nullptr;
+	};
+
+	Unseat(SeatedJudgePawn);
+	Unseat(SeatedCandidatePawn);
 }
 
 void AjinzzaGameGameMode::AssignRoles()
