@@ -19,22 +19,24 @@ AjinzzaCharacterPreviewCapture::AjinzzaCharacterPreviewCapture()
 	RootComponent = PreviewMesh;
 	PreviewMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	// Same mesh the real playable character (BP_FirstPersonCharacter) uses, so the preview
-	// actually matches what a live pawn looks like. Was SKM_Manny_Simple (the Mannequin) until
-	// the real character was reskinned to the seal - this preview is a separate hardcoded
-	// ConstructorHelpers reference (not read from the live character class), so it had to be
-	// updated here too or it would silently keep showing the old Mannequin forever.
-	static ConstructorHelpers::FObjectFinder<USkeletalMesh> PreviewMeshFinder(TEXT("/Game/JINZZA/Characters/seal/SKM_Seal.SKM_Seal"));
+	// SKM_Seal (a skeletal mesh) no longer exists - the real character's seal body
+	// (2026-09-14) is SM_Seal, a rigid StaticMeshComponent with no skeleton/sockets, because the
+	// seal has no animation yet. JinzzaCustomization::ApplyToMesh (called from
+	// RefreshAppearance()) needs a USkeletalMeshComponent for its Head-socket/hair/accessory
+	// attachment logic, so this preview can't be switched to SM_Seal without that customization
+	// path being redesigned too - see docs/PROJECT_STATUS.md and ask before doing that redesign.
+	// Falling back to the last-known-good Mannequin (same fallback BP_CustomizationTest uses) so
+	// CDO construction stops erroring "Failed to find SKM_Seal" on every launch; the preview will
+	// look like the Mannequin, not the real seal body, until that redesign happens.
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> PreviewMeshFinder(TEXT("/Game/JINZZA/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
 	if (PreviewMeshFinder.Succeeded())
 	{
 		PreviewMesh->SetSkeletalMesh(PreviewMeshFinder.Object);
 	}
 
-	// Single-node looping Idle so the preview isn't frozen in bind pose - same stopgap
-	// AjinzzaCharacter's real Mesh component uses until a proper AnimBP exists (see
-	// jinzzaCharacter.cpp's history) - not driven by an AnimBlueprint since this preview never
-	// moves/jumps, just idles.
-	static ConstructorHelpers::FObjectFinder<UAnimSequence> IdleAnimFinder(TEXT("/Game/JINZZA/Characters/seal/SKM_Seal_Anim_Armature_Idle.SKM_Seal_Anim_Armature_Idle"));
+	// Single-node looping Idle so the preview isn't frozen in bind pose - not driven by an
+	// AnimBlueprint since this preview never moves/jumps, just idles.
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> IdleAnimFinder(TEXT("/Game/JINZZA/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"));
 	if (IdleAnimFinder.Succeeded())
 	{
 		PreviewMesh->SetAnimationMode(EAnimationMode::AnimationSingleNode);

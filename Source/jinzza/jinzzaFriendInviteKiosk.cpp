@@ -37,11 +37,12 @@ AjinzzaFriendInviteKiosk::AjinzzaFriendInviteKiosk()
 	Label->SetText(FText::FromString(TEXT("INVITE FRIENDS")));
 	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
 
-	static ConstructorHelpers::FClassFinder<UjinzzaFriendInviteWidget> FriendInviteWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_FriendInvite"));
-	if (FriendInviteWidgetBPClass.Succeeded())
-	{
-		FriendInviteWidgetClass = FriendInviteWidgetBPClass.Class;
-	}
+	// No automatic WBP_FriendInvite lookup here: that Blueprint asset doesn't exist on disk at all
+	// (confirmed via AssetTools.find_assets - zero results) - a ConstructorHelpers::FClassFinder
+	// lookup here always failed anyway - it just logged a CDO-construction error on every compile.
+	// FriendInviteWidgetClass can still be set by hand in the Details panel if a real
+	// Designer-authored subclass is ever built; until then Interact() falls back to
+	// UjinzzaFriendInviteWidget::StaticClass() below.
 }
 
 void AjinzzaFriendInviteKiosk::Interact(APlayerController* Interactor)

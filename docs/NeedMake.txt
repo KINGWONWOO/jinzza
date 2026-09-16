@@ -1,0 +1,94 @@
+JINZZA - 3D Modeling Needed (NeedMake.txt)
+Generated 2026-09-16, by Claude Code, verified live against the running editor (every item
+below was checked directly - which mesh is actually assigned right now - not guessed from
+memory). Everything listed currently renders using an Engine primitive shape (Cube/Cylinder/
+Sphere/Cone) or has no mesh at all, standing in for real art. Nothing here blocks gameplay -
+it's a pure art backlog.
+
+=================================================================
+1. MAIN CHARACTER
+=================================================================
+- Seal character body: currently a rigid StaticMesh (SM_Seal) glued to the capsule - no skeleton,
+  no animation at all (no idle/walk/jump). A previous attempt at a rigged, animated seal
+  (SKM_Seal) was abandoned: the rig kept coming out visually broken, and separately, Unreal
+  5.4+'s "First Person Rendering" feature silently failed to render a from-scratch custom
+  skeleton at all in first-person view. If real animation is wanted, this needs a proper
+  sculpted/skinned seal model + a working rig, built with that first-person rendering
+  requirement checked from the start (not discovered after the fact).
+- Face disguise materials (MI_Face_A / MI_Face_B / MI_Face_C): the 3-way "which face is the
+  real one" disguise system has real code wired up (UjinzzaDisguiseComponent) but no material
+  assets to actually apply - right now it's a no-op. Needs 3 distinct face looks (paint/material
+  variants, not necessarily separate meshes) for the seal.
+- Hair accessory: a placeholder sphere (/Engine/BasicShapes/Sphere) tinted by the player's chosen
+  hair color. Needs a real hair/headpiece model.
+- Accessory item: a placeholder cube (/Engine/BasicShapes/Cube) tinted by the player's chosen
+  accessory style. Needs a real accessory model (hat, bandana, etc. - whatever fits a seal).
+  Note: both of the above are currently socketed to the OLD Mannequin skeleton, which is hidden
+  now that the real body is the static seal mesh - see docs/TODO.md for that unresolved
+  architecture question before modeling hair/accessories that need to actually attach to the
+  seal's body.
+
+=================================================================
+2. LOBBY KIOSKS (all 6 are the exact same bare cylinder primitive right now)
+=================================================================
+Every one of these is /Engine/BasicShapes/Cylinder.Cylinder with a floating text label - no
+individual identity/shape at all yet:
+- Room Settings kiosk
+- Friend Invite kiosk
+- Start Match kiosk
+- Voice Test kiosk
+- Wardrobe kiosk
+- Wall clock (cylinder face + 2 cube "hands" - the one place a bit of shape already exists,
+  but still just primitives)
+
+Real modeling target: something like a standing signpost/terminal/kiosk booth shape distinct
+enough per-station that players recognize which is which at a glance (a settings panel/terminal
+look for Room Settings, a mailbox/phone-booth look for Friend Invite, a closet/mirror for
+Wardrobe, a big red button/lever for Start Match, a mic stand for Voice Test, an actual analog
+clock face for the wall clock).
+
+=================================================================
+3. MATCH NOISE PROPS (Free Time zone) - composite primitive assemblies, not sculpted art
+=================================================================
+Each is currently several Engine primitives glued together to approximate a silhouette:
+- Bat: a cylinder shaft + thicker cylinder "barrel"
+- Boombox: a cube body + 2 cylinder speakers + a cube handle
+- Megaphone: a cone horn + a cylinder handle
+- Basketball + Hoop: sphere ball (already fine) + disc rim + cube backboard + cylinder pole
+- Stun Gun: cylinder body + cylinder barrel + cube grip
+All 5 need real sculpted models - the interaction logic (pick up/use/drop) is fully built and
+won't need to change, only the mesh(es) on each Blueprint.
+
+=================================================================
+4. INTERVIEW ROOM (1:1 interrogation zone)
+=================================================================
+- Desk: a plain Cube
+- 2 chairs (Judge's + candidate's): plain Cubes
+- Isolation walls: plain Cubes (may be fine to keep simple/blocky as an intentional "isolation
+  booth" look - use judgment, but currently they're literally just cubes, not walls with any
+  detailing)
+Real modeling target: an actual interrogation desk + 2 chairs (could even lean into the noir/
+courtroom art direction already established elsewhere in the game's UI).
+
+=================================================================
+5. SELF-INTRODUCTION STAGE
+=================================================================
+- Curtain (AjinzzaAuditionCurtain): has NO mesh assigned at all right now (its StaticMeshComponent
+  is empty) - it's also not yet placed in Lvl_Game at all. Needs at minimum a simple curtain/cloth
+  panel mesh once it's placed; ideally a real theater-curtain model matching the "audition stage"
+  concept (spotlight + stage already exist for this zone).
+
+=================================================================
+6. COMPLETELY UNDRESSED ZONES
+=================================================================
+- Question Time zone: bare gray-box floor, zero props/decor of any kind.
+- Evaluation zone: bare gray-box floor, zero props/decor of any kind.
+Both need a full first pass of set dressing (whatever fits "written Q&A round" and "final judge
+decision" respectively) - these two are earlier than the kiosks/props above; there's currently
+nothing to swap, just an empty room.
+
+=================================================================
+Not included here (not modeling)
+=================================================================
+2D UI icon art (interact-key icon, 4 emote icons, kiosk badge icons) is a separate, smaller
+backlog - see docs/TODO.md section 5. This file is 3D assets only.

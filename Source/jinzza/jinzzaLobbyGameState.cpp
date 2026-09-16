@@ -43,6 +43,17 @@ void AjinzzaLobbyGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 	DOREPLIFETIME(AjinzzaLobbyGameState, TimeOfDay);
 }
 
+void AjinzzaLobbyGameState::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// See the header comment: without this, the room stays at whatever raw DirectionalLight_0/
+	// SkyLight_0 values were last saved in the level - never guaranteed to actually match the
+	// "Day" preset (or get the SkyLight's captured cubemap re-taken) until someone interacts with
+	// the clock at least once.
+	ApplyTimeOfDayVisuals();
+}
+
 void AjinzzaLobbyGameState::CycleTimeOfDay()
 {
 	if (!HasAuthority())

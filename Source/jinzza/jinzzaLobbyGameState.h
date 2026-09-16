@@ -31,6 +31,15 @@ public:
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	/** Applies the initial TimeOfDay's visuals immediately - without this, DirectionalLight_0/
+	 * SkyLight_0 just sit at whatever raw values were last saved in the level (see
+	 * ApplyTimeOfDayVisuals's comment: OnRep_TimeOfDay never fires for the CDO-default TimeOfDay
+	 * value since nothing changed it, so the "Day" preset was never actually guaranteed to be
+	 * applied unless someone interacted with the clock at least once). Runs on every instance
+	 * (server and each client) since ApplyTimeOfDayVisuals only touches local actors/components,
+	 * not replicated state. */
+	virtual void BeginPlay() override;
+
 private:
 	UFUNCTION()
 	void OnRep_TimeOfDay();

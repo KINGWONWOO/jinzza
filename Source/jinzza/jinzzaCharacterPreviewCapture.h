@@ -14,8 +14,9 @@ class UTextureRenderTarget2D;
 class UMaterialInstanceDynamic;
 
 /**
- * A temporary character mesh (SKM_Manny_Simple, same mesh the real playable character uses)
- * plus a SceneCaptureComponent2D rendering it into a runtime render target - the live "preview
+ * A temporary character mesh (SKM_Manny_Simple - a stand-in, NOT what the real playable character
+ * currently shows; see jinzzaCharacterPreviewCapture.cpp's constructor comment) plus a
+ * SceneCaptureComponent2D rendering it into a runtime render target - the live "preview
  * on the left" for UjinzzaCustomizationWidget's Customization screen, and also usable as a
  * pre-placed level actor (e.g. in Lvl_MainMenu) for an ambient main-menu character preview.
  *

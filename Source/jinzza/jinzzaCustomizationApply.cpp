@@ -121,6 +121,17 @@ void JinzzaCustomization::ApplyToMesh(
 	{
 		HairMaterial->SetVectorParameterValue(HairColorParamName, GetHairColorValue(Settings.GetHairColor()));
 	}
+	if (HairMesh)
+	{
+		// Match whatever visibility state Mesh itself is in - Mesh is bOwnerNoSee/bHiddenInGame
+		// on BP_FirstPersonCharacter today (the real body is a separate SealMesh
+		// StaticMeshComponent, not this skeletal mesh - see docs/TODO.md "seal customization
+		// preview mismatch"), so without this the hair sphere floated visibly at Mesh's Head
+		// socket - a stray orb nowhere near the actual seal body - even while Mesh itself was
+		// correctly hidden.
+		HairMesh->SetHiddenInGame(Mesh->bHiddenInGame);
+		HairMesh->SetOwnerNoSee(Mesh->bOwnerNoSee);
+	}
 
 	// Accessory -> a second placeholder mesh on the same socket, offset clear of the hair sphere.
 	// Hidden entirely when AccessoryStyle is None (there's no real accessory content yet either).
@@ -145,7 +156,11 @@ void JinzzaCustomization::ApplyToMesh(
 	}
 	if (AccessoryMesh)
 	{
-		AccessoryMesh->SetVisibility(AccessoryStyle != EJinzzaAccessoryStyle::None);
+		// See the matching HairMesh comment above - same stray-floating-orb problem, plus its own
+		// style-based show/hide.
+		AccessoryMesh->SetVisibility(AccessoryStyle != EJinzzaAccessoryStyle::None && !Mesh->bHiddenInGame);
+		AccessoryMesh->SetHiddenInGame(Mesh->bHiddenInGame);
+		AccessoryMesh->SetOwnerNoSee(Mesh->bOwnerNoSee);
 	}
 	if (AccessoryMaterial)
 	{

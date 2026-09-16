@@ -41,11 +41,13 @@ AjinzzaRoomSettingsKiosk::AjinzzaRoomSettingsKiosk()
 	Label->SetText(FText::FromString(TEXT("ROOM SETTINGS")));
 	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
 
-	static ConstructorHelpers::FClassFinder<UjinzzaRoomSettingsWidget> RoomSettingsWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_RoomSettings"));
-	if (RoomSettingsWidgetBPClass.Succeeded())
-	{
-		RoomSettingsWidgetClass = RoomSettingsWidgetBPClass.Class;
-	}
+	// No automatic WBP_RoomSettings lookup here: the on-disk WBP_RoomSettings Blueprint predates
+	// UjinzzaRoomSettingsWidget's C++-built-tree migration (2026-09-07) and is no longer parented
+	// to it (confirmed via the live editor log: "is not a child class of jinzzaRoomSettingsWidget"),
+	// so a ConstructorHelpers::FClassFinder lookup here always failed anyway - it just logged a
+	// CDO-construction error on every compile. RoomSettingsWidgetClass can still be set by hand in
+	// the Details panel if a real Designer-authored subclass is ever built; until then Interact()
+	// falls back to UjinzzaRoomSettingsWidget::StaticClass() below.
 }
 
 void AjinzzaRoomSettingsKiosk::Interact(APlayerController* Interactor)

@@ -72,11 +72,14 @@ AjinzzaCharacter::AjinzzaCharacter()
 		EmoteWheelWidgetClass = EmoteWheelWidgetBPClass.Class;
 	}
 
-	static ConstructorHelpers::FClassFinder<UjinzzaPropUsageWidget> PropUsageWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_PropUsageHUD"));
-	if (PropUsageWidgetBPClass.Succeeded())
-	{
-		PropUsageWidgetClass = PropUsageWidgetBPClass.Class;
-	}
+	// No automatic WBP_PropUsageHUD lookup here: that Blueprint's generated class is not a child
+	// class of jinzzaPropUsageWidget (confirmed via the live editor log - a stale leftover from
+	// before this class got its own BuildWidgetTree()), so a ConstructorHelpers::FClassFinder
+	// lookup here always failed anyway - it just logged a CDO-construction error on every compile.
+	// Unlike the kiosk classes, BeginPlay() below has no StaticClass() fallback when
+	// PropUsageWidgetClass is unset, so it's defaulted directly here instead - can still be
+	// overridden by hand in the Details panel if a real Designer-authored subclass is ever built.
+	PropUsageWidgetClass = UjinzzaPropUsageWidget::StaticClass();
 
 	// TEMP placeholder audio defaults - swap these for real per-surface/animation sounds later.
 	static ConstructorHelpers::FObjectFinder<USoundBase> FootstepSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/FootStep/Footstep.Footstep"));

@@ -14,11 +14,12 @@ class UTextBlock;
  * screen-space UWidgetComponent (AjinzzaInteractableProp::InteractionPromptComponent), so it
  * always faces the viewer without any billboard logic of its own.
  *
- * UMG-authored: add an Image showing the interact key (this project's noob-game reference
- * assets have a matching F_Prompt icon, currently only present there as an unfetched Git LFS
- * pointer - see PROJECT_STATUS.md) plus a UTextBlock named exactly "PromptText" to the Widget
- * Blueprint (e.g. WBP_InteractionPrompt) that subclasses this. PromptText is BindWidgetOptional
- * so the class still compiles before that layout exists.
+ * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
+ * BuildWidgetTree() (a note-style panel from JinzzaUI::MakeNoteBackground around a centered
+ * PromptText) instead of relying on a Designer-authored WBP_InteractionPrompt layout with a real
+ * key-icon Image - this project's noob-game reference F_Prompt icon is still only an unfetched
+ * Git LFS pointer (see PROJECT_STATUS.md). When real icon art exists, delete BuildWidgetTree(),
+ * restore `meta = (BindWidgetOptional)` on PromptText, and add the icon Image in the Designer.
  */
 UCLASS()
 class JINZZA_API UjinzzaInteractionPromptWidget : public UUserWidget
@@ -26,11 +27,15 @@ class JINZZA_API UjinzzaInteractionPromptWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	virtual void NativeOnInitialized() override;
+
 	/** Sets the prompt label (e.g. "Pick Up" or "Use" - see AjinzzaInteractableProp::InteractPromptText). */
 	UFUNCTION(BlueprintCallable, Category = "Prompt")
 	void SetPrompt(const FText& Text);
 
 private:
-	UPROPERTY(meta = (BindWidgetOptional))
+	void BuildWidgetTree();
+
+	UPROPERTY()
 	TObjectPtr<UTextBlock> PromptText;
 };

@@ -1,0 +1,69 @@
+JINZZA - 2D Icon Art Needed (NeedIcons.txt)
+Generated 2026-09-16, by Claude Code, verified live against the current UI source (checked which
+Make*Button/Icon helpers are actually called today, not just referenced in old comments - one
+previously-noted "icon badge" gap turned out to be stale/no longer used, see the note at the
+bottom). Nothing here blocks gameplay - every screen below already works and reads fine with
+text/no icon, this is a pure art backlog.
+
+=================================================================
+1. INTERACT KEY-CAP ICON
+=================================================================
+UjinzzaInteractionPromptWidget - the floating "[E] Interact" style prompt shown above kiosks/
+pickable props - is currently text-only (just says the action, no key glyph). Needs a small
+key-cap icon (the actual bindable key, e.g. "E") to sit next to the label. Should ideally be
+built as a small set (at least the actual bound key) rather than one hardcoded image, since this
+project has real key-rebinding (Settings screen) - if the interact key gets rebound, showing the
+wrong icon would be worse than no icon.
+
+=================================================================
+2. EMOTE WHEEL ICONS (4)
+=================================================================
+UjinzzaEmoteWheelWidget's radial menu currently shows 4 plain text labels in a cross layout
+instead of icons:
+- Thumbs Up
+- Thumbs Down
+- Middle Finger
+- Point
+Needs 4 icon images, one per quadrant, that read clearly at small size while the wheel is open
+(held-E overlay, not a lot of screen time to parse them).
+
+=================================================================
+3. PROP USAGE ICONS (5)
+=================================================================
+UjinzzaPropUsageWidget (bottom-right "how to use this" HUD, shown while holding a noise prop) has
+a real UImage slot for a per-prop icon (AjinzzaInteractableProp::UsageIcon) but it's left unset on
+every prop today - the HUD currently shows only the text description, no icon. Needs one icon each
+for:
+- Bat
+- Boombox
+- Megaphone
+- Basketball (+ Hoop)
+- Stun Gun
+These can be simple item silhouettes - they're just reinforcing which prop's controls are being
+described, not the on-ground 3D representation (see NeedMake.txt for the actual 3D models of
+these same 5 props, which is a separate, unrelated need).
+
+=================================================================
+4. OPTIONAL UPGRADE (not a gap - already has working placeholder art)
+=================================================================
+Main menu's Customize and Voice Test buttons use icons already, just not illustrated ones - a
+masquerade-mask shape and a microphone shape, both built directly from rounded-box primitives in
+code (JinzzaUI::MakeMaskIcon / MakeMicIcon), no image asset needed. They already fit the theme
+(mask = Imitator disguise, mic = Judge/voice) and work fine as-is. Only worth touching if you want
+a more illustrated/less geometric look for these two specifically - not required.
+
+=================================================================
+Note: one previously-flagged icon gap is now STALE
+=================================================================
+Earlier project notes mention "icon badges are still plain white circles" for main-menu buttons
+(JinzzaUI::MakeMenuActionButton's generic circle-badge fallback). Checked the current source:
+Host/Settings/Quit no longer use that helper at all - they were reworked back to plain noir text
+buttons (JinzzaUI::MakePrimaryButton/MakeSecondaryButton/MakeWarningButton) in a later pass.
+MakeMenuActionButton/MakeNoobIconButton/MakeNoobCircleIconButton still exist in jinzzaUIStyle.cpp
+but nothing calls them anymore - not a live gap, left out of the list above.
+
+=================================================================
+Not included here (not icons)
+=================================================================
+3D modeling needs (character, kiosks, props, zone dressing) are tracked separately in
+NeedMake.txt.

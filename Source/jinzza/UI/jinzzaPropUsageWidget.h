@@ -18,9 +18,12 @@ class UTexture2D;
  * OnRep_HoldingPawn calls on whichever locally-controlled character just gained or lost this
  * specific prop.
  *
- * UMG-authored: add a UImage named exactly "UsageIcon" and a UTextBlock named exactly
- * "UsageText" to the Widget Blueprint (e.g. WBP_PropUsageHUD) that subclasses this, anchored to
- * the bottom-right of the canvas. Both are BindWidgetOptional so the class compiles either way.
+ * TEMP C++-built (see docs/umg_widget_authoring_guide.md, same pattern as UjinzzaGameEndWidget/
+ * UjinzzaInteractionPromptWidget): builds a bottom-right note panel (icon + text row) in
+ * BuildWidgetTree() instead of relying on a Designer-authored WBP_PropUsageHUD layout - without
+ * it, holding a prop showed no usage hint on screen at all even though ShowPropUsageHUD/
+ * SetPropInfo's logic worked. When a real HUD art pass happens, delete BuildWidgetTree(), restore
+ * `meta = (BindWidgetOptional)` on both properties, and lay them out for real in the Designer.
  */
 UCLASS()
 class JINZZA_API UjinzzaPropUsageWidget : public UUserWidget
@@ -28,14 +31,18 @@ class JINZZA_API UjinzzaPropUsageWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	virtual void NativeOnInitialized() override;
+
 	/** Sets the usage icon/description for the currently held prop. Either may be unset. */
 	UFUNCTION(BlueprintCallable, Category = "Prop")
 	void SetPropInfo(UTexture2D* Icon, const FText& Description);
 
 private:
-	UPROPERTY(meta = (BindWidgetOptional))
+	void BuildWidgetTree();
+
+	UPROPERTY()
 	TObjectPtr<UImage> UsageIcon;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY()
 	TObjectPtr<UTextBlock> UsageText;
 };

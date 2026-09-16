@@ -1,0 +1,73 @@
+JINZZA - Audio Needed (NeedSounds.txt)
+Generated 2026-09-16, by Claude Code, verified directly against source (exact file each sound
+currently points at, not guessed) and the actual Blueprint CDOs for the 5 noise props. Every
+sound below IS wired up and plays right now - none of this is broken/silent (except where
+called out) - it's a placeholder-vs-real-content backlog. Most current audio is a real clip
+borrowed from an unrelated moment in the game, reused because it happened to exist.
+
+=================================================================
+1. NOTHING PLAYS AT ALL (real gap, not just placeholder)
+=================================================================
+- Boombox prop: UseSound is literally None on BP_Boombox - using it (a "noise" prop, of all
+  things) makes no sound whatsoever right now. Needs actual boombox/music-blast SFX.
+
+=================================================================
+2. CLEARLY MISMATCHED (has a sound, but the wrong one)
+=================================================================
+- Jump: plays "ButtonClickPopSound" - a UI menu-button click, not a jump sound.
+- Land: plays "InteractWoodenBox__cut_0sec_" - a wooden-crate interaction sound.
+- Basketball prop (bounce/use): also plays "InteractWoodenBox__cut_0sec_" - same wooden-crate
+  sound, not a basketball bounce/dribble.
+- Role reveal (when a player learns they're the Real One/Imitator/Judge): plays
+  "correctanswer" (BasketballHoop's quiz-style scoring jingle) - a dramatic story beat currently
+  sounds like winning a mini-game.
+- Round-phase transition notification (every phase change, e.g. Free Time -> Question Time):
+  plays "PressButton" (Megaphone's own button-press click) - a generic click for a fairly
+  important gameplay beat.
+- Emote - Point: plays "PressButton" (same Megaphone click as the phase-transition sound above) -
+  doesn't suggest "pointing" at all.
+- Emote - Thumbs Up: plays "correctanswer" (same BasketballHoop jingle as the role-reveal sound
+  above).
+- In-round background music: an explicit TEMP placeholder, "QuizGameBgm" - needs a real match
+  theme (the design doc's judge/courtroom/social-deduction tone, matching the noir UI style
+  already established elsewhere).
+- Footsteps: two generic asset-pack clips (Footstep / FootstepGrass, randomly alternated) - fine
+  as a stopgap, but not seal-specific or surface-aware. There's also a separate, already-broken
+  `Cue_Footstep` SoundCue sitting unused in Content - it was never finished in the source project
+  it came from (empty node graph, plays nothing) - either finish it as a real randomized-variation
+  Cue or delete it; don't build anything new on top of it as-is.
+
+=================================================================
+3. ONE SOUND DOING FIVE JOBS (all identical right now)
+=================================================================
+"LobbyPannelOpen__cut_1sec_" plays, unchanged, for every one of these unrelated UI moments:
+- Any kiosk's E-key interact confirm (generic, all kiosks)
+- Start Match kiosk confirm specifically
+- Lobby entry (arriving in Lvl_Lobby)
+- Main menu panel-open (Settings/Customization)
+- Room Settings panel confirm
+At minimum these should sound different from each other so a player gets distinct audio feedback
+per action; ideally each gets its own short, purpose-made UI sting.
+
+=================================================================
+4. ALREADY FINE (reused, but a reasonable fit - not listed as needed)
+=================================================================
+For reference, NOT flagged above because they're each in their own dedicated content folder and
+fit their own use reasonably well, even though some are also cross-reused elsewhere (see the
+mismatches above for those specific *other* uses):
+- Bat prop's own swing/hit sound ("Punch1")
+- Megaphone prop's own button-press sound ("PressButton")
+- Stun Gun's own zap sound ("Stunned")
+- Emote - Thumbs Down ("WrongAnswerSound") and Middle Finger ("Punch1", shared with the Bat prop)
+
+=================================================================
+5. NOT A MISSING FILE - A MISSING SYSTEM
+=================================================================
+Voice chat (proximity voice + the pitch/robot voice-disguise filter) doesn't exist at all yet -
+it's not that the audio is wrong, there's no pipeline yet. Blocked on setting up an EOS Product/
+Client (see docs/TODO.md section 7) - not something more sound files would fix.
+
+=================================================================
+Not included here (not audio)
+=================================================================
+3D modeling needs -> NeedMake.txt. 2D icon art needs -> NeedIcons.txt.

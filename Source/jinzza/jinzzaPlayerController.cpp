@@ -6,6 +6,8 @@
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
+#include "InputCoreTypes.h"
+#include "UObject/SoftObjectPath.h"
 #include "jinzzaCameraManager.h"
 #include "jinzzaGameUserSettings.h"
 #include "Blueprint/UserWidget.h"
@@ -111,26 +113,56 @@ UInputMappingContext* AjinzzaPlayerController::BuildRuntimeMappingContext(UInput
 	UInputMappingContext* Runtime = DuplicateObject<UInputMappingContext>(Source, this);
 	RuntimeMappingContexts.Add(Runtime);
 
-	const UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get();
-	if (!Settings)
-	{
-		return Runtime;
-	}
-
 	// Iterate the mappings as they existed on Source (Runtime starts as an identical copy), applying any
 	// per-player key override on top of the duplicate so the shared .uasset is never mutated.
-	for (const FEnhancedActionKeyMapping& Mapping : Source->GetMappings())
+	if (const UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get())
 	{
-		if (!Mapping.Action)
+		for (const FEnhancedActionKeyMapping& Mapping : Source->GetMappings())
 		{
-			continue;
+			if (!Mapping.Action)
+			{
+				continue;
+			}
+
+			const FKey Rebind = Settings->GetKeyRebind(Mapping.Action->GetFName());
+			if (Rebind.IsValid())
+			{
+				Runtime->UnmapKey(Mapping.Action, Mapping.Key);
+				Runtime->MapKey(Mapping.Action, Rebind);
+			}
+		}
+	}
+
+	// IA_EmoteWheel is authored on E in IMC_Default, colliding with IA_Interact (also E - kiosks/
+	// props) - holding E to interact was also opening the emote wheel. The Mappings array on the
+	// shared .uasset isn't reliably readable/editable through this project's editor-automation
+	// tooling (confirmed repeatedly - see docs/unreal_mcp_gotchas.md), so correct it here on the
+	// runtime duplicate instead, same pattern as the per-player rebind loop above. This is a
+	// default-key fix, not a per-player preference, so it runs unconditionally rather than going
+	// through UjinzzaGameUserSettings::GetKeyRebind.
+	static const FSoftObjectPath EmoteWheelActionPath(TEXT("/Game/JINZZA/Input/Actions/IA_EmoteWheel.IA_EmoteWheel"));
+	if (UInputAction* EmoteWheelAction = Cast<UInputAction>(EmoteWheelActionPath.TryLoad()))
+	{
+		TArray<FKey> KeysToUnmap;
+		for (const FEnhancedActionKeyMapping& Mapping : Runtime->GetMappings())
+		{
+			if (Mapping.Action == EmoteWheelAction && Mapping.Key != EKeys::Tab)
+			{
+				KeysToUnmap.Add(Mapping.Key);
+			}
+		}
+		for (const FKey& Key : KeysToUnmap)
+		{
+			Runtime->UnmapKey(EmoteWheelAction, Key);
 		}
 
-		const FKey Rebind = Settings->GetKeyRebind(Mapping.Action->GetFName());
-		if (Rebind.IsValid())
+		const bool bAlreadyOnTab = Runtime->GetMappings().ContainsByPredicate([EmoteWheelAction](const FEnhancedActionKeyMapping& M)
 		{
-			Runtime->UnmapKey(Mapping.Action, Mapping.Key);
-			Runtime->MapKey(Mapping.Action, Rebind);
+			return M.Action == EmoteWheelAction && M.Key == EKeys::Tab;
+		});
+		if (!bAlreadyOnTab)
+		{
+			Runtime->MapKey(EmoteWheelAction, EKeys::Tab);
 		}
 	}
 
