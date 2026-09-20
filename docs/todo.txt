@@ -2783,3 +2783,82 @@ rendering incompatibility. Content-only changes this round, no C++.
   needed before retesting.
 - Changes NOT committed - left for user review alongside every other
   uncommitted round from today.
+
+=================================================================
+DONE THIS SESSION (2026-09-20, by Claude) - Tripo models imported and
+placed on the prop Blueprints / kiosk
+=================================================================
+- Imported the 8 models in docs/modelFromTripo as static meshes under
+  /Game/JINZZA/Props/Meshes/<Name>/SM_<Name>: Bat, Basketball, Backboard,
+  Boombox, StunGun (the "electric" model - a taser), Megaphone, StandMic,
+  HoopRim (the "low-poly ring" - it is a basketball hoop rim with a
+  mounting block, no net).
+- Size problem + how it was solved: Tripo FBX are in metres and
+  normalised to ~1 unit, so a plain import is ~1cm tall, and import_file
+  has no scale option. A component scale can't be used either: held props
+  attach with SnapToTargetIncludingScale, which resets it. So each FBX was
+  baked through headless Blender 4.3 (docs/modelFromTripo/bake_props.py -
+  rotate, re-pivot to bbox centre like the old primitives, uniform scale)
+  and imported with import_materials=False. Targets (cm): bat 100 tall
+  (barrel up +Z), ball 24 dia, backboard 100 wide, boombox 60 wide, stun
+  gun 40 tall (prongs +Z), megaphone 60 tall (bell toward +X, handle
+  down), mic stand 160 tall, hoop rim 50 dia.
+- UE mirrors Blender's Y: the rim was turned 180deg so its mounting block
+  sits at -Y (where the placeholder backboard was); the backboard's red
+  target face points +Y (shooter side).
+- Materials: the first raw import created tripo_mat_* + textures (kept);
+  the baked meshes use those. Fixed an importer bug in 6 of them: the
+  roughness map was wired into METALLIC (basketball looked patchy/metallic)
+  -> rewired to Roughness, sRGB off, linear sampler, recompiled. Rim and mic
+  stand have no roughness map (plain / base colour only).
+- Collision: convex hulls on the 5 prop meshes + backboard + mic stand.
+  Hoop rim uses Complex-As-Simple so the ball can pass through the ring (a
+  hull would fill it in like the old solid disc did).
+- Blueprints (all compiled): BP_Bat/Boombox/Megaphone/Basketball/StunGun
+  Mesh -> SM_*, scale (1,1,1); removed the composite primitive children
+  (Barrel, SpeakerL/R, Handle, Grip). BP_BasketballHoop: HoopMesh ->
+  SM_HoopRim; Backboard child -> SM_Backboard at (0,-37.3,20.8); Pole is
+  still the placeholder cylinder (no model was supplied), moved behind the
+  board to (0,-47.5,-120) scale z 2.6.
+- Judgment call: backboard is 100cm wide, not the placeholder's 60 - a 60cm
+  board next to a 50cm rim looked wrong. Tunable via the Backboard
+  component's scale in BP_BasketballHoop.
+- jinzzaVoiceTestKiosk.cpp: constructor now loads SM_StandMic (old scaled
+  cylinder kept as fallback). NOT COMPILED - see below.
+- Lvl_test: the placed instances carried their own stale primitive-mesh
+  overrides (and the hoop instance's Backboard/Pole were empty), so the
+  Blueprint changes did not show. Set the mesh explicitly on the Bat,
+  both Boomboxes, Megaphone, Basketball, StunGun and the Voice Test kiosk
+  instances; replaced the hoop with a fresh instance (now
+  BP_BasketballHoop_C_1, label still Zone4_Hoop). Moved z of the 2
+  boomboxes to 25 and the stun gun to 20 so their bases sit on the floor.
+  CAVEAT: those explicit instance overrides won't follow a future change
+  of the Blueprint's mesh. Lvl_Game's instances have no overrides and
+  inherit the new meshes correctly (checked by property read + bounds).
+- Verified: mesh bounds in cm; every model thumbnailed at scale; Lvl_test
+  viewport captures of bat, boombox, megaphone, basketball, stun gun, hoop
+  and mic-stand kiosk (correct orientation, bases on floor); PIE on Lvl_test
+  ran with no new errors in the log.
+- [ ] NOT verified this session:
+  * jinzzaVoiceTestKiosk.cpp change is not compiled. Rebuild / Live Coding
+    once; until then the Lvl_test kiosk works only because its instance
+    mesh was set explicitly.
+  * Picking up / holding / dropping / throwing any prop. Pivots are bbox
+    centre like the placeholders, but the hold socket's orientation/offset
+    is unknown - a prop may sit oddly in the hand (taser is upright, the
+    megaphone bell points +X) and may need a socket tweak.
+  * Physics feel: mass is auto-computed from volume, so the thin bat and
+    the taser are now much lighter than the old 100cm cylinder was.
+  * A ball actually scoring through the rim (ScoringVolume is still the
+    r=25 sphere at the rim centre; the rim is now open with complex
+    collision).
+  * Lvl_Game visually (only property/bounds checks). Its props sit at
+    their own hand-placed heights; not adjusted.
+  * Boombox facing in Lvl_test (speaker face is the mesh's +Y) - not tuned.
+  * SM_HoopRim import warns "degenerate tangent bases" (cosmetic, may
+    give slightly odd shading on the rim).
+  * Multiplayer/replicated behaviour (only single PIE).
+- Pre-existing, not from this session: startup log has CDO-constructor
+  errors for /Game/JINZZA/Characters/seal/SKM_Seal(+Idle anim) and
+  WBP_FriendInvite_C not found.
+- Changes NOT committed.
