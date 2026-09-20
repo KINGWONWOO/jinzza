@@ -117,6 +117,9 @@ private:
 	void ApplyMusicLocally();
 
 	void EnsureMediaPlayer();
+
+	/** Points both audio sources (built-in track + streamed link) at the MusicAudibleRadius profile. */
+	void ApplyAttenuation();
 	void StopAllPlayback();
 
 	UPROPERTY(VisibleAnywhere, Category = "Components")
@@ -125,6 +128,11 @@ private:
 	/** Built-in songs offered in the music player panel. Defaults to the project's existing music; override in the Blueprint to change. */
 	UPROPERTY(EditAnywhere, Category = "Boombox")
 	TArray<FJinzzaBoomboxTrack> Playlist;
+
+	/** How far (cm) the music carries: full volume beside the boombox, fading to silence at this distance (see JinzzaAudio).
+	 * Applies to built-in songs and streamed links alike. 0 = no attenuation (audible everywhere). */
+	UPROPERTY(EditAnywhere, Category = "Boombox", meta = (ClampMin = "0.0", Units = "cm"))
+	float MusicAudibleRadius = 2500.f;
 
 	/** Legacy single track - only used (as the first playlist entry) if Playlist is left empty. */
 	UPROPERTY(EditAnywhere, Category = "Boombox")

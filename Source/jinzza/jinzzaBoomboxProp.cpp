@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaBoomboxProp.h"
+#include "jinzzaAudio.h"
 #include "jinzzaBoomboxWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Components/AudioComponent.h"
@@ -161,6 +162,8 @@ void AjinzzaBoomboxProp::ApplyMusicLocally()
 		return;
 	}
 
+	ApplyAttenuation();
+
 	if (!MusicState.HasSource())
 	{
 		StopAllPlayback();
@@ -254,14 +257,15 @@ void AjinzzaBoomboxProp::EnsureMediaPlayer()
 	{
 		MediaSound->SetMediaPlayer(MediaPlayer);
 		MediaSound->bAllowSpatialization = true;
-		MediaSound->bOverrideAttenuation = true;
-		MediaSound->AttenuationOverrides.bAttenuate = true;
-		MediaSound->AttenuationOverrides.bSpatialize = true;
-		MediaSound->AttenuationOverrides.AttenuationShapeExtents = FVector(300.f, 0.f, 0.f);
-		MediaSound->AttenuationOverrides.FalloffDistance = 1500.f;
+		MediaSound->bOverrideAttenuation = JinzzaAudio::MakeOverrides(MediaSound->AttenuationOverrides, MusicAudibleRadius);
 		MediaSound->SetupAttachment(GetRootComponent());
 		MediaSound->RegisterComponent();
 	}
+}
+
+void AjinzzaBoomboxProp::ApplyAttenuation()
+{
+	JinzzaAudio::ApplyToComponent(AudioComponent, MusicAudibleRadius);
 }
 
 void AjinzzaBoomboxProp::StopAllPlayback()

@@ -51,6 +51,10 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Hoop")
 	TObjectPtr<USoundBase> ScoreSound;
 
+	/** How far (cm) the score sound carries: full volume close by, fading to silence at this distance (see JinzzaAudio). 0 = no attenuation. */
+	UPROPERTY(EditAnywhere, Category = "Hoop", meta = (ClampMin = 0, Units = "cm"))
+	float ScoreSoundAudibleRadius = 2000.f;
+
 	/** Cooldown (seconds) after a score before the same ball can score again, so one pass through the volume as it settles doesn't trigger multiple times. */
 	UPROPERTY(EditAnywhere, Category = "Hoop", meta = (ClampMin = 0, Units = "s"))
 	float ScoreCooldown = 1.f;

@@ -13,6 +13,7 @@
 #include "jinzzaDisguiseComponent.h"
 #include "jinzzaCharacterCustomizationComponent.h"
 #include "jinzzaInteractableProp.h"
+#include "jinzzaAudio.h"
 #include "jinzzaBoomboxProp.h"
 #include "Blueprint/UserWidget.h"
 #include "jinzzaPartyPlayerState.h"
@@ -190,7 +191,7 @@ void AjinzzaCharacter::UpdateFootsteps(float DeltaSeconds)
 	USoundBase* StepSound = (FootstepSoundAlt && FMath::RandBool()) ? FootstepSoundAlt : FootstepSound;
 	if (StepSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, StepSound, GetActorLocation());
+		JinzzaAudio::PlaySoundAt(this, StepSound, GetActorLocation(), FootstepAudibleRadius);
 	}
 }
 
@@ -200,7 +201,7 @@ void AjinzzaCharacter::Landed(const FHitResult& Hit)
 
 	if (LandSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, LandSound, GetActorLocation());
+		JinzzaAudio::PlaySoundAt(this, LandSound, GetActorLocation(), ActionSoundAudibleRadius);
 	}
 }
 
@@ -313,7 +314,7 @@ void AjinzzaCharacter::DoJumpStart()
 
 	if (JumpSound && CanJump())
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, JumpSound, GetActorLocation());
+		JinzzaAudio::PlaySoundAt(this, JumpSound, GetActorLocation(), ActionSoundAudibleRadius);
 	}
 
 	// pass Jump to the character
@@ -792,7 +793,7 @@ void AjinzzaCharacter::Multicast_PlayEmote_Implementation(EJinzzaEmoteType Emote
 	// audible today even with no animation content.
 	if (USoundBase* Sound = GetSoundForEmote(EmoteType))
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, Sound, GetActorLocation());
+		JinzzaAudio::PlaySoundAt(this, Sound, GetActorLocation(), ActionSoundAudibleRadius);
 	}
 
 	UAnimMontage* Montage = GetMontageForEmote(EmoteType);

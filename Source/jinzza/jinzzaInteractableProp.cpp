@@ -8,6 +8,7 @@
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 #include "GameFramework/Character.h"
+#include "jinzzaAudio.h"
 #include "jinzzaCharacter.h"
 #include "jinzzaInteractionPromptWidget.h"
 
@@ -176,7 +177,7 @@ void AjinzzaInteractableProp::Multicast_PlayEffects_Implementation()
 {
 	if (UseSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, UseSound, GetActorLocation());
+		JinzzaAudio::PlaySoundAt(this, UseSound, GetActorLocation(), NoiseRadius);
 	}
 
 	BP_OnPlayUseEffects();

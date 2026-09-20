@@ -118,6 +118,14 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Audio", meta = (ClampMin = "1.0", Units = "cm"))
 	float FootstepDistanceInterval = 150.f;
 
+	/** How far (cm) footsteps carry: full volume close by, fading out to silence at this distance (see JinzzaAudio). 0 = no attenuation. */
+	UPROPERTY(EditAnywhere, Category = "Audio", meta = (ClampMin = "0.0", Units = "cm"))
+	float FootstepAudibleRadius = 1000.f;
+
+	/** How far (cm) this character's jump, landing and emote sounds carry (see JinzzaAudio). 0 = no attenuation. */
+	UPROPERTY(EditAnywhere, Category = "Audio", meta = (ClampMin = "0.0", Units = "cm"))
+	float ActionSoundAudibleRadius = 1500.f;
+
 	/** Played once when this character actually leaves the ground under their own input (Jump()). */
 	UPROPERTY(EditAnywhere, Category = "Audio")
 	TObjectPtr<USoundBase> JumpSound;

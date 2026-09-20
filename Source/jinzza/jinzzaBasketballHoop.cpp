@@ -2,6 +2,7 @@
 
 #include "jinzzaBasketballHoop.h"
 #include "jinzzaBasketballProp.h"
+#include "jinzzaAudio.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -55,7 +56,7 @@ void AjinzzaBasketballHoop::Multicast_PlayScoreEffects_Implementation()
 {
 	if (ScoreSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, ScoreSound, GetActorLocation());
+		JinzzaAudio::PlaySoundAt(this, ScoreSound, GetActorLocation(), ScoreSoundAudibleRadius);
 	}
 
 	BP_OnPlayScoreEffects();

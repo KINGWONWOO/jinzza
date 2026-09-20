@@ -165,7 +165,8 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Prop")
 	TObjectPtr<USoundBase> UseSound;
 
-	/** How far the use sound carries - also the doc's "bigger prop use draws more attention" balance knob. */
+	/** How far the use sound carries - also the doc's "bigger prop use draws more attention" balance knob.
+	 * The sound is full volume close to the prop and fades out to silence at this distance (see JinzzaAudio); 0 = no attenuation. */
 	UPROPERTY(EditAnywhere, Category = "Prop", meta = (ClampMin = 0, Units = "cm"))
 	float NoiseRadius = 1500.f;
 

@@ -3116,3 +3116,107 @@ another method" to choose music.
 - Files: Source/jinzza/{jinzzaBoomboxProp,jinzzaInteractableProp,jinzzaCharacter}.h/.cpp,
   jinzza.Build.cs, UI/jinzzaBoomboxWidget.h/.cpp (new); Content: BP_Boombox
   (usage text). Not committed.
+
+=== 2026-09-20 (session 6): distance attenuation for all in-world sounds ===
+Request: "Apply and calculate the attenuated effect across all sounds".
+- Finding: every sound asset under /Game/JINZZA/Audio has AttenuationSettings =
+  None (checked the 10 in-world ones), and every world sound is played from C++
+  with a bare PlaySoundAtLocation - so footsteps, prop use sounds, the hoop score
+  sound and the boombox were equally loud at ANY distance. No Blueprint graph
+  plays sounds itself (searched the .uassets for the sound-play nodes).
+- Fix: new Source/jinzza/jinzzaAudio.h/.cpp (namespace JinzzaAudio). One profile
+  described by a single "audible radius" (cm), cached as a runtime
+  USoundAttenuation; no per-sound attenuation assets needed:
+    dist <= inner (15% of radius, min 150cm) : full volume
+    inner..radius : NaturalSound falloff to -40 dB (~1%), then silent at the radius
+    plus air absorption: low-pass 20 kHz (near) -> 3 kHz (edge); spatialized (panned)
+  API: PlaySoundAt(...), ApplyToComponent(...), MakeOverrides(...), and
+  CalcVolumeAtDistance(radius, dist) = the engine's own Evaluate() on the profile.
+- Applied to: footsteps (Character.FootstepAudibleRadius = 1000cm); jump / land /
+  emote sounds (Character.ActionSoundAudibleRadius = 1500cm); prop use sounds (the
+  existing NoiseRadius, 1500cm on all 5 props - now actually enforced); hoop score
+  sound (Hoop.ScoreSoundAudibleRadius = 2000cm); boombox built-in songs AND streamed
+  links (Boombox.MusicAudibleRadius = 2500cm; replaces the ad-hoc 300/1500 numbers I
+  had put on the link player). All are EditAnywhere; 0 = old unattenuated behaviour.
+- Left as-is ON PURPOSE (2D, not positional): UI clicks/hover, main-menu / lobby /
+  game music, kiosk confirm beeps, lobby entry sound.
+- Resulting volume (multiplier, before per-sound volume), by distance:
+                    100   300   500   800  1000  1500  2000  2500 cm
+    footstep(1000)  1.00  0.44  0.15  0.03  0     0     0     0
+    action/prop(1500) 1.00 0.76 0.37  0.13  0.06  0     0     0
+    hoop(2000)      1.00  1.00  0.58  0.26  0.15  0.04  0     0
+    boombox(2500)   1.00  1.00  0.76  0.40  0.26  0.09  0.03  0
+  (computed offline with the same NaturalSound formula the engine uses; the
+  in-engine CalcVolumeAtDistance has NOT been run.)
+- COMPILE CHECK: UBT -SingleFile on jinzzaAudio, jinzzaCharacter,
+  jinzzaInteractableProp, jinzzaBasketballHoop, jinzzaBoomboxProp: all compile.
+- KNOWN GAPS / decisions:
+  * Jump sound is only played on the machine that pressed jump (pre-existing,
+    DoJumpStart is local-only), so other players never hear jumps regardless of
+    attenuation. Landing/footsteps/emotes do reach others.
+  * Occlusion (walls muffling sound) is OFF - lobby is open; turn on later if wanted.
+  * Radii are my guesses - tune by ear.
+- [ ] NOT verified at RUNTIME (needs full rebuild + editor restart, new UPROPERTYs):
+  walk away from another player and confirm footsteps fade out around 10m; stand
+  next to the boombox (full volume) then walk 25m (gone); your own footsteps should
+  be unchanged; hoop score audible ~20m; check a listen-server client too.
+- Files: Source/jinzza/jinzzaAudio.h/.cpp (new), jinzzaCharacter.h/.cpp,
+  jinzzaInteractableProp.h/.cpp, jinzzaBasketballHoop.h/.cpp,
+  jinzzaBoomboxProp.h/.cpp. Not committed.
+
+=== 2026-09-20 (session 7): recheck sizes/collisions of the Tripo meshes + function test ===
+Request: "Recheck the sizes and collisions of the newly added meshes and verify
+their functionality". Meshes: Basketball, HoopRim, Backboard, Bat, Boombox,
+Megaphone, StunGun, StandMic (all /Game/JINZZA/Props/Meshes/*).
+- SIZES (from the imported bounds, cm; all pivots are at the mesh centre):
+    Basketball 24x24x24 (real ball) | HoopRim 50x60.8x16.6 (ring ~50 outer, ~46 inner:
+    the 24cm ball clears it by ~11cm each side, same ratio as a real hoop) |
+    Backboard 100x3.7x71.6 | Bat 11.5x12x100 | Boombox 60x25.3x49.7 |
+    Megaphone 54.7x42.7x60 | StunGun 13.7x5.7x40 | StandMic 46.7x46.7x160.
+  Everything is plausible for a cartoony game. Slightly oversized vs. real life:
+  megaphone (~1.7x a real one) and stun gun (~1.6x); the bat is ~1.15x. Left alone
+  (a design call, not a defect) - say if you want them scaled.
+- COLLISION DATA: every prop has convex hulls (ball 1x64 verts, bat 3, boombox 3,
+  megaphone 4, stun gun 1, backboard 1, mic 1) that match the mesh bounds to <1 cm.
+  HoopRim is complex-as-simple (no hulls) - right for a static ring the ball has to
+  pass through. Verified by rotating each prop's hull vertices by its final pose in
+  a physics drop test: lowest hull point = 0.00 for bat, boombox, megaphone, stun
+  gun and ball (i.e. they rest exactly on the floor, no sinking, no floating).
+- FOUND + FIXED: fast-falling props tunnelled through the floor. In the test level
+  (Lvl_test) the floor is SM_Plane scaled 112x11x1 = a ZERO-thickness plane, and only
+  the basketball had CCD (continuous collision). Without CCD a stun gun / boombox
+  dropped from 3m fell straight through to z=-675 / -360, and the megaphone came to
+  rest 19cm sunk into the floor. The game throws props at ThrowSpeed 1500 cm/s
+  (=25cm per frame at 60fps) so a real throw could do the same. Fix: bUseCCD = true
+  on the Mesh of BP_Bat, BP_Boombox, BP_Megaphone, BP_StunGun (saved; the ball
+  already had it). Re-test from 3m with NO manual toggling: none went below 2.7cm,
+  all four settled with the lowest hull point at 0.0.
+- HOOP FUNCTION (physics sim in PIE, ball dropped from 4.2m): straight through the
+  rim centre scored 4/4 (score effect spawned each time); dropped 1m to the side
+  = no score; dropped on the rim tube = stopped ~2.7m (rim top + ball radius) and
+  deflected, no score; dropped on the top edge of the backboard = stopped at
+  z=317.8 (plate top 306.6 + ball radius) with no sample inside the plate.
+  (One early run read "0 scored" on a trial that reset the ball while it still had
+  velocity; 4 clean repeats scored every time.)
+- Voice Test kiosk mic stand: sits on the floor (bounds z 0..160), query-only
+  collision like the other kiosk pieces - fine.
+- Also confirmed: the floor of Lvl_Lobby is not a zero-thickness plane issue (props
+  aren't placed there anyway); the two BP_Boombox in Lvl_test (x=700, x=2800) are
+  both normal placements.
+- Nothing else changed: Lvl_test not saved (reloaded to pick up the new CCD defaults);
+  SM_Megaphone's collision was regenerated as a test and produced IDENTICAL hulls -
+  it shows as unsaved in the editor, safe to discard (don't need to save it).
+- KNOWN / NOT DONE:
+  * GRIP: every prop except the stun gun (hold_stungun socket) is attached at the
+    default hand_r socket by its pivot, which is the mesh CENTRE - so the bat is held
+    by its middle (half sticks out each side), the boombox/megaphone sit centred on
+    the hand. I could not check how it looks (the MCP tooling can't attach to a
+    socket or screenshot a held item), so this is from the mesh data, not a picture.
+    Fix if it looks wrong: one custom socket per prop like hold_stungun (bat: near
+    the handle at z~-35; megaphone: grip hull at z~-18).
+  * The physics sim in PIE runs at ~50 steps/s and the editor is slow when it isn't
+    focused; the numbers above are the kind that hold regardless (rest heights,
+    penetration), not timing.
+  * Not tested this session: pick-up/drop/throw through real input on the new CCD
+    setting (needs a real client), and the sound/attenuation changes from session 6.
+- Files: BP_Bat, BP_Boombox, BP_Megaphone, BP_StunGun (CCD). Not committed.
