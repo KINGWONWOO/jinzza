@@ -19,6 +19,8 @@ class UjinzzaCharacterCustomizationComponent;
 class UjinzzaEmoteWheelWidget;
 class UjinzzaPropUsageWidget;
 class AjinzzaInteractableProp;
+class AjinzzaBoomboxProp;
+class UUserWidget;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -180,6 +182,18 @@ protected:
 	 * stale call for a prop that isn't the one on screen anymore. */
 	TWeakObjectPtr<AjinzzaInteractableProp> HUDDisplayedProp;
 
+	/** Client-local: the prop this (locally controlled) character is holding, tracked from the same
+	 * ShowPropUsageHUD/HidePropUsageHUD calls as the HUD - unlike HeldProp it exists on the owning client too,
+	 * which is what lets a second press of the interact key open that prop's own panel. */
+	TWeakObjectPtr<AjinzzaInteractableProp> LocalHeldProp;
+
+	/** The held prop's own panel (e.g. the boombox music player), while open - see OpenHeldPropUI. */
+	UPROPERTY()
+	TObjectPtr<UUserWidget> HeldPropWidget;
+
+	/** True while HeldPropWidget is open - like bEmoteWheelOpen, freezes camera look and interaction prompts. */
+	bool bHeldPropUIOpen = false;
+
 	/** Whichever interactable prop the local player is currently looking at, if any - see
 	 * UpdateInteractionFocus. Never set on remote proxies (only the locally-controlled
 	 * character traces for this). */
@@ -197,6 +211,12 @@ public:
 	/** Client-local: hides the prop usage HUD, but only if it's currently showing Prop (guards
 	 * against a stale Hide arriving after a different prop has already replaced it on screen). */
 	void HidePropUsageHUD(AjinzzaInteractableProp* Prop);
+
+	/** Client-local: closes the held prop's own panel (if open) and gives the mouse back to the game. Also called when the prop is dropped/thrown/snatched. */
+	void CloseHeldPropUI();
+
+	/** Client-local: asks the server to change what a held boombox plays (TrackIndex, or Url when non-empty) and whether it's playing. Only honored if this character is the one holding it. */
+	void RequestBoomboxMusic(AjinzzaBoomboxProp* Boombox, int32 TrackIndex, const FString& Url, bool bPlaying);
 
 protected:
 	virtual void BeginPlay() override;
@@ -235,6 +255,9 @@ protected:
 	/** Traces from the camera for a prop and requests the server pick it up (Handheld) or activate it in place (Placed) */
 	void DoInteract();
 
+	/** Opens the held prop's own panel (see AjinzzaInteractableProp::CreateHeldInteractionWidget) and frees the mouse cursor. No-op if the held prop has none. */
+	void OpenHeldPropUI();
+
 	/** Shared trace logic for both DoInteract (on F press) and UpdateInteractionFocus (every tick, for the prompt). */
 	AjinzzaInteractableProp* TraceForInteractableProp() const;
 
@@ -252,6 +275,9 @@ protected:
 
 	/** Requests the server activate whatever prop this character is currently holding */
 	void DoUseHeldProp();
+
+	/** The use button was released: asks the server to stop a hold-to-repeat use (no-op for props that don't repeat) */
+	void DoStopUseHeldProp();
 
 	/** Requests the server drop whatever prop this character is currently holding */
 	void DoDropHeldProp();
@@ -276,9 +302,17 @@ protected:
 	UFUNCTION(Server, Reliable)
 	void Server_InteractWithProp(AjinzzaInteractableProp* Prop);
 
-	/** Server-only. Activates HeldProp, if any. */
+	/** Server-only. Activates HeldProp, if any - and starts its hold-to-repeat use if it has one (see AjinzzaInteractableProp::HoldRepeatInterval). */
 	UFUNCTION(Server, Reliable)
 	void Server_UseHeldProp();
+
+	/** Server-only. Stops HeldProp's hold-to-repeat use, if any. Sent when the use button is released. */
+	UFUNCTION(Server, Reliable)
+	void Server_StopUseHeldProp();
+
+	/** Server-only. Sets what Boombox plays, if this character is the one holding it (see AjinzzaBoomboxProp::ServerApplyMusic). Lives here because props aren't owned by any client, so they can't receive RPCs themselves. */
+	UFUNCTION(Server, Reliable)
+	void Server_SetBoomboxMusic(AjinzzaBoomboxProp* Boombox, int32 TrackIndex, const FString& Url, bool bPlaying);
 
 	/** Server-only. Drops HeldProp, if any, and clears it. */
 	UFUNCTION(Server, Reliable)

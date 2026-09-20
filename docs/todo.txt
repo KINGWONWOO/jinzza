@@ -2862,3 +2862,257 @@ placed on the prop Blueprints / kiosk
   errors for /Game/JINZZA/Characters/seal/SKM_Seal(+Idle anim) and
   WBP_FriendInvite_C not found.
 - Changes NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-20, later, by Claude) - red hoop rim, score
+sound + particles, basketball bounce/throw check
+=================================================================
+- Red rim: new M_HoopRim_Red (Content/JINZZA/Props/Meshes/HoopRim; vector
+  param "RimColor", scalar "Roughness") assigned to SM_HoopRim's slot. The
+  rim and its mounting block are one mesh, so both are red. Confirmed in
+  the Lvl_test viewport.
+- Ball bounce (measured in PIE, Lvl_test, ball dropped from 300cm onto
+  the floor): the ball had NO physical material (engine default: restitution
+  0.3, Average combine = dead bounce). Made PM_Basketball (duplicate of
+  the engine default; restitution 0.8, Max combine so it stays lively on
+  every surface, friction 0.6, density 0.083 ~ 0.6kg) and set it as the
+  physMaterial on SM_Basketball's body setup. Before the 0.8 tweak the
+  first rebound retained ~54% of the drop height (real ball ~64%);
+  the final 0.8 value was NOT re-measured.
+- BP_Basketball: bUseCCD on (a 1500cm/s throw moves ~25cm/frame, more than
+  the 4cm backboard / 6cm rim tube), angular damping 0.4 so it rolls to a
+  stop, bReplicateMovement = TRUE (it was false: a thrown/dropped ball
+  would have simulated on the server only and looked frozen at the hand on
+  every other client).
+- Score trigger: ScoringVolume was a r=25 sphere at the rim centre, so a
+  ball sitting on the rim or bouncing off it could score. Now r=10 at
+  z=-10 (BP_BasketballHoop defaults). Live-test result: a ball dropped
+  through the centre passes the open ring and scores.
+- Score sound: C++ already plays ScoreSound (correctanswer) before firing
+  BP_OnPlayScoreEffects; that event fired on every scoring drop (log
+  marker), so the sound call runs. NOT heard by ear.
+- Score particles: ScoreEffect was NONE (no particles ever). Now the engine
+  template /Niagara/DefaultAssets/Templates/Systems/RadialBurst. After a
+  scoring drop a live NiagaraComponent with Asset=RadialBurst exists (both
+  on the first run and on a final regression run with the cleaned graph).
+  Chose the engine template over /Game/Noob/.../NS_fireworks (old third-
+  party content folder; also not visible in my captures).
+- Process note: while testing I temporarily added PrintString/Delay/Spawn
+  nodes to BP_BasketballHoop's EventGraph. An empty "(event EventBeginPlay)"
+  in write_graph_dsl does NOT clear an existing body, so a test chain was
+  left in BeginPlay and got saved once; caught on a read-back, deleted node
+  by node, recompiled, resaved, and re-verified (graph = the 4 events + the
+  score chain only, no orphan nodes). The editor's "throttle CPU when not
+  foreground" setting was turned off for testing and restored to its
+  original value (true).
+- FINDING, not changed - throw speed: AjinzzaCharacter::ThrowSpeed is 1500
+  cm/s for every prop. From ~5m away at the rim's height that only allows a
+  near-flat shot (~2deg, enters the ring far too shallow to go in) or a
+  ~83deg lob (~11m up). A normal 45deg arc needs ~780cm/s at 5m, ~1250 at
+  15m. Suggest a lower ThrowSpeed (or a per-prop speed) if hoop shots
+  should feel natural; it's a design/tuning call, so left alone.
+- Same replicate-movement gap exists on BP_Bat/Boombox/Megaphone/StunGun
+  (all throwable via the base class); only the ball was fixed.
+- [ ] NOT verified this session:
+  * The actual throw: no input injection tool, so nothing pressed F/right-
+    click; ThrowFromHolder's path (detach, simulate physics, velocity) was
+    only read, not run. The thrown ball may also overlap the thrower's own
+    capsule at release (collision is re-enabled with no ignore).
+  * Particle visuals: CaptureViewport never showed any Niagara output for
+    any of 4 systems tried (NS_fireworks, NS_JumpPad, RadialBurst,
+    SimpleExplosion), so what the burst looks like / its size is unseen -
+    only that the component spawns. Please eyeball it in a real PIE.
+  * Sound audibility/volume.
+  * Multiplayer (bReplicateMovement change is untested over a network).
+  * Ball bounce at restitution 0.8 (measured at 0.75).
+  * Off-centre shots / rim collisions (only a centre drop, and one accident
+    where the ball clipped the rim on the way in and still scored).
+- Files: BP_Basketball, BP_BasketballHoop, SM_Basketball, SM_HoopRim
+  (modified); PM_Basketball, M_HoopRim_Red (new). No C++ changed. Levels
+  untouched (Lvl_test/Lvl_Game inherit from the Blueprints; note that
+  editing a Blueprint component's defaults through the tools does not
+  update instances already loaded in an open level - reload the level).
+- Changes NOT committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-20, later still, by Claude) - stun gun:
+electric particles at the gun head + on the shocked player, grip fix,
+grip/use checks
+=================================================================
+- Gun-head particles: BP_StunGun got a "ZapTip" SceneComponent at the prongs
+  (0,0,20) and a "ZapEffect" Niagara variable; its "On Play Use Effects"
+  event (runs on every machine on each zap) spawns ZapEffect attached to
+  ZapTip (bAutoDestroy ON - SpawnSystemAttached defaults it OFF, which would
+  leak a component per zap). Follows the hand; verified a live Niagara
+  component on the gun in BOTH the server world and the client world, gone by
+  2.6s.
+- Same particles on the shocked player, visible to them too: new
+  BP_StunEffectComponent (FirstPerson/Blueprints) added to
+  BP_FirstPersonCharacter as "StunEffectFX". Its tick watches the
+  BlueprintPure IsStunned() (bStunned is replicated) and spawns StunEffect
+  (attached to the actor root) every BurstInterval (0.35s) while stunned - so
+  it needs NO C++ change and works on the server, the victim's own client and
+  every observer. Both effects default to the engine template
+  /Niagara/DefaultAssets/Templates/Systems/RadialBurst.
+- Multiplayer check (real listen server + client, see below): victim Niagara
+  component counts were identical on the server's copy and on the victim's own
+  client (2/4/7/5/2 over 3.8s); the shocked player's own window screenshot
+  shows white spark bursts filling their view right after the shock (clean
+  view before).
+- GRIP was broken: props attach to GetMesh() = CharacterMesh0 = the hidden
+  Mannequin (SKM_Manny_Simple) at bone "hand_r" (the seal body has no hands).
+  Measured: the gun sat 48cm BEHIND the player, 57cm above their centre,
+  randomly tilted - i.e. invisible to the holder in first person. Fix: new
+  socket "hold_stungun" on SKM_Manny_Simple's root bone at (50,20,92) rot
+  (P0,Y-90,R90) = forward 50 / right 20 / up 45 from the player, prongs
+  pointing forward, wide face level (measured after the change: exactly
+  fwd 50.0 / right 20.0 / up 45.0, prong dir +1.0 forward). BP_StunGun
+  HoldSocketName = hold_stungun. Bat/Megaphone/Boombox/Basketball still use
+  hand_r and have the same behind-the-head grip - each needs its own socket
+  (a socket only sets position+orientation, and props snap to it exactly).
+- Usage checked with REAL input (Enhanced Input actions injected into the
+  running game): F picks the gun up (attached to CharacterMesh0), Left Click
+  zaps (victim got stunned - proven by the victim effect only spawning when
+  IsStunned() is true - and that reached the client), Q drops it (gun fell and
+  came to rest at z=2.7 on the floor). Stun range/radius behave: victim at
+  180cm in front is hit.
+- Test-harness findings worth keeping: (1) PIE was configured as 2 players in
+  "Standalone" = two DISCONNECTED worlds; I switched PlayNetMode to
+  ListenServer for the test and restored it. (2) Lvl_test has a placed
+  BP_CustomizationTest pawn that auto-possesses player 0 and only ONE
+  PlayerStart, so only one of two players got a BP_FirstPersonCharacter - I
+  disabled the auto-possess and added a temp PlayerStart for the test only
+  (both removed; levels not modified). (3) A temporary driver Blueprint
+  (BP_ZZ_TestDriver, injected the inputs) was created and DELETED. (4) The
+  editor's background CPU throttle was turned off for the tests and restored.
+  (5) write_graph_dsl leaves the previous attempt's nodes behind as orphans:
+  BP_StunEffectComponent's graph had 39 nodes for a ~18-node chain until I
+  deleted everything but the two event nodes and wrote it once (now 20).
+- [ ] NOT verified this session:
+  * RMB throw of the stun gun (not driven).
+  * The gun-tip burst as a picture: the last runs' screenshots only showed the
+    victim's window; evidence is the Niagara component on the gun (server +
+    client), not an image.
+  * How the grip looks from THIRD person. It was tuned for the holder's first-
+    person view (camera is 74cm above the capsule centre). The visible seal
+    body is much smaller than the 192cm capsule, so other players may see the
+    gun floating ~45cm above the seal's back. Needs eyes on a 2-player game.
+  * Electric look/sound: the particles are a generic white spark burst (engine
+    template) - not blue, not arcs; there is no Niagara authoring tool here.
+    Swap by setting ZapEffect (BP_StunGun) / StunEffect (BP_StunEffectComponent).
+    Also the victim gets ~2 bursts per 0.35s interval (unexplained, cosmetic).
+  * Zap sound audibility (UseSound Stunned plays via the existing C++ path).
+  * ZapTip is an estimate of the prong tip (z=+20 on a 40cm model).
+- Files: BP_StunGun, BP_FirstPersonCharacter, SKM_Manny_Simple (new socket)
+  modified; BP_StunEffectComponent new. No C++ changed. Not committed.
+
+=================================================================
+DONE THIS SESSION (2026-09-20, last, by Claude) - hold the use button to
+keep shocking (stun gun)
+=================================================================
+- Ask: with the stun gun, HOLDING the button should continue the effect.
+  Before: left click was bound to the "Started" event only = exactly one zap
+  per click. The server-side use RPC (Server_UseHeldProp) and
+  AjinzzaCharacter::DoUseHeldProp are not Blueprint-callable, and Blueprint
+  tooling can't make a client->server RPC (no replication flags), so this
+  needed a small C++ change (below). Design is generic, off by default:
+  * AjinzzaInteractableProp: new HoldRepeatInterval (seconds, default 0 = one
+    activation per click, so bat/megaphone/boombox/ball are unchanged) and
+    server-only BeginHoldUse()/EndHoldUse() (a looping timer calling
+    Activate()). EndHoldUse is also called on drop, throw and snatch.
+  * AjinzzaCharacter: UseHeldPropAction now also binds Completed + Canceled ->
+    DoStopUseHeldProp -> new Server_StopUseHeldProp RPC (release). The press
+    still does one immediate Activate(), then BeginHoldUse() starts the
+    repeat. Traffic is 2 RPCs per hold, not one per repeat.
+  * AjinzzaStunGunProp: constructor sets HoldRepeatInterval = 0.5s. Each
+    repeat re-runs the stun trace (StunDuration 3s refresh), replays the use
+    sound, and re-fires the gun-tip burst; the victim's particles are driven
+    by IsStunned() so they simply continue. After release the target recovers
+    StunDuration (3s) later, same as a single click.
+  * BP_StunGun usage text now says "Hold Left Click: keep zapping...".
+- Checked that IA_UseHeldProp (and its LeftMouseButton mapping in IMC_Default)
+  has no triggers/modifiers, so Completed really fires on release (same
+  pattern the E emote wheel already uses).
+- COMPILE CHECK (new capability - see memory): ran UnrealBuildTool in
+  -SingleFile mode next to the open editor for the 8 affected files; all
+  compile. That also caught two PRE-EXISTING missing includes that only bite
+  once a file is modified (git-modified files are excluded from the unity
+  build): jinzzaInteractableProp.cpp lacked Components/SkeletalMeshComponent.h
+  and jinzzaCharacter.cpp lacked TimerManager.h - both added. It also gave
+  jinzzaVoiceTestKiosk.cpp (the SM_StandMic change from earlier today) its
+  first-ever compile: OK.
+- [ ] NOT verified: the hold behaviour at RUNTIME. The header changes need a
+  full rebuild + editor restart (Live Coding can't apply new UPROPERTY/RPC),
+  and I can't close your editor. After you rebuild: hold left click with the
+  stun gun on someone - the burst should repeat at the gun head about twice a
+  second and the target stay locked until you let go (then ~3s); releasing
+  should stop it, and Q/RMB while holding should stop it too. Also untested:
+  a hold-then-snatch by another player.
+- Files: jinzzaInteractableProp.h/.cpp, jinzzaCharacter.h/.cpp,
+  jinzzaStunGunProp.h/.cpp (C++, compile-checked only); BP_StunGun (usage
+  text). Not committed.
+
+=== 2026-09-20 (session 5): Boombox music player (interact again -> UI) ===
+Request: with the boombox HELD, pressing the interact key again opens a UI;
+left-click a song there = play / pause it; also allow "insert a link or
+another method" to choose music.
+- What was built (C++, all new/rewritten; compile-checked only - see below):
+  * AjinzzaBoomboxProp rewritten. One replicated FJinzzaBoomboxMusicState
+    {TrackIndex, Url, bPlaying} replaces the old bool bIsPlaying, so late
+    joiners and everyone nearby hear the same thing. Every machine plays the
+    state locally at the boombox (positional). Left click (the normal "use")
+    still toggles on/off - it starts the first song if nothing was chosen yet.
+  * Built-in playlist (editable per-Blueprint, `Playlist`): Fruit Game BGM,
+    Quiz Game BGM, Lobby BGM, Main Menu BGM (existing project sounds; all four
+    asset paths confirmed to exist). Legacy `Track` is used as a 1-entry
+    playlist only if Playlist is emptied.
+  * Links: streamed via Media Framework (UMediaPlayer + UMediaSoundComponent,
+    created lazily on first link). New Build.cs dependency "MediaAssets";
+    decoding comes from the engine's WmfMedia plugin (enabled by default, so
+    jinzza.uproject is unchanged). Server validates the link (http/https, no
+    whitespace, <=512 chars).
+  * AjinzzaInteractableProp: new client-local virtual CreateHeldInteractionWidget()
+    (default none) so other props can get their own held-panel later.
+  * AjinzzaCharacter: pressing interact with nothing else under the crosshair
+    while holding a prop that has a panel opens it (OpenHeldPropUI: Game+UI
+    input mode, cursor shown, camera look + interaction prompts frozen, same
+    pattern as the emote wheel). Interact again / Esc / Close button closes it;
+    it also closes automatically if the prop is dropped, thrown or snatched.
+    Looking at a DIFFERENT prop still picks that one up as before.
+    New Server_SetBoomboxMusic RPC (props aren't client-owned) - server checks
+    the sender is actually holding that boombox.
+  * New UI/jinzzaBoomboxWidget.h/.cpp (C++-built like the friend-invite panel):
+    status line, song list (click = play; click current = pause/resume; current
+    row highlighted "[Playing]/[Paused]"), link text box + "Play Link"
+    (Enter also submits), Play/Pause button, Close. Refreshes itself on state
+    changes (deferred to next tick so it never rebuilds the clicked button).
+  * BP_Boombox usage text updated (saved).
+- COMPILE CHECK: UBT -SingleFile on jinzzaBoomboxProp, jinzzaBoomboxWidget,
+  jinzzaCharacter, jinzzaInteractableProp, jinzzaStunGunProp: all compile.
+- KNOWN LIMITS (by design, not bugs):
+  * Only DIRECT links to an audio file work (.mp3/.m4a/.wav/.aac/.wma...).
+    YouTube / Spotify / SoundCloud page links CANNOT be played - there is no
+    way to pull an audio stream out of them without an external extractor.
+    The panel says so.
+  * Every nearby player's game fetches the link itself, so the link's host
+    can see those players' IP addresses. Fine for friends; worth knowing.
+  * Songs don't auto-advance; a link loops. Playback position isn't synced
+    (a player who walks up late hears it from the start of THEIR stream) and
+    changes made by the holder while someone is out of relevancy range are
+    applied when they come back (replicated state), not retroactively timed.
+  * Nothing plays on a dedicated server (no audio device) - state still replicates.
+- [ ] NOT verified at RUNTIME (needs full rebuild + editor restart: new
+  UPROPERTY/RPC/Build.cs dependency, Live Coding can't apply them, and I can't
+  close your editor): (1) F-again opens the panel and the mouse cursor works;
+  (2) clicking a song plays it, clicking it again pauses/resumes; (3) a second
+  client hears it and sees the panel state change on the holder's machine only;
+  (4) a real direct .mp3 link actually streams (WmfMedia + your network) and a
+  bad link fails gracefully (only a log warning "Boombox: could not open link");
+  (5) Q/RMB/snatch while the panel is open closes it and returns mouse control;
+  (6) typing in the link box doesn't move the character (letters go to the
+  text box; WASD only matter when the box isn't focused - movement is NOT
+  blocked while the panel is open, only camera look); (7) audio attenuation
+  of streamed links (I set 300cm inner / 1500cm falloff; tune by ear).
+- Files: Source/jinzza/{jinzzaBoomboxProp,jinzzaInteractableProp,jinzzaCharacter}.h/.cpp,
+  jinzza.Build.cs, UI/jinzzaBoomboxWidget.h/.cpp (new); Content: BP_Boombox
+  (usage text). Not committed.

@@ -13,12 +13,15 @@
 #include "jinzzaDisguiseComponent.h"
 #include "jinzzaCharacterCustomizationComponent.h"
 #include "jinzzaInteractableProp.h"
+#include "jinzzaBoomboxProp.h"
+#include "Blueprint/UserWidget.h"
 #include "jinzzaPartyPlayerState.h"
 #include "jinzzaEmoteWheelWidget.h"
 #include "jinzzaPropUsageWidget.h"
 #include "jinzza.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 
@@ -225,6 +228,9 @@ void AjinzzaCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		// Free-time props: F to pick up / activate / steal, left click to use what's held, Q to drop it, right click to throw it
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoInteract);
 		EnhancedInputComponent->BindAction(UseHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoUseHeldProp);
+		// Releasing the use button ends a hold-to-repeat use (e.g. the stun gun's continuous shock)
+		EnhancedInputComponent->BindAction(UseHeldPropAction, ETriggerEvent::Completed, this, &AjinzzaCharacter::DoStopUseHeldProp);
+		EnhancedInputComponent->BindAction(UseHeldPropAction, ETriggerEvent::Canceled, this, &AjinzzaCharacter::DoStopUseHeldProp);
 		EnhancedInputComponent->BindAction(DropHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoDropHeldProp);
 		EnhancedInputComponent->BindAction(ThrowHeldPropAction, ETriggerEvent::Started, this, &AjinzzaCharacter::DoThrowHeldProp);
 
@@ -262,7 +268,7 @@ void AjinzzaCharacter::LookInput(const FInputActionValue& Value)
 void AjinzzaCharacter::DoAim(float Yaw, float Pitch)
 {
 	// While the emote wheel is open, mouse movement steers it instead of the camera.
-	if (bEmoteWheelOpen)
+	if (bEmoteWheelOpen || bHeldPropUIOpen)
 	{
 		return;
 	}
@@ -365,14 +371,104 @@ void AjinzzaCharacter::OnRep_IsSprinting()
 
 void AjinzzaCharacter::DoInteract()
 {
+	// Interact again while the held prop's panel is open = close it (the panel doesn't take the key itself).
+	if (bHeldPropUIOpen)
+	{
+		CloseHeldPropUI();
+		return;
+	}
+
 	if (IsGhost())
 	{
 		return;
 	}
 
-	if (AjinzzaInteractableProp* Prop = TraceForInteractableProp())
+	AjinzzaInteractableProp* Prop = TraceForInteractableProp();
+
+	// Looking at the prop we're already holding (it's in the trace's way) doesn't count as looking at something else.
+	if (Prop && !Prop->IsHeldBy(this))
 	{
 		Server_InteractWithProp(Prop);
+	}
+	else if (LocalHeldProp.IsValid())
+	{
+		OpenHeldPropUI();
+	}
+	else if (Prop)
+	{
+		Server_InteractWithProp(Prop);
+	}
+}
+
+void AjinzzaCharacter::OpenHeldPropUI()
+{
+	AjinzzaInteractableProp* Prop = LocalHeldProp.Get();
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (bHeldPropUIOpen || bEmoteWheelOpen || !Prop || !PC || !PC->IsLocalController())
+	{
+		return;
+	}
+
+	UUserWidget* Widget = Prop->CreateHeldInteractionWidget(PC);
+	if (!Widget)
+	{
+		return;
+	}
+
+	HeldPropWidget = Widget;
+	HeldPropWidget->AddToViewport(90);
+	bHeldPropUIOpen = true;
+
+	// Nothing to look at or point at while the panel is up.
+	if (AjinzzaInteractableProp* OldFocus = FocusedInteractProp.Get())
+	{
+		OldFocus->HideInteractionPrompt();
+		FocusedInteractProp = nullptr;
+	}
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(HeldPropWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	PC->SetInputMode(InputMode);
+	PC->bShowMouseCursor = true;
+}
+
+void AjinzzaCharacter::CloseHeldPropUI()
+{
+	if (!bHeldPropUIOpen)
+	{
+		return;
+	}
+	bHeldPropUIOpen = false;
+
+	if (HeldPropWidget)
+	{
+		HeldPropWidget->RemoveFromParent();
+		HeldPropWidget = nullptr;
+	}
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		FInputModeGameOnly InputMode;
+		PC->SetInputMode(InputMode);
+		PC->bShowMouseCursor = false;
+	}
+}
+
+void AjinzzaCharacter::RequestBoomboxMusic(AjinzzaBoomboxProp* Boombox, int32 TrackIndex, const FString& Url, bool bPlaying)
+{
+	if (Boombox && !IsGhost())
+	{
+		Server_SetBoomboxMusic(Boombox, TrackIndex, Url, bPlaying);
+	}
+}
+
+void AjinzzaCharacter::Server_SetBoomboxMusic_Implementation(AjinzzaBoomboxProp* Boombox, int32 TrackIndex, const FString& Url, bool bPlaying)
+{
+	if (Boombox && Boombox->IsHeldBy(this) && !IsGhost())
+	{
+		Boombox->ServerApplyMusic(TrackIndex, Url, bPlaying);
 	}
 }
 
@@ -399,7 +495,7 @@ AjinzzaInteractableProp* AjinzzaCharacter::TraceForInteractableProp() const
 
 void AjinzzaCharacter::UpdateInteractionFocus()
 {
-	AjinzzaInteractableProp* NewFocus = (bEmoteWheelOpen || IsGhost()) ? nullptr : TraceForInteractableProp();
+	AjinzzaInteractableProp* NewFocus = (bEmoteWheelOpen || bHeldPropUIOpen || IsGhost()) ? nullptr : TraceForInteractableProp();
 
 	// Don't prompt to interact with whatever you're already holding (it's still in the trace's way).
 	if (NewFocus && NewFocus->IsHeldBy(this))
@@ -427,6 +523,11 @@ void AjinzzaCharacter::UpdateInteractionFocus()
 
 void AjinzzaCharacter::ShowPropUsageHUD(AjinzzaInteractableProp* Prop)
 {
+	if (Prop)
+	{
+		LocalHeldProp = Prop;
+	}
+
 	if (!Prop || !PropUsageWidget)
 	{
 		return;
@@ -439,6 +540,13 @@ void AjinzzaCharacter::ShowPropUsageHUD(AjinzzaInteractableProp* Prop)
 
 void AjinzzaCharacter::HidePropUsageHUD(AjinzzaInteractableProp* Prop)
 {
+	// Lost the prop (dropped / thrown / snatched): its own panel can't stay open, and it's no longer "held" for a second interact press.
+	if (LocalHeldProp.Get() == Prop)
+	{
+		CloseHeldPropUI();
+		LocalHeldProp = nullptr;
+	}
+
 	if (!PropUsageWidget || HUDDisplayedProp.Get() != Prop)
 	{
 		return;
@@ -455,6 +563,12 @@ void AjinzzaCharacter::DoUseHeldProp()
 		return;
 	}
 	Server_UseHeldProp();
+}
+
+void AjinzzaCharacter::DoStopUseHeldProp()
+{
+	// Deliberately not gated on IsGhost(): if someone turned into a ghost mid-hold, releasing must still be able to stop the repeat.
+	Server_StopUseHeldProp();
 }
 
 void AjinzzaCharacter::DoDropHeldProp()
@@ -566,6 +680,16 @@ void AjinzzaCharacter::Server_UseHeldProp_Implementation()
 	if (HeldProp)
 	{
 		HeldProp->Activate();
+		// For props that repeat while the button stays down (HoldRepeatInterval > 0); no-op for everything else.
+		HeldProp->BeginHoldUse();
+	}
+}
+
+void AjinzzaCharacter::Server_StopUseHeldProp_Implementation()
+{
+	if (HeldProp)
+	{
+		HeldProp->EndHoldUse();
 	}
 }
 
