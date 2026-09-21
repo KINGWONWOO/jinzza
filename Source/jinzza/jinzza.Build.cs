@@ -35,7 +35,11 @@ public class jinzza : ModuleRules
 			// was already enabled in jinzza.uproject, but linking against its classes needs this
 			// too (same two-step gotcha as AudioCapture/AudioMixer above). NEW dependency - needs a
 			// full UnrealBuildTool rebuild (editor closed), not just Live Coding.
-			"Synthesis"
+			"Synthesis",
+			// UMediaPlayer/UMediaSoundComponent (AjinzzaBoomboxProp streams a pasted audio link
+			// through them). Actual decoding is done by the engine's WmfMedia plugin on Windows,
+			// which is enabled by default. NEW dependency - needs a full rebuild (editor closed).
+			"MediaAssets"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {

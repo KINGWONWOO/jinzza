@@ -31,6 +31,10 @@ class JINZZA_API AjinzzaStunGunProp : public AjinzzaInteractableProp
 {
 	GENERATED_BODY()
 
+public:
+	/** Sets HoldRepeatInterval so holding the use button keeps shocking (and keeps the stun refreshed) until released. */
+	AjinzzaStunGunProp();
+
 protected:
 	virtual void OnPropActivated_Implementation() override;
 

@@ -11,6 +11,8 @@ class USoundBase;
 class UTexture2D;
 class UWidgetComponent;
 class UjinzzaInteractionPromptWidget;
+class APlayerController;
+class UUserWidget;
 
 /**
  * Free-time noise/comedy prop behavior (design doc section 6/11/13): no info-clue props, just
@@ -57,6 +59,21 @@ public:
 	/** Server-only. Plays this prop's use effects. Called directly for Placed props, or via the holder for Handheld ones. */
 	void Activate();
 
+	/** Server-only. If HoldRepeatInterval > 0, keeps calling Activate() every HoldRepeatInterval seconds until
+	 * EndHoldUse. The holder's initial button press is a separate, immediate Activate() - this only adds the
+	 * repeats while the button stays down. No-op for props with HoldRepeatInterval == 0 (the default). */
+	void BeginHoldUse();
+
+	/** Server-only. Stops the repeat started by BeginHoldUse. Safe to call when nothing is repeating - also
+	 * called automatically whenever the prop is dropped, thrown or snatched by someone else. */
+	void EndHoldUse();
+
+	/** Client-local. Called when the holder presses the interact key again while holding this prop and nothing
+	 * else is under the crosshair. Return a widget to show as this prop's own panel (the boombox's music
+	 * player), or nullptr if this prop has none (the default). The caller adds it to the viewport, switches
+	 * to UI input, and closes it again if the prop is dropped, thrown or snatched. */
+	virtual UUserWidget* CreateHeldInteractionWidget(APlayerController* Interactor) { return nullptr; }
+
 	UFUNCTION(BlueprintPure, Category = "Prop")
 	bool IsHeld() const { return HoldingPawn != nullptr; }
 
@@ -89,6 +106,11 @@ protected:
 
 	virtual void BeginPlay() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** Seconds between repeated activations while the holder keeps the use button held down (e.g. the stun
+	 * gun's continuous shock). 0 = one activation per click, which is what every existing prop wants. */
+	UPROPERTY(EditAnywhere, Category = "Prop", meta = (ClampMin = 0, Units = "s"))
+	float HoldRepeatInterval = 0.f;
 
 	/** Server-only hook for gameplay-affecting behavior (e.g. Bat's knockback impulse). Runs once, authoritatively. */
 	UFUNCTION(BlueprintNativeEvent, Category = "Prop")
@@ -143,7 +165,8 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Prop")
 	TObjectPtr<USoundBase> UseSound;
 
-	/** How far the use sound carries - also the doc's "bigger prop use draws more attention" balance knob. */
+	/** How far the use sound carries - also the doc's "bigger prop use draws more attention" balance knob.
+	 * The sound is full volume close to the prop and fades out to silence at this distance (see JinzzaAudio); 0 = no attenuation. */
 	UPROPERTY(EditAnywhere, Category = "Prop", meta = (ClampMin = 0, Units = "cm"))
 	float NoiseRadius = 1500.f;
 
@@ -157,4 +180,7 @@ private:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayEffects();
 	void Multicast_PlayEffects_Implementation();
+
+	/** Server-only. Drives the repeats started by BeginHoldUse. */
+	FTimerHandle HoldUseTimerHandle;
 };

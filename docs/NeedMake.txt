@@ -36,7 +36,8 @@ individual identity/shape at all yet:
 - Room Settings kiosk
 - Friend Invite kiosk
 - Start Match kiosk
-- Voice Test kiosk
+- Voice Test kiosk  [DONE 2026-09-20: mic-stand model SM_StandMic placed in Lvl_test; the C++ default
+  in jinzzaVoiceTestKiosk.cpp also points at it once rebuilt - see todo.txt]
 - Wardrobe kiosk
 - Wall clock (cylinder face + 2 cube "hands" - the one place a bit of shape already exists,
   but still just primitives)
@@ -58,6 +59,10 @@ Each is currently several Engine primitives glued together to approximate a silh
 - Stun Gun: cylinder body + cylinder barrel + cube grip
 All 5 need real sculpted models - the interaction logic (pick up/use/drop) is fully built and
 won't need to change, only the mesh(es) on each Blueprint.
+
+[DONE 2026-09-20] All 5 now use Tripo models (Bat, Boombox, Megaphone, Basketball + hoop rim/backboard,
+Stun Gun) under Content/JINZZA/Props/Meshes/. Still placeholder: the hoop's Pole (cylinder). Hand-held
+orientation/socket offset and physics feel are untested - see todo.txt (2026-09-20).
 
 =================================================================
 4. INTERVIEW ROOM (1:1 interrogation zone)

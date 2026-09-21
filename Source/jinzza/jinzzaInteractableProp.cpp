@@ -1,11 +1,14 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaInteractableProp.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
 #include "GameFramework/Character.h"
+#include "jinzzaAudio.h"
 #include "jinzzaCharacter.h"
 #include "jinzzaInteractionPromptWidget.h"
 
@@ -69,6 +72,9 @@ void AjinzzaInteractableProp::AttachToHolder(APawn* NewHolder)
 		PreviousHolder->ClearHeldPropIfMatches(this);
 	}
 
+	// Whoever was holding the use button on it (if anyone) no longer is.
+	EndHoldUse();
+
 	// Physics must be off before attaching, or the attachment transform and physics sim fight each frame.
 	Mesh->SetSimulatePhysics(false);
 	APawn* OldHolder = HoldingPawn;
@@ -83,6 +89,8 @@ void AjinzzaInteractableProp::DropFromHolder()
 		return;
 	}
 
+	EndHoldUse();
+
 	APawn* OldHolder = HoldingPawn;
 	HoldingPawn = nullptr;
 	OnRep_HoldingPawn(OldHolder); // detaches (keeping current world transform) and re-enables collision
@@ -95,6 +103,8 @@ void AjinzzaInteractableProp::ThrowFromHolder(const FVector& LaunchVelocity)
 	{
 		return;
 	}
+
+	EndHoldUse();
 
 	APawn* OldHolder = HoldingPawn;
 	HoldingPawn = nullptr;
@@ -146,11 +156,28 @@ void AjinzzaInteractableProp::Activate()
 	Multicast_PlayEffects();
 }
 
+void AjinzzaInteractableProp::BeginHoldUse()
+{
+	if (!HasAuthority() || HoldRepeatInterval <= 0.f || !IsHeld())
+	{
+		return;
+	}
+
+	// The button press that got us here already did one immediate Activate(), so the first repeat is one
+	// full interval away (SetTimer's default first delay is the rate itself).
+	GetWorldTimerManager().SetTimer(HoldUseTimerHandle, this, &AjinzzaInteractableProp::Activate, HoldRepeatInterval, true);
+}
+
+void AjinzzaInteractableProp::EndHoldUse()
+{
+	GetWorldTimerManager().ClearTimer(HoldUseTimerHandle);
+}
+
 void AjinzzaInteractableProp::Multicast_PlayEffects_Implementation()
 {
 	if (UseSound)
 	{
-		UGameplayStatics::PlaySoundAtLocation(this, UseSound, GetActorLocation());
+		JinzzaAudio::PlaySoundAt(this, UseSound, GetActorLocation(), NoiseRadius);
 	}
 
 	BP_OnPlayUseEffects();

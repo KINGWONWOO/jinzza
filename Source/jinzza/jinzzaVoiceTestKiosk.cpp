@@ -17,14 +17,21 @@ AjinzzaVoiceTestKiosk::AjinzzaVoiceTestKiosk()
 
 	Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
 	RootComponent = Mesh;
-	Mesh->SetRelativeScale3D(FVector(1.2f, 1.2f, 1.6f));
 	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Mesh->SetCollisionResponseToAllChannels(ECR_Block);
 
+	// Real mic-stand model (160cm tall, centered pivot, baked at final size - no component scale needed).
+	// Falls back to the old scaled cylinder placeholder if the asset is ever missing.
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> StandMicMeshFinder(TEXT("/Game/JINZZA/Props/Meshes/StandMic/SM_StandMic.SM_StandMic"));
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> CylinderMeshFinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-	if (CylinderMeshFinder.Succeeded())
+	if (StandMicMeshFinder.Succeeded())
+	{
+		Mesh->SetStaticMesh(StandMicMeshFinder.Object);
+	}
+	else if (CylinderMeshFinder.Succeeded())
 	{
 		Mesh->SetStaticMesh(CylinderMeshFinder.Object);
+		Mesh->SetRelativeScale3D(FVector(1.2f, 1.2f, 1.6f));
 	}
 
 	Label = CreateDefaultSubobject<UTextRenderComponent>(TEXT("Label"));
