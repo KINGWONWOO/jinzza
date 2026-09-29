@@ -9,17 +9,15 @@
 class UTextBlock;
 
 /**
- * Small "[F] Pick Up" style prompt shown above an AjinzzaInteractableProp while the local
+ * Small "[E] Pick Up" style prompt shown above an AjinzzaInteractableProp while the local
  * player is looking at it (see AjinzzaCharacter::UpdateInteractionFocus). Hosted on a
  * screen-space UWidgetComponent (AjinzzaInteractableProp::InteractionPromptComponent), so it
  * always faces the viewer without any billboard logic of its own.
  *
- * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
- * BuildWidgetTree() (a note-style panel from JinzzaUI::MakeNoteBackground around a centered
- * PromptText) instead of relying on a Designer-authored WBP_InteractionPrompt layout with a real
- * key-icon Image - this project's noob-game reference F_Prompt icon is still only an unfetched
- * Git LFS pointer (see PROJECT_STATUS.md). When real icon art exists, delete BuildWidgetTree(),
- * restore `meta = (BindWidgetOptional)` on PromptText, and add the icon Image in the Designer.
+ * C++-built (see docs/umg_widget_authoring_guide.md): a note-style panel with a key cap
+ * (JinzzaUI::MakeKeyCap) and the PromptText label. The key cap shows whatever key is bound to
+ * IA_Interact right now (JinzzaInput::GetBoundKey), so a rebind in the Settings screen shows up
+ * the next time the prompt appears - no per-key icon art needed.
  */
 UCLASS()
 class JINZZA_API UjinzzaInteractionPromptWidget : public UUserWidget
@@ -28,14 +26,22 @@ class JINZZA_API UjinzzaInteractionPromptWidget : public UUserWidget
 
 public:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeConstruct() override;
 
 	/** Sets the prompt label (e.g. "Pick Up" or "Use" - see AjinzzaInteractableProp::InteractPromptText). */
 	UFUNCTION(BlueprintCallable, Category = "Prompt")
 	void SetPrompt(const FText& Text);
+
+	/** Re-reads the key bound to IA_Interact into the key cap. Called whenever the prompt is shown. */
+	UFUNCTION(BlueprintCallable, Category = "Prompt")
+	void RefreshBoundKey();
 
 private:
 	void BuildWidgetTree();
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> PromptText;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> KeyText;
 };

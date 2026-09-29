@@ -177,6 +177,38 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_HoldingPawn)
 	TObjectPtr<APawn> HoldingPawn;
 
+	/** Knock played (broadcast to everyone in range) when this prop hits something hard after being thrown or
+	 * dropped - louder the harder the hit. Defaults to TEMP placeholder audio. */
+	UPROPERTY(EditAnywhere, Category = "Prop|Impact")
+	TObjectPtr<USoundBase> ImpactSound;
+
+	/** How far the impact knock carries (see JinzzaAudio). */
+	UPROPERTY(EditAnywhere, Category = "Prop|Impact", meta = (ClampMin = 0, Units = "cm"))
+	float ImpactAudibleRadius = 1200.f;
+
+	/** Hits softer than this (speed change caused by the hit) are silent - filters out rolling/settling. */
+	UPROPERTY(EditAnywhere, Category = "Prop|Impact", meta = (ClampMin = 0, Units = "cm/s"))
+	float MinImpactSpeed = 150.f;
+
+	/** Hit speed at which the knock reaches full volume. */
+	UPROPERTY(EditAnywhere, Category = "Prop|Impact", meta = (ClampMin = 0, Units = "cm/s"))
+	float LoudImpactSpeed = 1200.f;
+
+	/** Minimum time between two knocks, so a bouncing prop doesn't machine-gun the sound. */
+	UPROPERTY(EditAnywhere, Category = "Prop|Impact", meta = (ClampMin = 0, Units = "s"))
+	float ImpactCooldown = 0.15f;
+
+	/** Server-only. World time of the last knock (see ImpactCooldown). */
+	float LastImpactTime = -1000.f;
+
+	/** Server-only. Physics hit on Mesh - decides whether it's hard enough to be heard. */
+	UFUNCTION()
+	void OnMeshHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+
+	/** Cosmetic, so unreliable: a dropped knock under packet loss is fine. */
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlayImpact(FVector_NetQuantize Location, float Volume);
+
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayEffects();
 	void Multicast_PlayEffects_Implementation();

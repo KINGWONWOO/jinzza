@@ -7,6 +7,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
+#include "Sound/SoundBase.h"
+#include "UObject/ConstructorHelpers.h"
 #include "GameFramework/Character.h"
 #include "jinzzaAudio.h"
 #include "jinzzaCharacter.h"
@@ -23,13 +25,29 @@ AjinzzaInteractableProp::AjinzzaInteractableProp()
 	InteractionPromptComponent->SetupAttachment(RootComponent);
 	InteractionPromptComponent->SetRelativeLocation(FVector(0.f, 0.f, 50.f));
 	InteractionPromptComponent->SetWidgetSpace(EWidgetSpace::Screen);
-	InteractionPromptComponent->SetDrawSize(FVector2D(150.f, 60.f));
+	// Sized to the widget itself - the key cap is as wide as the bound key's name ("E" vs "Space Bar").
+	InteractionPromptComponent->SetDrawAtDesiredSize(true);
 	InteractionPromptComponent->SetVisibility(false);
+
+	// TEMP placeholder audio (a dull wooden knock) - swap for real per-prop impact sounds later.
+	static ConstructorHelpers::FObjectFinder<USoundBase> ImpactSoundFinder(TEXT("/Game/JINZZA/Audio/Sounds/Basketball/InteractWoodenBox__cut_0sec_.InteractWoodenBox__cut_0sec_"));
+	if (ImpactSoundFinder.Succeeded())
+	{
+		ImpactSound = ImpactSoundFinder.Object;
+	}
 }
 
 void AjinzzaInteractableProp::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Impacts are detected by the server's physics only (clients see replicated movement, not their own sim)
+	// and then broadcast, so everyone in range hears the same knock at the same spot.
+	if (HasAuthority() && ImpactSound)
+	{
+		Mesh->SetNotifyRigidBodyCollision(true);
+		Mesh->OnComponentHit.AddDynamic(this, &AjinzzaInteractableProp::OnMeshHit);
+	}
 
 	if (InteractionPromptWidgetClass)
 	{
@@ -50,6 +68,11 @@ void AjinzzaInteractableProp::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 
 void AjinzzaInteractableProp::ShowInteractionPrompt()
 {
+	// The interact key may have been rebound since this prompt was last on screen.
+	if (UjinzzaInteractionPromptWidget* PromptWidget = Cast<UjinzzaInteractionPromptWidget>(InteractionPromptComponent->GetUserWidgetObject()))
+	{
+		PromptWidget->RefreshBoundKey();
+	}
 	InteractionPromptComponent->SetVisibility(true);
 }
 
@@ -171,6 +194,34 @@ void AjinzzaInteractableProp::BeginHoldUse()
 void AjinzzaInteractableProp::EndHoldUse()
 {
 	GetWorldTimerManager().ClearTimer(HoldUseTimerHandle);
+}
+
+void AjinzzaInteractableProp::OnMeshHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+{
+	// Only free-flying props knock - a held prop has physics off, and a resting one reports no new hits.
+	if (!Mesh->IsSimulatingPhysics())
+	{
+		return;
+	}
+
+	// Rolling/sliding keeps firing tiny hits every physics step; only a real knock (and not more often than
+	// ImpactCooldown) makes a sound. NormalImpulse / mass = the speed change the hit caused (cm/s).
+	const float Mass = FMath::Max(Mesh->GetMass(), KINDA_SMALL_NUMBER);
+	const float ImpactSpeed = NormalImpulse.Size() / Mass;
+	const float Now = GetWorld()->GetTimeSeconds();
+	if (ImpactSpeed < MinImpactSpeed || Now - LastImpactTime < ImpactCooldown)
+	{
+		return;
+	}
+	LastImpactTime = Now;
+
+	const float Volume = FMath::GetMappedRangeValueClamped(FVector2f(MinImpactSpeed, LoudImpactSpeed), FVector2f(0.3f, 1.f), ImpactSpeed);
+	Multicast_PlayImpact(Hit.ImpactPoint, Volume);
+}
+
+void AjinzzaInteractableProp::Multicast_PlayImpact_Implementation(FVector_NetQuantize Location, float Volume)
+{
+	JinzzaAudio::PlaySoundAt(this, ImpactSound, Location, ImpactAudibleRadius, Volume);
 }
 
 void AjinzzaInteractableProp::Multicast_PlayEffects_Implementation()

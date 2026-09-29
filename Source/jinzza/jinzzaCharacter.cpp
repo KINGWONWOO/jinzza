@@ -12,6 +12,7 @@
 #include "jinzzaGameUserSettings.h"
 #include "jinzzaDisguiseComponent.h"
 #include "jinzzaCharacterCustomizationComponent.h"
+#include "jinzzaProximityVoiceComponent.h"
 #include "jinzzaInteractableProp.h"
 #include "jinzzaAudio.h"
 #include "jinzzaBoomboxProp.h"
@@ -69,6 +70,13 @@ AjinzzaCharacter::AjinzzaCharacter()
 
 	DisguiseComponent = CreateDefaultSubobject<UjinzzaDisguiseComponent>(TEXT("DisguiseComponent"));
 	CustomizationComponent = CreateDefaultSubobject<UjinzzaCharacterCustomizationComponent>(TEXT("CustomizationComponent"));
+
+	// Just below the camera (eye height 80) - roughly where a mouth would be.
+	VoiceAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("VoiceAnchor"));
+	VoiceAnchor->SetupAttachment(GetCapsuleComponent());
+	VoiceAnchor->SetRelativeLocation(FVector(0.f, 0.f, 65.f));
+
+	ProximityVoiceComponent = CreateDefaultSubobject<UjinzzaProximityVoiceComponent>(TEXT("ProximityVoiceComponent"));
 
 	static ConstructorHelpers::FClassFinder<UjinzzaEmoteWheelWidget> EmoteWheelWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_EmoteWheel"));
 	if (EmoteWheelWidgetBPClass.Succeeded())
@@ -141,6 +149,8 @@ void AjinzzaCharacter::BeginPlay()
 
 	BaseWalkSpeed = GetCharacterMovement()->MaxWalkSpeed;
 
+	ProximityVoiceComponent->SetVoiceAnchor(VoiceAnchor);
+
 	if (IsLocallyControlled() && PropUsageWidgetClass)
 	{
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -199,9 +209,67 @@ void AjinzzaCharacter::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
 
-	if (LandSound)
+	// Velocity still carries the fall speed here - the movement component zeroes it right after this call.
+	const float FallSpeed = -GetVelocity().Z;
+	const float Volume = FMath::GetMappedRangeValueClamped(FVector2D(LandSoundSpeedRange.X, LandSoundSpeedRange.Y), FVector2D(0.35f, 1.f), FallSpeed);
+	PlayMovementSound(LandSound, Volume, false);
+}
+
+void AjinzzaCharacter::OnJumped_Implementation()
+{
+	Super::OnJumped_Implementation();
+
+	PlayMovementSound(JumpSound, 1.f, true);
+}
+
+void AjinzzaCharacter::PlayMovementSound(USoundBase* Sound, float Volume, bool bIsJump)
+{
+	if (!Sound)
 	{
-		JinzzaAudio::PlaySoundAt(this, LandSound, GetActorLocation(), ActionSoundAudibleRadius);
+		return;
+	}
+
+	// The owning client re-runs its recent moves after a server correction - don't replay the sound for those.
+	if (bClientUpdating)
+	{
+		return;
+	}
+
+	// The player making the noise hears it right away, without waiting for a network round trip.
+	if (IsLocallyControlled())
+	{
+		JinzzaAudio::PlaySoundAt(this, Sound, GetActorLocation(), ActionSoundAudibleRadius, Volume);
+	}
+
+	// Everyone else hears it via the server. (Simulated proxies never get here: they don't run the jump/landing
+	// physics themselves, which is exactly why these sounds used to be heard only by the jumper.)
+	if (HasAuthority())
+	{
+		if (bIsJump)
+		{
+			Multicast_PlayJumpSound();
+		}
+		else
+		{
+			Multicast_PlayLandSound(Volume);
+		}
+	}
+}
+
+void AjinzzaCharacter::Multicast_PlayJumpSound_Implementation()
+{
+	// Already played locally by the owner (see PlayMovementSound). Also covers the listen-server host's own character.
+	if (!IsLocallyControlled() && JumpSound)
+	{
+		JinzzaAudio::PlaySoundAt(this, JumpSound, GetActorLocation(), ActionSoundAudibleRadius);
+	}
+}
+
+void AjinzzaCharacter::Multicast_PlayLandSound_Implementation(float Volume)
+{
+	if (!IsLocallyControlled() && LandSound)
+	{
+		JinzzaAudio::PlaySoundAt(this, LandSound, GetActorLocation(), ActionSoundAudibleRadius, Volume);
 	}
 }
 
@@ -312,12 +380,7 @@ void AjinzzaCharacter::DoJumpStart()
 		return;
 	}
 
-	if (JumpSound && CanJump())
-	{
-		JinzzaAudio::PlaySoundAt(this, JumpSound, GetActorLocation(), ActionSoundAudibleRadius);
-	}
-
-	// pass Jump to the character
+	// pass Jump to the character (the jump sound plays from OnJumped, once the jump really happens)
 	Jump();
 }
 
@@ -794,6 +857,26 @@ void AjinzzaCharacter::Multicast_PlayEmote_Implementation(EJinzzaEmoteType Emote
 	if (USoundBase* Sound = GetSoundForEmote(EmoteType))
 	{
 		JinzzaAudio::PlaySoundAt(this, Sound, GetActorLocation(), ActionSoundAudibleRadius);
+	}
+
+	// TEMP on-screen confirmation - there's no emote montage content yet (GetMontageForEmote below
+	// returns null for every case until anim assets are assigned), so this is currently the only
+	// visible signal on ANY client that an emote actually fired. Remove once real montages land and
+	// the Montage_Play below is itself the visible feedback.
+	if (GEngine)
+	{
+		FString EmoteName;
+		switch (EmoteType)
+		{
+		case EJinzzaEmoteType::ThumbsUp:     EmoteName = TEXT("ThumbsUp"); break;
+		case EJinzzaEmoteType::ThumbsDown:   EmoteName = TEXT("ThumbsDown"); break;
+		case EJinzzaEmoteType::MiddleFinger: EmoteName = TEXT("MiddleFinger"); break;
+		case EJinzzaEmoteType::Point:        EmoteName = TEXT("Point"); break;
+		default:                              EmoteName = TEXT("None"); break;
+		}
+		const APlayerState* PS = GetPlayerState<APlayerState>();
+		const FString PlayerLabel = PS ? PS->GetPlayerName() : GetName();
+		GEngine->AddOnScreenDebugMessage(INDEX_NONE, 4.f, FColor::Yellow, FString::Printf(TEXT("%s: %s"), *PlayerLabel, *EmoteName));
 	}
 
 	UAnimMontage* Montage = GetMontageForEmote(EmoteType);

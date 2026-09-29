@@ -16,6 +16,7 @@ class UAnimMontage;
 class USoundBase;
 class UjinzzaDisguiseComponent;
 class UjinzzaCharacterCustomizationComponent;
+class UjinzzaProximityVoiceComponent;
 class UjinzzaEmoteWheelWidget;
 class UjinzzaPropUsageWidget;
 class AjinzzaInteractableProp;
@@ -48,6 +49,14 @@ class AjinzzaCharacter : public ACharacter
 	/** Applies the local player's saved appearance (head/hair/top/eyebrows/eyes) - see UjinzzaCharacterCustomizationComponent. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UjinzzaCharacterCustomizationComponent> CustomizationComponent;
+
+	/** Mouth height point other players hear this character's voice from - see UjinzzaProximityVoiceComponent. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> VoiceAnchor;
+
+	/** Plays this player's voice chat positionally from VoiceAnchor on every other player's machine (proximity voice, disguise filters, megaphone, walls). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UjinzzaProximityVoiceComponent> ProximityVoiceComponent;
 
 protected:
 
@@ -126,13 +135,17 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Audio", meta = (ClampMin = "0.0", Units = "cm"))
 	float ActionSoundAudibleRadius = 1500.f;
 
-	/** Played once when this character actually leaves the ground under their own input (Jump()). */
+	/** Played once when this character actually leaves the ground under their own input (Jump()) - heard by everyone in range, see OnJumped. */
 	UPROPERTY(EditAnywhere, Category = "Audio")
 	TObjectPtr<USoundBase> JumpSound;
 
-	/** Played once when this character lands back on the ground after being airborne. */
+	/** Played once when this character lands back on the ground after being airborne - heard by everyone in range, louder the harder the fall. */
 	UPROPERTY(EditAnywhere, Category = "Audio")
 	TObjectPtr<USoundBase> LandSound;
+
+	/** Falling speeds (cm/s) at which the landing sound goes from quiet (0.35) to full volume - a hop off a step barely makes a sound. */
+	UPROPERTY(EditAnywhere, Category = "Audio", meta = (Units = "cm/s"))
+	FVector2D LandSoundSpeedRange = FVector2D(200.f, 1200.f);
 
 	/** Ground distance covered since the last footstep sound - see UpdateFootsteps. */
 	float DistanceSinceLastFootstep = 0.f;
@@ -281,6 +294,10 @@ protected:
 	/** Plays LandSound when this character touches back down after being airborne. */
 	virtual void Landed(const FHitResult& Hit) override;
 
+	/** Plays JumpSound. Like Landed, the engine only runs this on the server and the owning client (simulated
+	 * proxies never simulate the jump themselves), so both forward it to everyone else via a multicast. */
+	virtual void OnJumped_Implementation() override;
+
 	/** Requests the server activate whatever prop this character is currently holding */
 	void DoUseHeldProp();
 
@@ -342,7 +359,19 @@ protected:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PlayEmote(EJinzzaEmoteType EmoteType);
 
+	/** Jump/land sounds for everyone except the owning player (who already heard it locally, with no network
+	 * delay). Cosmetic, so unreliable. */
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlayJumpSound();
+
+	UFUNCTION(NetMulticast, Unreliable)
+	void Multicast_PlayLandSound(float Volume);
+
 private:
+	/** Plays a movement sound (jump/land) for this machine's listener and, on the server, sends it to everyone
+	 * else. Shared by OnJumped and Landed - see their comments. */
+	void PlayMovementSound(USoundBase* Sound, float Volume, bool bIsJump);
+
 	UAnimMontage* GetMontageForEmote(EJinzzaEmoteType EmoteType) const;
 	USoundBase* GetSoundForEmote(EJinzzaEmoteType EmoteType) const;
 
@@ -379,11 +408,7 @@ public:
 	bool IsStunned() const { return bStunned; }
 
 	/** Server-only. Immobilizes this character for Duration seconds (movement/jump input ignored - see DoMove/DoJumpStart). Called by props like AjinzzaStunGunProp.
-	 *
-	 * NOT YET IMPLEMENTED (deferred - see AjinzzaStunGunProp's class comment): making the
-	 * stunned character's voice sound mechanical. That needs the proximity voice system
-	 * (Vivox/EOS, design doc section 11, Week 6), which doesn't exist yet - same gap
-	 * EJinzzaVoiceFilter::Robot already has everywhere else in the project. */
+	 * While stunned, other players also hear this character's voice robotized (UjinzzaProximityVoiceComponent reads IsStunned). */
 	void Stun(float Duration);
 
 private:

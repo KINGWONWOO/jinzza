@@ -228,124 +228,6 @@ namespace JinzzaUI
 		return MakeStyledButton(Tree, Name, Label, FontSize, Style, Color_TextPrimary);
 	}
 
-	UButton* MakeMenuActionButton(UWidgetTree* Tree, FName Name, const FText& Label, const FLinearColor& TintColor, float FontSize)
-	{
-		// Hover/press feedback derived from the caller's own tint (lighten/darken in HSV) rather
-		// than hand-picked per color, since this helper takes an arbitrary palette of tints instead
-		// of the noir palette's fixed set.
-		const FLinearColor Hovered = FLinearColor::LerpUsingHSV(TintColor, FLinearColor::White, 0.15f);
-		const FLinearColor Pressed = FLinearColor::LerpUsingHSV(TintColor, FLinearColor::Black, 0.15f);
-		const FButtonStyle Style = MakeRoundedButtonStyle(TintColor, Hovered, Pressed, TintColor);
-
-		UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
-		Button->SetStyle(Style);
-
-		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), *(Name.ToString() + TEXT("_Row")));
-
-		// White circular icon-slot badge (see header comment) - no icon glyph inside, just the
-		// NOOB-style badge shape/placement until real icon art exists.
-		UBorder* IconBadge = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), *(Name.ToString() + TEXT("_IconBadge")));
-		IconBadge->SetBrush(FSlateRoundedBoxBrush(FLinearColor::White, 14.f));
-		IconBadge->SetPadding(FMargin(0.f));
-
-		USizeBox* IconBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(Name.ToString() + TEXT("_IconBox")));
-		IconBox->SetWidthOverride(28.f);
-		IconBox->SetHeightOverride(28.f);
-		IconBox->AddChild(IconBadge);
-
-		if (UHorizontalBoxSlot* IconSlot = Row->AddChildToHorizontalBox(IconBox))
-		{
-			IconSlot->SetVerticalAlignment(VAlign_Center);
-			IconSlot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
-		}
-
-		UTextBlock* ButtonText = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(Name.ToString() + TEXT("_Label")));
-		ButtonText->SetText(Label);
-		ButtonText->SetFont(HeadingFont(FMath::RoundToInt(FontSize)));
-		ButtonText->SetColorAndOpacity(FSlateColor(Color_TextPrimary));
-		if (UHorizontalBoxSlot* TextSlot = Row->AddChildToHorizontalBox(ButtonText))
-		{
-			TextSlot->SetVerticalAlignment(VAlign_Center);
-		}
-
-		UJinzzaUIButtonSounds* SoundBinder = NewObject<UJinzzaUIButtonSounds>(Button);
-		Button->OnClicked.AddDynamic(SoundBinder, &UJinzzaUIButtonSounds::HandleClicked);
-		Button->OnHovered.AddDynamic(SoundBinder, &UJinzzaUIButtonSounds::HandleHovered);
-
-		Button->AddChild(Row);
-		return Button;
-	}
-
-	UButton* MakeNoobIconButton(UWidgetTree* Tree, FName Name, const FText& Label, const TCHAR* TexturePath, const FLinearColor& FallbackTintColor, float Height, float FontSize)
-	{
-		UTexture2D* ButtonTexture = LoadObject<UTexture2D>(nullptr, TexturePath);
-		if (!ButtonTexture)
-		{
-			return MakeMenuActionButton(Tree, Name, Label, FallbackTintColor, FontSize);
-		}
-
-		const float AspectRatio = (float)ButtonTexture->GetSizeX() / (float)ButtonTexture->GetSizeY();
-		const float Width = Height * AspectRatio;
-
-		FSlateBrush Normal;
-		Normal.SetResourceObject(ButtonTexture);
-		Normal.ImageSize = FVector2D(Width, Height);
-		Normal.DrawAs = ESlateBrushDrawType::Image;
-
-		FSlateBrush Hovered = Normal;
-		Hovered.TintColor = FSlateColor(FLinearColor(1.12f, 1.12f, 1.12f, 1.f));
-		FSlateBrush Pressed = Normal;
-		Pressed.TintColor = FSlateColor(FLinearColor(0.85f, 0.85f, 0.85f, 1.f));
-		FSlateBrush Disabled = Normal;
-		Disabled.TintColor = FSlateColor(FLinearColor(0.6f, 0.6f, 0.6f, 0.5f));
-
-		FButtonStyle Style;
-		Style.Normal = Normal;
-		Style.Hovered = Hovered;
-		Style.Pressed = Pressed;
-		Style.Disabled = Disabled;
-		Style.NormalPadding = FMargin(0.f);
-		Style.PressedPadding = FMargin(0.f);
-
-		UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
-		Button->SetStyle(Style);
-
-		USizeBox* ButtonBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(Name.ToString() + TEXT("_Box")));
-		ButtonBox->SetWidthOverride(Width);
-		ButtonBox->SetHeightOverride(Height);
-
-		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), *(Name.ToString() + TEXT("_Row")));
-
-		// Invisible spacer reserving the baked icon's footprint (~22% of the pill's width in the
-		// source art) so the label starts to its right instead of overlapping it.
-		USizeBox* IconSpacer = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(Name.ToString() + TEXT("_IconSpacer")));
-		IconSpacer->SetWidthOverride(Width * 0.22f);
-		if (UHorizontalBoxSlot* SpacerSlot = Row->AddChildToHorizontalBox(IconSpacer))
-		{
-			SpacerSlot->SetVerticalAlignment(VAlign_Fill);
-		}
-
-		UTextBlock* ButtonText = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(Name.ToString() + TEXT("_Label")));
-		ButtonText->SetText(Label);
-		ButtonText->SetFont(HeadingFont(FMath::RoundToInt(FontSize)));
-		// White/cream text on the pastel pill, matching NOOB-GAME's own button label color.
-		ButtonText->SetColorAndOpacity(FSlateColor(FLinearColor(0.98f, 0.98f, 0.96f, 1.f)));
-		if (UHorizontalBoxSlot* TextSlot = Row->AddChildToHorizontalBox(ButtonText))
-		{
-			TextSlot->SetVerticalAlignment(VAlign_Center);
-			TextSlot->SetSize(ESlateSizeRule::Fill);
-		}
-
-		ButtonBox->AddChild(Row);
-
-		UJinzzaUIButtonSounds* SoundBinder = NewObject<UJinzzaUIButtonSounds>(Button);
-		Button->OnClicked.AddDynamic(SoundBinder, &UJinzzaUIButtonSounds::HandleClicked);
-		Button->OnHovered.AddDynamic(SoundBinder, &UJinzzaUIButtonSounds::HandleHovered);
-
-		Button->AddChild(ButtonBox);
-		return Button;
-	}
-
 	UButton* MakeCircleIconButton(UWidgetTree* Tree, FName Name, const FText& Label, UWidget* IconContent, const FLinearColor& TintColor, float Diameter, float FontSize)
 	{
 		// Fully transparent button style - the visible circle is a child UBorder (below), not the
@@ -408,30 +290,28 @@ namespace JinzzaUI
 		return Button;
 	}
 
-	UButton* MakeNoobCircleIconButton(UWidgetTree* Tree, FName Name, const FText& Label, const TCHAR* TexturePath, const FLinearColor& TintColor, float Diameter, float FontSize)
+	UWidget* MakeKeyCap(UWidgetTree* Tree, FName Name, UTextBlock*& OutKeyText, float Height)
 	{
-		UTexture2D* IconTexture = LoadObject<UTexture2D>(nullptr, TexturePath);
+		USizeBox* Box = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), Name);
+		Box->SetHeightOverride(Height);
+		Box->SetMinDesiredWidth(Height);
 
-		UImage* Icon = nullptr;
-		if (IconTexture)
-		{
-			// Aspect-fit within ~62% of the circle's diameter rather than stretching to a square,
-			// so a non-square source icon (e.g. T_IconVoiceTest's headphones, wider than tall)
-			// isn't squashed.
-			const float FitSize = Diameter * 0.62f;
-			const float AspectRatio = (float)IconTexture->GetSizeX() / (float)IconTexture->GetSizeY();
-			const FVector2D IconSize = AspectRatio >= 1.f
-				? FVector2D(FitSize, FitSize / AspectRatio)
-				: FVector2D(FitSize * AspectRatio, FitSize);
+		// Parchment key face with a gold rim - the same light-on-dark contrast as the note panels, so the key
+		// reads as "the thing to press" next to the prompt's muted body text.
+		UBorder* Cap = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), *(Name.ToString() + TEXT("_Cap")));
+		Cap->SetBrush(FSlateRoundedBoxBrush(FLinearColor(0.93f, 0.89f, 0.80f, 1.f), 6.f, Color_Accent, 2.f));
+		Cap->SetPadding(FMargin(8.f, 0.f));
+		Cap->SetHorizontalAlignment(HAlign_Center);
+		Cap->SetVerticalAlignment(VAlign_Center);
+		Box->AddChild(Cap);
 
-			Icon = Tree->ConstructWidget<UImage>(UImage::StaticClass(), *(Name.ToString() + TEXT("_Icon")));
-			FSlateBrush IconBrush;
-			IconBrush.SetResourceObject(IconTexture);
-			IconBrush.ImageSize = IconSize;
-			Icon->SetBrush(IconBrush);
-		}
+		OutKeyText = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(Name.ToString() + TEXT("_Key")));
+		OutKeyText->SetFont(HeadingFont(FMath::RoundToInt(Height * 0.5f)));
+		OutKeyText->SetColorAndOpacity(FSlateColor(Color_Background));
+		OutKeyText->SetJustification(ETextJustify::Center);
+		Cap->SetContent(OutKeyText);
 
-		return MakeCircleIconButton(Tree, Name, Label, Icon, TintColor, Diameter, FontSize);
+		return Box;
 	}
 
 	UWidget* MakeMaskIcon(UWidgetTree* Tree, FName Name, float Size, const FLinearColor& MaskColor)
