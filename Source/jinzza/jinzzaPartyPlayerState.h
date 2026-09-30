@@ -34,9 +34,9 @@ public:
 	 * clears FaceType/VoiceFilter ("위장 해제" - disguise fully removed, not just visually ignored)
 	 * and force-drops whatever prop the owning AjinzzaCharacter was holding, since a ghost can no
 	 * longer pick up or use props (see AjinzzaCharacter::IsGhost). Movement/emotes stay available -
-	 * "탈락은 처벌이 아니라 전환" (elimination is a transition, not a punishment). Voice force-mute
-	 * (design doc section 8-2) isn't implemented here - it needs a real voice backend
-	 * (UVoiceDisguiseComponent/UProximityVoiceComponent, Week 6), which doesn't exist yet. */
+	 * "탈락은 처벌이 아니라 전환" (elimination is a transition, not a punishment). The ghost's voice is
+	 * force-muted (design doc section 8-2) by AjinzzaPlayerController (stops transmitting) and
+	 * UjinzzaProximityVoiceComponent (silenced on every listener), both reading IsGhost(). */
 	void ServerSetGhost(bool bNewGhost);
 
 	UFUNCTION(BlueprintPure, Category = "Party")

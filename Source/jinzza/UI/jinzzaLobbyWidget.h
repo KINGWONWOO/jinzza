@@ -37,7 +37,8 @@ public:
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
-	/** Shows a bottom-center interaction prompt (e.g. "Press E - Room Settings"), or hides it if PromptText is empty. */
+	/** Shows a bottom-center interaction prompt - a key cap with the key currently bound to IA_Interact, then
+	 * PromptText (e.g. "[E] Room Settings") - or hides it if PromptText is empty. */
 	void SetInteractionPrompt(const FText& PromptText);
 
 private:
@@ -55,6 +56,14 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> InteractPromptText;
+
+	/** Key cap label inside the prompt - see SetInteractionPrompt. */
+	UPROPERTY()
+	TObjectPtr<UTextBlock> InteractKeyText;
+
+	/** The whole prompt panel (key cap + InteractPromptText), shown/hidden as one. */
+	UPROPERTY()
+	TObjectPtr<UWidget> InteractPrompt;
 
 	/** Looping lobby BGM, started in NativeOnInitialized and stopped in NativeDestruct. */
 	UPROPERTY()

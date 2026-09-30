@@ -2,6 +2,9 @@
 
 #include "jinzzaLobbyWidget.h"
 #include "jinzzaUIStyle.h"
+#include "jinzzaInputKeys.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
@@ -53,12 +56,33 @@ void UjinzzaLobbyWidget::BuildWidgetTree()
 	PlayerCountText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("PlayerCountText"), FText::GetEmpty(), true);
 	JinzzaUI::AddSpaced(Stack, PlayerCountText, 4.f);
 
-	InteractPromptText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("InteractPromptText"), FText::GetEmpty());
-	if (UOverlaySlot* PromptSlot = Root->AddChildToOverlay(InteractPromptText))
+	// Same key cap + label look as the in-world prop prompt (UjinzzaInteractionPromptWidget).
+	UBorder* PromptPanel = JinzzaUI::MakeNoteBackground(WidgetTree, TEXT("InteractPrompt"));
+	PromptPanel->SetPadding(FMargin(16.f, 10.f));
+	if (UOverlaySlot* PromptSlot = Root->AddChildToOverlay(PromptPanel))
 	{
 		PromptSlot->SetHorizontalAlignment(HAlign_Center);
 		PromptSlot->SetVerticalAlignment(VAlign_Bottom);
 		PromptSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 60.f));
+	}
+	InteractPrompt = PromptPanel;
+
+	UHorizontalBox* PromptRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("InteractPromptRow"));
+	PromptPanel->SetContent(PromptRow);
+
+	UTextBlock* KeyLabel = nullptr;
+	UWidget* KeyCap = JinzzaUI::MakeKeyCap(WidgetTree, TEXT("InteractKeyCap"), KeyLabel, 30.f);
+	InteractKeyText = KeyLabel;
+	if (UHorizontalBoxSlot* KeySlot = PromptRow->AddChildToHorizontalBox(KeyCap))
+	{
+		KeySlot->SetVerticalAlignment(VAlign_Center);
+		KeySlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
+	}
+
+	InteractPromptText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("InteractPromptText"), FText::GetEmpty());
+	if (UHorizontalBoxSlot* TextSlot = PromptRow->AddChildToHorizontalBox(InteractPromptText))
+	{
+		TextSlot->SetVerticalAlignment(VAlign_Center);
 	}
 
 	// Welcome overlay shown once when the lobby first opens - see NativeOnInitialized/HideIntro.
@@ -88,10 +112,11 @@ void UjinzzaLobbyWidget::BuildWidgetTree()
 	JinzzaUI::AddSpaced(IntroStack, JinzzaUI::MakeTitleText(WidgetTree, TEXT("IntroTitle"), FText::FromString(TEXT("JINZZA")), 36), 0.f);
 	JinzzaUI::AddSpaced(IntroStack, JinzzaUI::MakeDivider(WidgetTree, TEXT("IntroDivider")));
 
-	UTextBlock* IntroBody = JinzzaUI::MakeBodyText(WidgetTree, TEXT("IntroBody"), FText::FromString(TEXT(
+	const FText InteractKey = JinzzaInput::GetKeyCapText(JinzzaInput::GetBoundKey(JinzzaInput::ResolveLocalPlayer(this), JinzzaInput::GetInteractAction()));
+	UTextBlock* IntroBody = JinzzaUI::MakeBodyText(WidgetTree, TEXT("IntroBody"), FText::Format(FText::FromString(TEXT(
 		"Welcome to the lobby. Wait for everyone to join, visit the Wardrobe kiosk to customize "
-		"your look, and press E at any kiosk to interact. The host can invite friends and start "
-		"the match when ready.")));
+		"your look, and press {0} at any kiosk to interact. The host can invite friends and start "
+		"the match when ready.")), InteractKey));
 	IntroBody->SetAutoWrapText(true);
 	IntroBody->SetJustification(ETextJustify::Center);
 	JinzzaUI::AddSpaced(IntroStack, IntroBody, 16.f);
@@ -107,9 +132,9 @@ void UjinzzaLobbyWidget::NativeOnInitialized()
 
 	BuildWidgetTree();
 
-	if (InteractPromptText)
+	if (InteractPrompt)
 	{
-		InteractPromptText->SetVisibility(ESlateVisibility::Collapsed);
+		InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
 	}
 
 	if (USoundBase* Bgm = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/Lobby/LobbyBgm__cut_83sec__Cue.LobbyBgm__cut_83sec__Cue")))
@@ -182,19 +207,24 @@ void UjinzzaLobbyWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTi
 
 void UjinzzaLobbyWidget::SetInteractionPrompt(const FText& PromptText)
 {
-	if (!InteractPromptText)
+	if (!InteractPrompt || !InteractPromptText)
 	{
 		return;
 	}
 
 	if (PromptText.IsEmpty())
 	{
-		InteractPromptText->SetVisibility(ESlateVisibility::Collapsed);
+		InteractPrompt->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	else
 	{
+		// Re-read every time it appears - the key may have been rebound in Settings since.
+		if (InteractKeyText)
+		{
+			InteractKeyText->SetText(JinzzaInput::GetKeyCapText(JinzzaInput::GetBoundKey(JinzzaInput::ResolveLocalPlayer(this), JinzzaInput::GetInteractAction())));
+		}
 		InteractPromptText->SetText(PromptText);
-		InteractPromptText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		InteractPrompt->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 }
 

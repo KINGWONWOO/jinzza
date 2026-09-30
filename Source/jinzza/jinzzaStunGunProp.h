@@ -13,15 +13,11 @@
  * of launching. Placeholder art only (temporary model, per user request) - see
  * BP_StunGun's Mesh component.
  *
+ * While stunned, the target's voice plays robotized for everyone (UjinzzaProximityVoiceComponent
+ * reads AjinzzaCharacter::IsStunned and overrides the round disguise filter for the duration -
+ * AjinzzaPartyPlayerState::VoiceFilter itself is left untouched).
+ *
  * NOT YET IMPLEMENTED - deferred, recorded here so it isn't forgotten:
- *   - Making the stunned target's voice sound mechanical/robotic. The project already has
- *     EJinzzaVoiceFilter::Robot (jinzzaRoundTypes.h) for exactly this kind of effect, but
- *     nothing consumes it anywhere yet - there's no proximity voice system at all (Vivox/EOS,
- *     design doc section 11, Week 6, still blocked on the plugin decision/install). Once that
- *     exists, this is the natural place to apply a temporary voice filter override for the
- *     stun's duration (distinct from AjinzzaPartyPlayerState::VoiceFilter, which is the
- *     round-disguise field with its own separate semantics - don't repurpose that one for
- *     this, it would collide with role-assignment's voice cloning).
  *   - Any stun VFX/SFX (screen shake, electric zap sound, a "stunned" icon over the victim's
  *     head) - AjinzzaCharacter::IsStunned() is real and replicated, so this is just a matter of
  *     a Blueprint/widget reading it once someone wants to add the presentation.

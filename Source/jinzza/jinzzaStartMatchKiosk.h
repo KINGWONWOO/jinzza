@@ -23,7 +23,7 @@ class JINZZA_API AjinzzaStartMatchKiosk : public AjinzzaInteractableKiosk
 public:
 	AjinzzaStartMatchKiosk();
 
-	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Press E - Start Match")); }
+	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Start Match")); }
 
 	/** Host-only: server-travels everyone to Lvl_Game. No-op for anything but the host's own local controller. */
 	virtual void Interact(APlayerController* Interactor) override;

@@ -28,7 +28,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	TSubclassOf<UjinzzaFriendInviteWidget> FriendInviteWidgetClass;
 
-	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Press E - Invite Friends")); }
+	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Invite Friends")); }
 
 	/** Opens the friend invite panel locally for Interactor (a no-op for anything but the interactor's own client). */
 	virtual void Interact(APlayerController* Interactor) override;

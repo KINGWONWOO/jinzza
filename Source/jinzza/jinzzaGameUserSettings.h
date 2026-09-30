@@ -22,10 +22,9 @@ enum class EJinzzaColorblindMode : uint8
 };
 
 /**
- * How the local player's mic is gated. Stored here as a plain preference - not consumed yet,
- * since UVoiceDisguiseComponent/UProximityVoiceComponent (design doc section 11) don't exist
- * yet, but per the reference brief's adaptation plan this needs to exist before those do: a
- * near-field voice game needs push-to-talk far more than a typical single-player-feel project.
+ * How the local player's mic is gated - applied by AjinzzaPlayerController (push-to-talk key
+ * IA_PushToTalk, rebindable in Settings > Controls). A near-field voice game needs push-to-talk
+ * far more than a typical single-player-feel project, so it's the default.
  */
 UENUM(BlueprintType)
 enum class EJinzzaMicInputMode : uint8
@@ -88,7 +87,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Settings|Audio")
 	USoundClass* GetVoiceSoundClass() const;
 
-	/** Push-to-talk vs. open mic for proximity/disguised voice (see UVoiceDisguiseComponent, once it exists). */
+	/** Push-to-talk vs. open mic for proximity voice (see AjinzzaPlayerController::ApplyMicInputMode). */
 	UFUNCTION(BlueprintPure, Category = "Settings|Audio")
 	EJinzzaMicInputMode GetMicInputMode() const;
 	UFUNCTION(BlueprintCallable, Category = "Settings|Audio")

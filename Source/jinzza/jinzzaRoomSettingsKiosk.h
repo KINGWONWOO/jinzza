@@ -34,7 +34,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	TSubclassOf<UjinzzaRoomSettingsWidget> RoomSettingsWidgetClass;
 
-	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Press E - Room Settings")); }
+	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Room Settings")); }
 
 	/** Opens the room settings panel locally for Interactor (a no-op for anything but the interactor's own client). */
 	virtual void Interact(APlayerController* Interactor) override;

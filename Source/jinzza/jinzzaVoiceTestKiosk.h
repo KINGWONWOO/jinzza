@@ -28,7 +28,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	TSubclassOf<UjinzzaVoiceTestWidget> VoiceTestWidgetClass;
 
-	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Press E - Voice Test")); }
+	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Voice Test")); }
 
 	/** Opens the voice test panel locally for Interactor (a no-op for anything but the interactor's own client). */
 	virtual void Interact(APlayerController* Interactor) override;

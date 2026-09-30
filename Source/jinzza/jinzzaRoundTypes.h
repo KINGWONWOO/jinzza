@@ -41,7 +41,7 @@ enum class EJinzzaFaceType : uint8
 	C
 };
 
-/** Voice filter preset (design doc section 13-5: SC_VoiceFilter_High/Low/Robot). Not yet consumed - Week 6 (Vivox). */
+/** Voice filter preset (design doc section 13-5: SC_VoiceFilter_High/Low/Robot). Applied by UjinzzaProximityVoiceComponent. */
 UENUM(BlueprintType)
 enum class EJinzzaVoiceFilter : uint8
 {

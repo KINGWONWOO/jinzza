@@ -5,7 +5,8 @@
 #include "jinzzaLobbyWidget.h"
 #include "jinzzaInteractableKiosk.h"
 #include "EngineUtils.h"
-#include "Components/InputComponent.h"
+#include "EnhancedInputComponent.h"
+#include "jinzzaInputKeys.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace
@@ -60,9 +61,12 @@ void AjinzzaLobbyPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
-	if (InputComponent)
+	// IA_Interact (not a hardcoded key), so kiosks follow the player's Interact rebind like props do.
+	// The pawn binds the same action for props; both handlers run, and each is a no-op with nothing in range.
+	UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent);
+	if (UInputAction* InteractAction = JinzzaInput::GetInteractAction(); EnhancedInputComponent && InteractAction)
 	{
-		InputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &AjinzzaLobbyPlayerController::OnInteractPressed);
+		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AjinzzaLobbyPlayerController::OnInteractPressed);
 	}
 }
 

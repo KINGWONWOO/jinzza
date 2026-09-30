@@ -30,7 +30,7 @@ class JINZZA_API AjinzzaLobbyClock : public AjinzzaInteractableKiosk
 public:
 	AjinzzaLobbyClock();
 
-	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Press E - Change Time of Day")); }
+	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Change Time of Day")); }
 
 	/** Host-only: advances the shared lobby TimeOfDay by one step. */
 	virtual void Interact(APlayerController* Interactor) override;

@@ -28,7 +28,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	TSubclassOf<UjinzzaCustomizationWidget> CustomizationWidgetClass;
 
-	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Press E - Wardrobe")); }
+	virtual FText GetInteractionPrompt() const override { return FText::FromString(TEXT("Wardrobe")); }
 
 	/** Opens the customization panel locally for Interactor (a no-op for anything but the interactor's own client). */
 	virtual void Interact(APlayerController* Interactor) override;

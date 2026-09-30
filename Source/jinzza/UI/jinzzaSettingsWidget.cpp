@@ -2,6 +2,8 @@
 
 #include "jinzzaSettingsWidget.h"
 #include "jinzzaGameUserSettings.h"
+#include "jinzzaInputKeys.h"
+#include "jinzzaPlayerController.h"
 #include "jinzzaUIStyle.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -225,6 +227,14 @@ void UjinzzaSettingsWidget::BuildWidgetTree()
 	SprintRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("SprintRebindLabel"), FText::FromString(TEXT("Default")));
 	AddRow(ControlsPage, TEXT("Sprint"), FText::FromString(TEXT("Sprint")), MakeRebindControl(WidgetTree, SprintRebindButton, SprintRebindLabel));
 
+	InteractRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("InteractRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
+	InteractRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("InteractRebindLabel"), FText::FromString(TEXT("Default")));
+	AddRow(ControlsPage, TEXT("Interact"), FText::FromString(TEXT("Interact")), MakeRebindControl(WidgetTree, InteractRebindButton, InteractRebindLabel));
+
+	PushToTalkRebindButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("PushToTalkRebindButton"), FText::FromString(TEXT("Rebind")), 16.f);
+	PushToTalkRebindLabel = JinzzaUI::MakeBodyText(WidgetTree, TEXT("PushToTalkRebindLabel"), FText::FromString(TEXT("Default")));
+	AddRow(ControlsPage, TEXT("PushToTalk"), FText::FromString(TEXT("Push to Talk")), MakeRebindControl(WidgetTree, PushToTalkRebindButton, PushToTalkRebindLabel));
+
 	// --- Gameplay page (index 3) ---
 	UVerticalBox* GameplayPage = MakePage(TEXT("GameplayPage"));
 	SubtitlesCheckBox = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("SubtitlesCheckBox"));
@@ -275,6 +285,8 @@ void UjinzzaSettingsWidget::NativeOnInitialized()
 
 	if (JumpRebindButton) JumpRebindButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnRebindJumpClicked);
 	if (SprintRebindButton) SprintRebindButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnRebindSprintClicked);
+	if (InteractRebindButton) InteractRebindButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnRebindInteractClicked);
+	if (PushToTalkRebindButton) PushToTalkRebindButton->OnClicked.AddDynamic(this, &UjinzzaSettingsWidget::OnRebindPushToTalkClicked);
 }
 
 void UjinzzaSettingsWidget::PopulateGraphicsPage()
@@ -469,9 +481,13 @@ void UjinzzaSettingsWidget::PopulateControlsPage()
 	RebindLabels.Reset();
 	RebindLabels.Add(TEXT("IA_Jump"), JumpRebindLabel);
 	RebindLabels.Add(TEXT("IA_Sprint"), SprintRebindLabel);
+	RebindLabels.Add(TEXT("IA_Interact"), InteractRebindLabel);
+	RebindLabels.Add(JinzzaInput::GetPushToTalkActionName(), PushToTalkRebindLabel);
 
-	RefreshRebindButtonLabel(TEXT("IA_Jump"));
-	RefreshRebindButtonLabel(TEXT("IA_Sprint"));
+	for (const TPair<FName, TObjectPtr<UTextBlock>>& Pair : RebindLabels)
+	{
+		RefreshRebindButtonLabel(Pair.Key);
+	}
 }
 
 void UjinzzaSettingsWidget::PopulateGameplayPage()
@@ -534,7 +550,19 @@ void UjinzzaSettingsWidget::RefreshRebindButtonLabel(FName ActionName)
 		if (*Label)
 		{
 			const FKey Key = Settings->GetKeyRebind(ActionName);
-			(*Label)->SetText(FText::FromString(Key.IsValid() ? Key.GetDisplayName().ToString() : TEXT("Default")));
+			if (Key.IsValid())
+			{
+				(*Label)->SetText(Key.GetDisplayName());
+			}
+			else if (ActionName == JinzzaInput::GetPushToTalkActionName())
+			{
+				// Push-to-talk's default lives in code, not in an IMC asset - worth spelling out.
+				(*Label)->SetText(FText::Format(FText::FromString(TEXT("{0} (Default)")), JinzzaInput::GetKeyCapText(JinzzaInput::GetDefaultPushToTalkKey())));
+			}
+			else
+			{
+				(*Label)->SetText(FText::FromString(TEXT("Default")));
+			}
 		}
 	}
 }
@@ -548,6 +576,12 @@ FReply UjinzzaSettingsWidget::NativeOnKeyDown(const FGeometry& InGeometry, const
 			Settings->SetKeyRebind(PendingRebindAction, InKeyEvent.GetKey());
 		}
 
+		// Live right away - key prompts ([E] Pick Up, kiosks) read the live mappings.
+		if (AjinzzaPlayerController* PC = Cast<AjinzzaPlayerController>(GetOwningPlayer()))
+		{
+			PC->RefreshKeyBindings();
+		}
+
 		RefreshRebindButtonLabel(PendingRebindAction);
 		bWaitingForRebind = false;
 		PendingRebindAction = NAME_None;
@@ -559,6 +593,8 @@ FReply UjinzzaSettingsWidget::NativeOnKeyDown(const FGeometry& InGeometry, const
 
 void UjinzzaSettingsWidget::OnRebindJumpClicked() { StartRebind(TEXT("IA_Jump")); }
 void UjinzzaSettingsWidget::OnRebindSprintClicked() { StartRebind(TEXT("IA_Sprint")); }
+void UjinzzaSettingsWidget::OnRebindInteractClicked() { StartRebind(TEXT("IA_Interact")); }
+void UjinzzaSettingsWidget::OnRebindPushToTalkClicked() { StartRebind(JinzzaInput::GetPushToTalkActionName()); }
 
 void UjinzzaSettingsWidget::SetActiveTab(int32 TabIndex)
 {
@@ -647,4 +683,9 @@ void UjinzzaSettingsWidget::OnApplyClicked()
 
 	Settings->ApplySettings(false);
 	Settings->SaveSettings();
+
+	if (AjinzzaPlayerController* PC = Cast<AjinzzaPlayerController>(GetOwningPlayer()))
+	{
+		PC->ApplyMicInputMode();
+	}
 }

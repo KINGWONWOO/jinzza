@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "jinzzaPlayerController.generated.h"
 
+class UInputAction;
 class UInputMappingContext;
 class UUserWidget;
 
@@ -13,6 +14,10 @@ class UUserWidget;
  *  Simple first person Player Controller
  *  Manages the input mapping context.
  *  Overrides the Player Camera Manager class.
+ *
+ *  Also owns the local mic (proximity voice - see UjinzzaProximityVoiceComponent for the playback side):
+ *  transmits while the push-to-talk key is held, or all the time in Open Mic mode (Settings > Audio), and
+ *  never while this player is a ghost.
  */
 UCLASS(abstract, config="Game")
 class JINZZA_API AjinzzaPlayerController : public APlayerController
@@ -23,6 +28,17 @@ public:
 
 	/** Constructor */
 	AjinzzaPlayerController();
+
+	/** Rebuilds the runtime mapping contexts from the current key rebinds, so a rebind in the Settings screen
+	 *  applies immediately instead of on the next level load. */
+	void RefreshKeyBindings();
+
+	/** Re-reads Push to Talk / Open Mic from settings and starts/stops transmitting to match. */
+	void ApplyMicInputMode();
+
+	/** True while this player's mic is transmitting. */
+	UFUNCTION(BlueprintPure, Category = "Voice")
+	bool IsTransmittingVoice() const { return bTransmittingVoice; }
 
 protected:
 
@@ -62,4 +78,37 @@ protected:
 	/** Runtime copies handed to the Enhanced Input subsystem in place of DefaultMappingContexts/MobileExcludedMappingContexts. */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UInputMappingContext>> RuntimeMappingContexts;
+
+	/** The engine calls this on login (and after seamless travel) with the server's push-to-talk default,
+	 *  resetting the mic - the local Mic Input Mode setting decides instead. */
+	virtual void ClientEnableNetworkVoice_Implementation(bool bEnable) override;
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+private:
+	/** Adds every runtime mapping context (DefaultMappingContexts, MobileExcludedMappingContexts, voice) to the local player. */
+	void AddRuntimeMappingContexts();
+
+	/** Push-to-talk has no .uasset - created here, named JinzzaInput::GetPushToTalkActionName() so the Settings
+	 *  screen can rebind it like any other action. */
+	void CreatePushToTalkAction();
+
+	void OnPushToTalkPressed();
+	void OnPushToTalkReleased();
+
+	/** Starts/stops transmitting to match push-to-talk, the mic mode setting and ghost state. */
+	void UpdateVoiceTransmission();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> PushToTalkAction;
+
+	bool bPushToTalkHeld = false;
+	bool bTransmittingVoice = false;
+
+	/** Set once the engine has finished setting up voice for this connection (ClientEnableNetworkVoice) - starting
+	 *  to talk before that silently does nothing. */
+	bool bVoiceReady = false;
+
+	/** Re-checks ghost state (which can change without any input) a few times a second. */
+	FTimerHandle VoiceUpdateTimerHandle;
 };

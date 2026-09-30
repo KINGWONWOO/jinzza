@@ -11,11 +11,8 @@
  * much larger radius. Unlike most props (one-shot use), this one toggles on/off each time it's
  * used.
  *
- * No proximity voice system exists yet (Week 6 - blocked on the Vivox plugin, see
- * docs/PROJECT_STATUS.md section 8), so IsAmplifying()/GetAmplifiedVoiceRadius() are a no-op
- * hook for now - the same "wire in real behavior once the dependency exists" pattern
- * UjinzzaGameUserSettings already uses for its audio sliders and UjinzzaDisguiseComponent uses
- * for face materials. Harmless today; a future voice component just needs to read these.
+ * UjinzzaProximityVoiceComponent reads IsAmplifying()/GetAmplifiedVoiceRadius() off whichever
+ * megaphone the speaker holds and widens that player's voice radius to match.
  */
 UCLASS()
 class JINZZA_API AjinzzaMegaphoneProp : public AjinzzaInteractableProp
@@ -26,7 +23,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Megaphone")
 	bool IsAmplifying() const { return bIsAmplifying; }
 
-	/** How far the wielder's voice should carry while amplifying - read by a future proximity voice component. */
+	/** How far the wielder's voice carries while amplifying - read by UjinzzaProximityVoiceComponent. */
 	UFUNCTION(BlueprintPure, Category = "Megaphone")
 	float GetAmplifiedVoiceRadius() const { return bIsAmplifying ? AmplifiedVoiceRadius : 0.f; }
 

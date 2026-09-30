@@ -3,6 +3,7 @@
 
 #include "jinzzaPlayerController.h"
 #include "EnhancedInputSubsystems.h"
+#include "EnhancedInputComponent.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
 #include "InputAction.h"
@@ -10,6 +11,9 @@
 #include "UObject/SoftObjectPath.h"
 #include "jinzzaCameraManager.h"
 #include "jinzzaGameUserSettings.h"
+#include "jinzzaInputKeys.h"
+#include "jinzzaPartyPlayerState.h"
+#include "TimerManager.h"
 #include "Blueprint/UserWidget.h"
 #include "jinzza.h"
 #include "Widgets/Input/SVirtualJoystick.h"
@@ -76,25 +80,148 @@ void AjinzzaPlayerController::SetupInputComponent()
 	// only add IMCs for local player controllers
 	if (IsLocalPlayerController())
 	{
-		// Add Input Mapping Context
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
-		{
-			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
-			{
-				Subsystem->AddMappingContext(BuildRuntimeMappingContext(CurrentContext), 0);
-			}
+		CreatePushToTalkAction();
+		AddRuntimeMappingContexts();
 
-			// only add these IMCs if we're not using mobile touch input
-			if (!ShouldUseTouchControls())
-			{
-				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
-				{
-					Subsystem->AddMappingContext(BuildRuntimeMappingContext(CurrentContext), 0);
-				}
-			}
+		if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
+		{
+			EnhancedInputComponent->BindAction(PushToTalkAction, ETriggerEvent::Started, this, &AjinzzaPlayerController::OnPushToTalkPressed);
+			EnhancedInputComponent->BindAction(PushToTalkAction, ETriggerEvent::Completed, this, &AjinzzaPlayerController::OnPushToTalkReleased);
+			EnhancedInputComponent->BindAction(PushToTalkAction, ETriggerEvent::Canceled, this, &AjinzzaPlayerController::OnPushToTalkReleased);
+		}
+
+		GetWorldTimerManager().SetTimer(VoiceUpdateTimerHandle, this, &AjinzzaPlayerController::UpdateVoiceTransmission, 0.25f, true);
+	}
+}
+
+void AjinzzaPlayerController::AddRuntimeMappingContexts()
+{
+	UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	for (UInputMappingContext* Existing : RuntimeMappingContexts)
+	{
+		if (Existing)
+		{
+			Subsystem->RemoveMappingContext(Existing);
 		}
 	}
-	
+	RuntimeMappingContexts.Reset();
+
+	// Add Input Mapping Context
+	for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
+	{
+		Subsystem->AddMappingContext(BuildRuntimeMappingContext(CurrentContext), 0);
+	}
+
+	// only add these IMCs if we're not using mobile touch input
+	if (!ShouldUseTouchControls())
+	{
+		for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
+		{
+			Subsystem->AddMappingContext(BuildRuntimeMappingContext(CurrentContext), 0);
+		}
+	}
+
+	if (PushToTalkAction)
+	{
+		const UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get();
+		const FKey Rebind = Settings ? Settings->GetKeyRebind(JinzzaInput::GetPushToTalkActionName()) : EKeys::Invalid;
+
+		UInputMappingContext* VoiceContext = NewObject<UInputMappingContext>(this);
+		VoiceContext->MapKey(PushToTalkAction, Rebind.IsValid() ? Rebind : JinzzaInput::GetDefaultPushToTalkKey());
+		RuntimeMappingContexts.Add(VoiceContext);
+		Subsystem->AddMappingContext(VoiceContext, 0);
+	}
+}
+
+void AjinzzaPlayerController::RefreshKeyBindings()
+{
+	if (IsLocalPlayerController())
+	{
+		AddRuntimeMappingContexts();
+	}
+}
+
+void AjinzzaPlayerController::CreatePushToTalkAction()
+{
+	if (!PushToTalkAction)
+	{
+		// ValueType defaults to Boolean - a plain held/released button.
+		PushToTalkAction = NewObject<UInputAction>(this, JinzzaInput::GetPushToTalkActionName());
+	}
+}
+
+void AjinzzaPlayerController::OnPushToTalkPressed()
+{
+	bPushToTalkHeld = true;
+	UpdateVoiceTransmission();
+}
+
+void AjinzzaPlayerController::OnPushToTalkReleased()
+{
+	bPushToTalkHeld = false;
+	UpdateVoiceTransmission();
+}
+
+void AjinzzaPlayerController::ApplyMicInputMode()
+{
+	UpdateVoiceTransmission();
+}
+
+void AjinzzaPlayerController::ClientEnableNetworkVoice_Implementation(bool bEnable)
+{
+	// Deliberately not calling Super: it would start/stop talking from the server-wide bRequiresPushToTalk
+	// instead of this player's own setting. The engine's call resets the mic, so resync from scratch.
+	bVoiceReady = true;
+	bTransmittingVoice = false;
+	ToggleSpeaking(false);
+	UpdateVoiceTransmission();
+}
+
+void AjinzzaPlayerController::UpdateVoiceTransmission()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	bool bWantTransmit = false;
+	const UWorld* World = GetWorld();
+	if (bVoiceReady && World && World->GetNetMode() != NM_Standalone)
+	{
+		const UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get();
+		const bool bOpenMic = Settings && Settings->GetMicInputMode() == EJinzzaMicInputMode::OpenMic;
+		bWantTransmit = bOpenMic || bPushToTalkHeld;
+
+		// Ghosts can't talk (design doc 8-2). Other players' machines also silence a ghost's voice on their side
+		// (UjinzzaProximityVoiceComponent), so this is just to stop sending it at all.
+		if (const AjinzzaPartyPlayerState* PartyState = GetPlayerState<AjinzzaPartyPlayerState>())
+		{
+			bWantTransmit &= !PartyState->IsGhost();
+		}
+	}
+
+	if (bWantTransmit != bTransmittingVoice)
+	{
+		bTransmittingVoice = bWantTransmit;
+		ToggleSpeaking(bWantTransmit);
+	}
+}
+
+void AjinzzaPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GetWorldTimerManager().ClearTimer(VoiceUpdateTimerHandle);
+	if (bTransmittingVoice)
+	{
+		bTransmittingVoice = false;
+		ToggleSpeaking(false);
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 bool AjinzzaPlayerController::ShouldUseTouchControls() const
@@ -110,7 +237,8 @@ UInputMappingContext* AjinzzaPlayerController::BuildRuntimeMappingContext(UInput
 		return nullptr;
 	}
 
-	UInputMappingContext* Runtime = DuplicateObject<UInputMappingContext>(Source, this);
+	// Unique name - RefreshKeyBindings rebuilds these while the previous copies still exist under the same outer.
+	UInputMappingContext* Runtime = DuplicateObject<UInputMappingContext>(Source, this, MakeUniqueObjectName(this, UInputMappingContext::StaticClass(), Source->GetFName()));
 	RuntimeMappingContexts.Add(Runtime);
 
 	// Iterate the mappings as they existed on Source (Runtime starts as an identical copy), applying any

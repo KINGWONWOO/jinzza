@@ -63,6 +63,10 @@ protected:
 	void OnRebindJumpClicked();
 	UFUNCTION()
 	void OnRebindSprintClicked();
+	UFUNCTION()
+	void OnRebindInteractClicked();
+	UFUNCTION()
+	void OnRebindPushToTalkClicked();
 
 private:
 	void PopulateGraphicsPage();
@@ -137,6 +141,10 @@ private:
 	UPROPERTY() TObjectPtr<UTextBlock> JumpRebindLabel;
 	UPROPERTY() TObjectPtr<UButton> SprintRebindButton;
 	UPROPERTY() TObjectPtr<UTextBlock> SprintRebindLabel;
+	UPROPERTY() TObjectPtr<UButton> InteractRebindButton;
+	UPROPERTY() TObjectPtr<UTextBlock> InteractRebindLabel;
+	UPROPERTY() TObjectPtr<UButton> PushToTalkRebindButton;
+	UPROPERTY() TObjectPtr<UTextBlock> PushToTalkRebindLabel;
 
 	UPROPERTY()
 	TMap<FName, TObjectPtr<UTextBlock>> RebindLabels;
