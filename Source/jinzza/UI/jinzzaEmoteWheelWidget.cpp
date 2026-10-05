@@ -26,7 +26,7 @@ void UjinzzaEmoteWheelWidget::BuildWidgetTree()
 	// relative to the viewport edges like the old cross layout was) so the backdrop circle, its
 	// X-divider, and the four quadrant labels all stay proportional to each other and to the
 	// mouse dead-zone/quadrant math in NativeTick regardless of resolution.
-	constexpr float WheelDiameter = 380.f;
+	constexpr float WheelDiameter = 460.f;
 
 	USizeBox* WheelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("WheelBox"));
 	WheelBox->SetWidthOverride(WheelDiameter);
@@ -41,10 +41,10 @@ void UjinzzaEmoteWheelWidget::BuildWidgetTree()
 		WheelSlot->SetVerticalAlignment(VAlign_Center);
 	}
 
-	// The circle - fills the Wheel square, corner radius = half the size makes a Border a circle
-	// (same FSlateRoundedBoxBrush trick as JinzzaUI::MakeCircleIconButton).
+	// The circle - fills the Wheel square, corner radius = half the size makes a Border a circle.
+	// Sticker style (matches T_Logo): near-black with a thick white outline.
 	UBorder* Backdrop = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Backdrop"));
-	Backdrop->SetBrush(FSlateRoundedBoxBrush(FLinearColor(JinzzaUI::Color_Panel.R, JinzzaUI::Color_Panel.G, JinzzaUI::Color_Panel.B, 0.85f), WheelDiameter * 0.5f, JinzzaUI::Color_PanelBorder, 2.f));
+	Backdrop->SetBrush(FSlateRoundedBoxBrush(JinzzaUI::Sticker_Ink.CopyWithNewOpacity(0.9f), WheelDiameter * 0.5f, JinzzaUI::Sticker_White, 5.f));
 	Wheel->AddChildToOverlay(Backdrop);
 
 	// X-divider - NativeTick already splits the wheel into Up/Down/Left/Right by comparing
@@ -52,7 +52,13 @@ void UjinzzaEmoteWheelWidget::BuildWidgetTree()
 	// bars rotated +/-45 and crossing at center visualizes that same split as a literal "X".
 	auto AddDividerBar = [this, Wheel, WheelDiameter](const TCHAR* Name, float AngleDegrees)
 	{
-		UWidget* Bar = JinzzaUI::MakeDivider(WidgetTree, Name, WheelDiameter * 0.9f, 3.f);
+		// White rounded bar (in place of the old gold JinzzaUI::MakeDivider), inset from the outline.
+		USizeBox* Bar = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), Name);
+		Bar->SetWidthOverride(WheelDiameter * 0.86f);
+		Bar->SetHeightOverride(4.f);
+		UBorder* BarShape = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), *(FString(Name) + TEXT("_Shape")));
+		BarShape->SetBrush(FSlateRoundedBoxBrush(JinzzaUI::Sticker_White.CopyWithNewOpacity(0.5f), 2.f));
+		Bar->AddChild(BarShape);
 		Bar->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 		Bar->SetRenderTransformAngle(AngleDegrees);
 		if (UOverlaySlot* BarSlot = Wheel->AddChildToOverlay(Bar))
@@ -66,7 +72,7 @@ void UjinzzaEmoteWheelWidget::BuildWidgetTree()
 
 	auto AddQuadrantLabel = [this, Wheel](const TCHAR* Name, const FText& Text, EHorizontalAlignment HAlign, EVerticalAlignment VAlign, const FMargin& LabelPadding) -> UTextBlock*
 	{
-		UTextBlock* Label = JinzzaUI::MakeSectionHeading(WidgetTree, Name, Text);
+		UTextBlock* Label = JinzzaUI::MakeStickerHeading(WidgetTree, Name, Text, 26);
 		Label->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 		if (UOverlaySlot* Slot = Wheel->AddChildToOverlay(Label))
 		{
@@ -149,7 +155,7 @@ void UjinzzaEmoteWheelWidget::RefreshHighlight()
 			return;
 		}
 		const bool bSelected = HoveredEmote == Emote;
-		Label->SetColorAndOpacity(FSlateColor(bSelected ? JinzzaUI::Color_Accent : JinzzaUI::Color_TextMuted));
+		Label->SetColorAndOpacity(FSlateColor(bSelected ? JinzzaUI::Sticker_Yellow : JinzzaUI::Sticker_SubText));
 		// Enlarging the hovered slice is the wheel's only "you're about to pick this" cue for now
 		// - there's no per-emote icon art yet (see class comment) for a nicer treatment.
 		Label->SetRenderScale(FVector2D(bSelected ? 1.35f : 1.f));

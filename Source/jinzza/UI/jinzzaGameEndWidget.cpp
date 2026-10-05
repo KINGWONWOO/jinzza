@@ -20,7 +20,8 @@ void UjinzzaGameEndWidget::BuildWidgetTree()
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
 	WidgetTree->RootWidget = Root;
 
-	EndGameButton = JinzzaUI::MakeWarningButton(WidgetTree, TEXT("EndGameButton"), FText::FromString(TEXT("End Game")));
+	// Filled coral sticker pill (the "stop/leave" color), matching the menus / T_Logo.
+	EndGameButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("EndGameButton"), FText::FromString(TEXT("End Game")), JinzzaUI::Sticker_Coral, 28.f, true);
 	if (UOverlaySlot* ButtonSlot = Root->AddChildToOverlay(EndGameButton))
 	{
 		ButtonSlot->SetHorizontalAlignment(HAlign_Center);

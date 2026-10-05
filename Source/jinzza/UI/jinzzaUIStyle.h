@@ -13,6 +13,13 @@ class UTextBlock;
 class UBorder;
 class UVerticalBox;
 class UVerticalBoxSlot;
+class UOverlay;
+class USlider;
+class UCheckBox;
+class UComboBoxString;
+class USpinBox;
+class UEditableTextBox;
+class UHorizontalBox;
 
 /** Binds click/hover sound playback to buttons built via JinzzaUI::MakeStyledButton. Not for direct use. */
 UCLASS()
@@ -118,6 +125,69 @@ namespace JinzzaUI
 	 * the rest on the right. Used by every C++-built settings/kiosk-style panel to avoid
 	 * repeating this layout per control - see UjinzzaSettingsWidget/UjinzzaRoomSettingsWidget. */
 	UWidget* MakeLabeledRow(UWidgetTree* Tree, FName Name, const FText& LabelText, UWidget* Control, float LabelWidth = 160.f);
+
+	// --- "Sticker" style (matches T_Logo: near-black fills, thick white outlines, fully rounded
+	// shapes, candy accent colors). Used by the main menu and its popup pages (Settings /
+	// Customization / Voice Test - so also the lobby's wardrobe and voice-test kiosks). ---
+
+	extern const FLinearColor Sticker_Ink;
+	extern const FLinearColor Sticker_White;
+	extern const FLinearColor Sticker_Shadow;
+	extern const FLinearColor Sticker_SubText;
+	extern const FLinearColor Sticker_Yellow;
+	extern const FLinearColor Sticker_Sky;
+	extern const FLinearColor Sticker_Coral;
+	extern const FLinearColor Sticker_Pink;
+	extern const FLinearColor Sticker_Teal;
+	inline constexpr float StickerOutline = 4.f;
+	inline constexpr float StickerShadowDepth = 6.f;
+
+	/** A sticker surface: a rounded face (Fill + white outline) on a solid drop shadow ShadowDepth px
+	 * below. Returns the root overlay to add to a parent; OutFace is the face border to put content in. */
+	UOverlay* MakeSticker(UWidgetTree* Tree, FName Name, const FLinearColor& Fill, float Radius, UBorder*& OutFace,
+		float Outline = StickerOutline, float ShadowDepth = StickerShadowDepth);
+
+	/** Big popup-page panel sticker (black, white outline, deep shadow). Same return/OutFace contract as MakeSticker. */
+	UOverlay* MakeStickerPanel(UWidgetTree* Tree, FName Name, UBorder*& OutFace);
+
+	/** Button style for a sticker pill: black + white outline with white text, filling with Accent
+	 * (dark text) on hover. bSelected/bFilled draws it filled with Accent all the time (a selected
+	 * tab or a primary action). Text inside must use FSlateColor::UseForeground() to follow it. */
+	FButtonStyle MakeStickerButtonStyle(const FLinearColor& Accent, bool bFilled);
+
+	/** Sticker pill text button (label is the button's only child, a UTextBlock - same structure as MakeStyledButton). */
+	UButton* MakeStickerButton(UWidgetTree* Tree, FName Name, const FText& Label, const FLinearColor& Accent,
+		float FontSize = 20.f, bool bFilled = false);
+
+	/** Re-styles a MakeStickerButton as selected (filled) or not - for tab buttons. */
+	void SetStickerButtonSelected(UButton* Button, const FLinearColor& Accent, bool bSelected);
+
+	/** Big white heading for sticker panels. */
+	UTextBlock* MakeStickerHeading(UWidgetTree* Tree, FName Name, const FText& Text, int32 Size = 32);
+
+	/** Small filled circle with a white outline (e.g. a "selected" marker). */
+	UWidget* MakeStickerDot(UWidgetTree* Tree, FName Name, const FLinearColor& Color, float Size = 14.f);
+
+	/** Sticker look for stock UMG input controls (rounded black fields with white outlines, yellow accents). */
+	void ApplyStickerStyle(USlider* Slider);
+	void ApplyStickerStyle(UCheckBox* CheckBox);
+	void ApplyStickerStyle(UComboBoxString* ComboBox);
+	void ApplyStickerStyle(USpinBox* SpinBox);
+	void ApplyStickerStyle(UEditableTextBox* TextBox);
+
+	/** Section label drawn like T_Logo's "who is?" speech bubble (white bubble, dark text, a little
+	 * tail bottom-left), added to Page. bFirst skips the extra top gap. */
+	void AddStickerSection(UWidgetTree* Tree, UVerticalBox* Page, FName Name, const FText& Title, bool bFirst = false);
+
+	/** Big, readable row: 24pt white label left (fills), Control right in a ControlWidth-wide box. Added to Page. */
+	UHorizontalBox* AddStickerRow(UWidgetTree* Tree, UVerticalBox* Page, FName Name, const FText& Label, UWidget* Control,
+		float ControlWidth = 520.f, int32 LabelFontSize = 24);
+
+	/** Big white body text for sticker panels (hints, status lines). */
+	UTextBlock* MakeStickerText(UWidgetTree* Tree, FName Name, const FText& Text, int32 Size = 20, bool bMuted = false);
+
+	/** Sticker-style key cap (white key, yellow rim, dark key name) - same contract as MakeKeyCap. */
+	UWidget* MakeStickerKeyCap(UWidgetTree* Tree, FName Name, UTextBlock*& OutKeyText, float Height = 34.f);
 
 	/** Adds Child to the bottom of Box with TopPadding above it, filled horizontally - the
 	 * standard vertical-stack spacing helper every C++-built panel needs. Centralized here

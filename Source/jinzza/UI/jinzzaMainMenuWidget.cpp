@@ -10,6 +10,7 @@
 #include "Components/Button.h"
 #include "Components/Widget.h"
 #include "Components/Image.h"
+#include "Engine/Texture2D.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/Border.h"
 #include "Components/Overlay.h"
@@ -17,6 +18,9 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/SizeBox.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Blueprint/WidgetTree.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -40,6 +44,235 @@ namespace
 
 	constexpr float FadeInDuration = 0.35f;
 
+	// Backdrop tint per page: fully clear on the button page so the 3D menu scene (the seal - see
+	// AjinzzaMenuBackgroundCharacter) shows through, dimmed behind the popup pages so their
+	// floating panels stay readable over it.
+	const FLinearColor BackdropClear(0.f, 0.f, 0.f, 0.f);
+	const FLinearColor BackdropDimmed(0.035f, 0.030f, 0.045f, 0.82f);
+
+	// Sticker palette/constants and MakeSticker live in JinzzaUI (jinzzaUIStyle.h) - shared with the popup pages.
+
+	enum class EStickerIcon : uint8
+	{
+		Plus,
+		Lines,
+		Cross,
+	};
+
+	/** A rounded bar (for the badge icons), optionally rotated. */
+	UWidget* MakeStickerBar(UWidgetTree* Tree, const FString& Name, float Width, float Height, const FLinearColor& Color, float Angle = 0.f)
+	{
+		USizeBox* Box = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *Name);
+		Box->SetWidthOverride(Width);
+		Box->SetHeightOverride(Height);
+		Box->SetRenderTransformAngle(Angle);
+		UBorder* Bar = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), *(Name + TEXT("_Shape")));
+		Bar->SetBrush(FSlateRoundedBoxBrush(Color, Height * 0.5f));
+		Box->AddChild(Bar);
+		return Box;
+	}
+
+	/** White round badge with a simple black icon drawn from bars - the "face" of each menu entry. */
+	UWidget* MakeStickerBadge(UWidgetTree* Tree, FName Name, EStickerIcon Icon, float Size)
+	{
+		const FString Base = Name.ToString();
+		USizeBox* Box = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), Name);
+		Box->SetWidthOverride(Size);
+		Box->SetHeightOverride(Size);
+
+		UBorder* Circle = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), *(Base + TEXT("_Circle")));
+		Circle->SetBrush(FSlateRoundedBoxBrush(JinzzaUI::Sticker_White, Size * 0.5f));
+		Circle->SetHorizontalAlignment(HAlign_Center);
+		Circle->SetVerticalAlignment(VAlign_Center);
+		Box->AddChild(Circle);
+
+		const float Long = Size * 0.46f;
+		const float Thick = FMath::Max(4.f, Size * 0.12f);
+		if (Icon == EStickerIcon::Lines)
+		{
+			UVerticalBox* Lines = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), *(Base + TEXT("_Lines")));
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				UWidget* Bar = MakeStickerBar(Tree, Base + FString::Printf(TEXT("_Line%d"), Index), Long, Thick * 0.85f, JinzzaUI::Sticker_Ink);
+				if (UVerticalBoxSlot* BarSlot = Lines->AddChildToVerticalBox(Bar))
+				{
+					BarSlot->SetPadding(FMargin(0.f, Index == 0 ? 0.f : Thick * 0.55f, 0.f, 0.f));
+				}
+			}
+			Circle->SetContent(Lines);
+		}
+		else
+		{
+			const float Angle = (Icon == EStickerIcon::Cross) ? 45.f : 0.f;
+			UOverlay* Glyph = Tree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), *(Base + TEXT("_Glyph")));
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				const bool bVertical = Index == 1;
+				UWidget* Bar = MakeStickerBar(Tree, Base + FString::Printf(TEXT("_Bar%d"), Index),
+					bVertical ? Thick : Long, bVertical ? Long : Thick, JinzzaUI::Sticker_Ink, Angle);
+				if (UOverlaySlot* BarSlot = Glyph->AddChildToOverlay(Bar))
+				{
+					BarSlot->SetHorizontalAlignment(HAlign_Center);
+					BarSlot->SetVerticalAlignment(VAlign_Center);
+				}
+			}
+			Circle->SetContent(Glyph);
+		}
+		return Box;
+	}
+
+	UButton* MakeMainMenuInvisibleButton(UWidgetTree* Tree, FName Name)
+	{
+		FSlateBrush Transparent;
+		Transparent.DrawAs = ESlateBrushDrawType::NoDrawType;
+		FButtonStyle Style;
+		Style.Normal = Transparent;
+		Style.Hovered = Transparent;
+		Style.Pressed = Transparent;
+		Style.Disabled = Transparent;
+		Style.NormalPadding = FMargin(0.f);
+		Style.PressedPadding = FMargin(0.f);
+
+		UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
+		Button->SetStyle(Style);
+
+		UJinzzaUIButtonSounds* SoundBinder = NewObject<UJinzzaUIButtonSounds>(Button);
+		Button->OnClicked.AddDynamic(SoundBinder, &UJinzzaUIButtonSounds::HandleClicked);
+		Button->OnHovered.AddDynamic(SoundBinder, &UJinzzaUIButtonSounds::HandleHovered);
+		return Button;
+	}
+
+	UJinzzaMenuStickerFx* BindStickerFx(UObject* Owner, UButton* Button, UBorder* Face, const FLinearColor& NormalFill, const FLinearColor& HoverFill, float Radius)
+	{
+		UJinzzaMenuStickerFx* Fx = NewObject<UJinzzaMenuStickerFx>(Owner);
+		Fx->Bind(Button, Face,
+			FSlateRoundedBoxBrush(NormalFill, Radius, JinzzaUI::Sticker_White, JinzzaUI::StickerOutline),
+			FSlateRoundedBoxBrush(HoverFill, Radius, JinzzaUI::Sticker_White, JinzzaUI::StickerOutline));
+		return Fx;
+	}
+
+	/**
+	 * Bottom-left main-menu entry, in the logo's sticker style: a wide black pill with a thick white
+	 * outline and drop shadow, a white round badge icon on the left, a big label over a small Korean
+	 * sub-label. On hover the pill fills with Accent and the text turns dark (UJinzzaMenuStickerFx).
+	 * Uniquely named since anonymous-namespace helpers can collide across .cpp files in unity
+	 * builds - see JinzzaUI::AddSpaced's comment.
+	 */
+	UButton* MakeMainMenuStickerButton(UObject* Owner, TArray<TObjectPtr<UJinzzaMenuStickerFx>>& FxStore, UWidgetTree* Tree, FName Name,
+		const FText& Label, const FText& SubLabel, const FLinearColor& Accent, EStickerIcon Icon, bool bBig)
+	{
+		const FString Base = Name.ToString();
+		const float Height = bBig ? 92.f : 76.f;
+		const float Radius = (Height - JinzzaUI::StickerShadowDepth) * 0.5f;
+
+		UButton* Button = MakeMainMenuInvisibleButton(Tree, Name);
+
+		USizeBox* Box = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(Base + TEXT("_Box")));
+		Box->SetWidthOverride(bBig ? 430.f : 400.f);
+		Box->SetHeightOverride(Height);
+		Button->AddChild(Box);
+
+		UBorder* Face = nullptr;
+		Box->AddChild(JinzzaUI::MakeSticker(Tree, *(Base + TEXT("_Sticker")), JinzzaUI::Sticker_Ink, Radius, Face));
+
+		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), *(Base + TEXT("_Row")));
+		Face->SetContent(Row);
+
+		const float BadgeSize = Height - JinzzaUI::StickerShadowDepth - 24.f;
+		if (UHorizontalBoxSlot* BadgeSlot = Row->AddChildToHorizontalBox(MakeStickerBadge(Tree, *(Base + TEXT("_Badge")), Icon, BadgeSize)))
+		{
+			BadgeSlot->SetVerticalAlignment(VAlign_Center);
+			BadgeSlot->SetPadding(FMargin(14.f, 0.f, 0.f, 0.f));
+		}
+
+		UVerticalBox* TextStack = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), *(Base + TEXT("_Text")));
+		if (UHorizontalBoxSlot* TextSlot = Row->AddChildToHorizontalBox(TextStack))
+		{
+			TextSlot->SetSize(ESlateSizeRule::Fill);
+			TextSlot->SetVerticalAlignment(VAlign_Center);
+			TextSlot->SetPadding(FMargin(16.f, 0.f, 20.f, 0.f));
+		}
+
+		UTextBlock* LabelText = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(Base + TEXT("_Label")));
+		LabelText->SetText(Label);
+		LabelText->SetFont(JinzzaUI::HeadingFont(bBig ? 36 : 29));
+		LabelText->SetColorAndOpacity(FSlateColor(JinzzaUI::Sticker_White));
+		TextStack->AddChildToVerticalBox(LabelText);
+
+		UTextBlock* SubLabelText = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(Base + TEXT("_SubLabel")));
+		SubLabelText->SetText(SubLabel);
+		SubLabelText->SetFont(JinzzaUI::BodyFont(bBig ? 16 : 14));
+		SubLabelText->SetColorAndOpacity(FSlateColor(JinzzaUI::Sticker_SubText));
+		if (UVerticalBoxSlot* SubSlot = TextStack->AddChildToVerticalBox(SubLabelText))
+		{
+			SubSlot->SetPadding(FMargin(2.f, -4.f, 0.f, 0.f));
+		}
+
+		UJinzzaMenuStickerFx* Fx = BindStickerFx(Owner, Button, Face, JinzzaUI::Sticker_Ink, Accent, Radius);
+		Fx->AddText(LabelText, JinzzaUI::Sticker_White, JinzzaUI::Sticker_Ink);
+		Fx->AddText(SubLabelText, JinzzaUI::Sticker_SubText, FLinearColor::FromSRGBColor(FColor(60, 50, 40)));
+		FxStore.Add(Fx);
+		return Button;
+	}
+
+	/**
+	 * Bottom-right round sticker button (Customize / Voice Test): a colored circle with a thick white
+	 * outline and drop shadow holding IconContent, over a small black caption pill. Hover brightens
+	 * the circle toward white.
+	 */
+	UButton* MakeMainMenuRoundSticker(UObject* Owner, TArray<TObjectPtr<UJinzzaMenuStickerFx>>& FxStore, UWidgetTree* Tree, FName Name,
+		const FText& Caption, UWidget* IconContent, const FLinearColor& Fill)
+	{
+		const FString Base = Name.ToString();
+		constexpr float Diameter = 100.f;
+		const float Radius = Diameter * 0.5f;
+
+		UButton* Button = MakeMainMenuInvisibleButton(Tree, Name);
+		UVerticalBox* Column = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), *(Base + TEXT("_Column")));
+		Button->AddChild(Column);
+
+		USizeBox* CircleBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(Base + TEXT("_CircleBox")));
+		CircleBox->SetWidthOverride(Diameter);
+		CircleBox->SetHeightOverride(Diameter + JinzzaUI::StickerShadowDepth);
+		UBorder* Face = nullptr;
+		CircleBox->AddChild(JinzzaUI::MakeSticker(Tree, *(Base + TEXT("_Circle")), Fill, Radius, Face));
+		Face->SetHorizontalAlignment(HAlign_Center);
+		Face->SetVerticalAlignment(VAlign_Center);
+		if (IconContent)
+		{
+			Face->SetContent(IconContent);
+		}
+		if (UVerticalBoxSlot* CircleSlot = Column->AddChildToVerticalBox(CircleBox))
+		{
+			CircleSlot->SetHorizontalAlignment(HAlign_Center);
+		}
+
+		UBorder* CaptionFace = nullptr;
+		UOverlay* CaptionSticker = JinzzaUI::MakeSticker(Tree, *(Base + TEXT("_Caption")), JinzzaUI::Sticker_Ink, 16.f, CaptionFace);
+		CaptionFace->SetPadding(FMargin(14.f, 3.f, 14.f, 5.f));
+		UTextBlock* CaptionText = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(Base + TEXT("_CaptionText")));
+		CaptionText->SetText(Caption);
+		CaptionText->SetFont(JinzzaUI::HeadingFont(17));
+		CaptionText->SetColorAndOpacity(FSlateColor(JinzzaUI::Sticker_White));
+		CaptionText->SetJustification(ETextJustify::Center);
+		CaptionFace->SetContent(CaptionText);
+		if (UVerticalBoxSlot* CaptionSlot = Column->AddChildToVerticalBox(CaptionSticker))
+		{
+			CaptionSlot->SetHorizontalAlignment(HAlign_Center);
+			CaptionSlot->SetPadding(FMargin(0.f, 6.f, 0.f, 0.f));
+		}
+
+		FxStore.Add(BindStickerFx(Owner, Button, Face, Fill, FMath::Lerp(Fill, JinzzaUI::Sticker_White, 0.35f), Radius));
+		return Button;
+	}
+
+	/** Soft dark drop shadow so text stays readable over the 3D scene rather than a flat backdrop. */
+	void AddMainMenuTextShadow(UTextBlock* Text, float Offset)
+	{
+		Text->SetShadowOffset(FVector2D(0.f, Offset));
+		Text->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.75f));
+	}
+
 	// TEMP placeholder panel-open sound (menu entry, opening Settings/Customization) - swap for
 	// real SFX later. Shared here since three call sites in this file all want the same one-shot.
 	void PlayPanelOpenSound(const UObject* WorldContext)
@@ -58,8 +291,11 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 		return;
 	}
 
+	// Clear on the button page so the 3D menu scene shows through - see ShowPage.
 	UBorder* Background = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Background"));
-	Background->SetBrush(FSlateColorBrush(JinzzaUI::Color_Background));
+	Background->SetBrush(FSlateColorBrush(FLinearColor::White));
+	Background->SetBrushColor(BackdropClear);
+	Backdrop = Background;
 	Background->SetHorizontalAlignment(HAlign_Fill);
 	Background->SetVerticalAlignment(VAlign_Fill);
 	WidgetTree->RootWidget = Background;
@@ -76,13 +312,12 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 		SwitcherSlot->SetVerticalAlignment(VAlign_Fill);
 	}
 
-	// Top-left company logo badge: a gold-tinted mask icon (JinzzaUI::MakeMaskIcon, built from
-	// primitives, no source art) instead of a plain "LOGO" text placeholder - the mask directly
-	// evokes the "Imitator" disguise premise the whole game is built around, giving the badge real
-	// identity until a real logo asset exists.
+	// Top-left company logo badge (placeholder until a real company logo exists): a rounded-square
+	// sticker in the same style as everything else on this page, holding the white mask icon - the
+	// mask evokes the "Imitator" disguise premise the game is built around.
 	USizeBox* LogoBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("LogoBox"));
 	LogoBox->SetWidthOverride(84.f);
-	LogoBox->SetHeightOverride(84.f);
+	LogoBox->SetHeightOverride(84.f + JinzzaUI::StickerShadowDepth);
 	if (UOverlaySlot* LogoSlot = RootOverlay->AddChildToOverlay(LogoBox))
 	{
 		LogoSlot->SetHorizontalAlignment(HAlign_Left);
@@ -90,20 +325,20 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 		LogoSlot->SetPadding(FMargin(24.f));
 	}
 
-	UBorder* LogoBadge = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("LogoBadge"));
-	LogoBadge->SetHorizontalAlignment(HAlign_Center);
-	LogoBadge->SetVerticalAlignment(VAlign_Center);
-	LogoBox->AddChild(LogoBadge);
-	LogoBadge->SetContent(JinzzaUI::MakeMaskIcon(WidgetTree, TEXT("LogoMaskIcon"), 48.f, JinzzaUI::Color_Accent));
+	UBorder* LogoBadgeFace = nullptr;
+	LogoBox->AddChild(JinzzaUI::MakeSticker(WidgetTree, TEXT("LogoBadge"), JinzzaUI::Sticker_Ink, 22.f, LogoBadgeFace));
+	LogoBadgeFace->SetHorizontalAlignment(HAlign_Center);
+	LogoBadgeFace->SetVerticalAlignment(VAlign_Center);
+	LogoBadgeFace->SetContent(JinzzaUI::MakeMaskIcon(WidgetTree, TEXT("LogoMaskIcon"), 50.f, JinzzaUI::Sticker_White));
 
 	// Page 0: the button-list page. ButtonsPageRoot is the whole page (fade target).
 	UOverlay* ButtonsPage = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("ButtonsPageRoot"));
 	ButtonsPageRoot = ButtonsPage;
 
-	// Branding column (title/divider/status) sits top-right, per user request - distinct from the
-	// small top-left LogoBox above (that's the company logo corner badge, not the game title).
+	// Branding column (game logo + status) sits top-right - distinct from the small top-left
+	// LogoBox above (that's the company logo corner badge, not the game title).
 	USizeBox* BrandingBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("BrandingBox"));
-	BrandingBox->SetWidthOverride(360.f);
+	BrandingBox->SetWidthOverride(640.f);
 	if (UOverlaySlot* BrandingSlot = ButtonsPage->AddChildToOverlay(BrandingBox))
 	{
 		BrandingSlot->SetHorizontalAlignment(HAlign_Right);
@@ -114,95 +349,91 @@ void UjinzzaMainMenuWidget::BuildWidgetTree()
 	UVerticalBox* BrandingStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BrandingStack"));
 	BrandingBox->AddChild(BrandingStack);
 
-	UTextBlock* TitleText = JinzzaUI::MakeTitleText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("JINZZA")), 44);
-	TitleText->SetJustification(ETextJustify::Right);
-	JinzzaUI::AddSpaced(BrandingStack, TitleText, 0.f);
-
-	// Korean tagline directly under the title - "Find the Real One", the game's own concept in one
-	// line, so the logo lockup reads as more than just a wordmark. Uses the same SacheonUju font
-	// every other Korean string in this project already relies on (kiosk signs, etc.), so there's
-	// no tofu-glyph risk.
-	UTextBlock* TaglineText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("TaglineText"), FText::FromString(TEXT("진짜를 찾아라")), true);
-	TaglineText->SetJustification(ETextJustify::Right);
-	JinzzaUI::AddSpaced(BrandingStack, TaglineText, 2.f);
-
-	if (UVerticalBoxSlot* DividerSlot = JinzzaUI::AddSpaced(BrandingStack, JinzzaUI::MakeDivider(WidgetTree, TEXT("TitleDivider")), 8.f))
+	// Game logo image (T_Logo: the seal + "who is? JINZZA" sticker wordmark, with alpha), sized by
+	// width and right-aligned. Falls back to the plain text title if the texture is missing.
+	if (UTexture2D* LogoTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/JINZZA/UI/Textures/T_Logo.T_Logo")))
 	{
-		DividerSlot->SetHorizontalAlignment(HAlign_Right);
+		constexpr float LogoWidth = 600.f;
+		const float LogoHeight = LogoWidth * LogoTexture->GetSizeY() / FMath::Max(LogoTexture->GetSizeX(), 1);
+
+		USizeBox* LogoImageBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("TitleLogoBox"));
+		LogoImageBox->SetWidthOverride(LogoWidth);
+		LogoImageBox->SetHeightOverride(LogoHeight);
+
+		UImage* LogoImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("TitleLogo"));
+		LogoImage->SetBrushFromTexture(LogoTexture, false);
+		LogoImageBox->AddChild(LogoImage);
+
+		if (UVerticalBoxSlot* LogoSlot = JinzzaUI::AddSpaced(BrandingStack, LogoImageBox, 0.f))
+		{
+			LogoSlot->SetHorizontalAlignment(HAlign_Right);
+		}
+	}
+	else
+	{
+		UTextBlock* TitleText = JinzzaUI::MakeTitleText(WidgetTree, TEXT("TitleText"), FText::FromString(TEXT("JINZZA")), 76);
+		TitleText->SetJustification(ETextJustify::Right);
+		TitleText->SetColorAndOpacity(FSlateColor(JinzzaUI::Sticker_White));
+		AddMainMenuTextShadow(TitleText, 4.f);
+		JinzzaUI::AddSpaced(BrandingStack, TitleText, 0.f);
 	}
 
-	StatusText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("StatusText"), FText::GetEmpty(), true);
+	StatusText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("StatusText"), FText::GetEmpty(), false);
 	StatusText->SetJustification(ETextJustify::Right);
-	JinzzaUI::AddSpaced(BrandingStack, StatusText, 10.f);
+	StatusText->SetFont(JinzzaUI::BodyFont(18));
+	AddMainMenuTextShadow(StatusText, 2.f);
+	JinzzaUI::AddSpaced(BrandingStack, StatusText, 8.f);
 
-	// Left button column - Host/Settings/Quit - and right button column - Customize/Voice Test -
-	// both anchored to the bottom of the screen. Reworked this round to match JINZZA's own
-	// established noir courtroom/interrogation theme (see JinzzaUI's header comment) rather than
-	// NOOB-GAME's cute pastel look used in earlier rounds: Host/Settings/Quit are back to
-	// JinzzaUI::MakePrimaryButton/MakeSecondaryButton/MakeWarningButton - the exact same noir pill
-	// buttons every other jinzza screen (Settings/Customization/kiosks) already uses, instead of
-	// the imported NOOB pill art. (T_ButtonHost/T_ButtonSettings/T_ButtonQuit/T_ButtonCustomize are
-	// now unused content assets, left in place rather than deleted.)
+	// Left button column - Host/Settings/Quit - anchored bottom-left, as wide sticker pills (see
+	// MakeMainMenuStickerButton). Host is the big primary one; hover colors: Host yellow, Settings
+	// sky blue, Quit coral.
 	USizeBox* ButtonsLeftBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ButtonsLeftBox"));
 	if (UOverlaySlot* ButtonsLeftSlot = ButtonsPage->AddChildToOverlay(ButtonsLeftBox))
 	{
 		ButtonsLeftSlot->SetHorizontalAlignment(HAlign_Left);
 		ButtonsLeftSlot->SetVerticalAlignment(VAlign_Bottom);
-		ButtonsLeftSlot->SetPadding(FMargin(64.f, 0.f, 0.f, 64.f));
+		ButtonsLeftSlot->SetPadding(FMargin(56.f, 0.f, 0.f, 56.f));
 	}
 
-	// Dark noir panel (JinzzaUI::MakePanelBackground - the same "room wall" surface Settings/
-	// Customization use) behind the button column, replacing last round's light NOOB-toned
-	// parchment note-card now that the buttons themselves are noir again - a light card behind
-	// dark noir buttons would clash the same way the pastel buttons clashed with the dark page
-	// background before that.
-	UBorder* ButtonsLeftPanel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("ButtonsLeftPanel"));
-	ButtonsLeftPanel->SetPadding(FMargin(28.f, 24.f, 28.f, 24.f));
-	ButtonsLeftBox->AddChild(ButtonsLeftPanel);
-
 	UVerticalBox* ButtonsLeftStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ButtonsLeftStack"));
-	ButtonsLeftPanel->SetContent(ButtonsLeftStack);
+	ButtonsLeftBox->AddChild(ButtonsLeftStack);
 
-	HostButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("HostButton"), FText::FromString(TEXT("Host Game")));
+	HostButton = MakeMainMenuStickerButton(this, StickerFx, WidgetTree, TEXT("HostButton"), FText::FromString(TEXT("Host Game")),
+		FText::FromString(TEXT("방 만들기")), JinzzaUI::Sticker_Yellow, EStickerIcon::Plus, true);
 	JinzzaUI::AddSpaced(ButtonsLeftStack, HostButton, 0.f);
 
-	SettingsButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("SettingsButton"), FText::FromString(TEXT("Settings")));
-	JinzzaUI::AddSpaced(ButtonsLeftStack, SettingsButton);
+	SettingsButton = MakeMainMenuStickerButton(this, StickerFx, WidgetTree, TEXT("SettingsButton"), FText::FromString(TEXT("Settings")),
+		FText::FromString(TEXT("설정")), JinzzaUI::Sticker_Sky, EStickerIcon::Lines, false);
+	JinzzaUI::AddSpaced(ButtonsLeftStack, SettingsButton, 10.f);
 
-	QuitButton = JinzzaUI::MakeWarningButton(WidgetTree, TEXT("QuitButton"), FText::FromString(TEXT("Quit")));
-	JinzzaUI::AddSpaced(ButtonsLeftStack, QuitButton);
+	QuitButton = MakeMainMenuStickerButton(this, StickerFx, WidgetTree, TEXT("QuitButton"), FText::FromString(TEXT("Quit")),
+		FText::FromString(TEXT("게임 종료")), JinzzaUI::Sticker_Coral, EStickerIcon::Cross, false);
+	JinzzaUI::AddSpaced(ButtonsLeftStack, QuitButton, 10.f);
 
+	// Right column - Customize / Voice Test - as round candy-colored stickers with their own caption
+	// pills, so they need no panel behind them over the 3D scene.
 	USizeBox* ButtonsRightBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ButtonsRightBox"));
 	if (UOverlaySlot* ButtonsRightSlot = ButtonsPage->AddChildToOverlay(ButtonsRightBox))
 	{
 		ButtonsRightSlot->SetHorizontalAlignment(HAlign_Right);
 		ButtonsRightSlot->SetVerticalAlignment(VAlign_Bottom);
-		ButtonsRightSlot->SetPadding(FMargin(0.f, 0.f, 64.f, 64.f));
+		ButtonsRightSlot->SetPadding(FMargin(0.f, 0.f, 64.f, 56.f));
 	}
 
-	// Same noir panel as ButtonsLeftPanel above.
-	UBorder* ButtonsRightPanel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("ButtonsRightPanel"));
-	ButtonsRightPanel->SetPadding(FMargin(28.f, 24.f, 28.f, 24.f));
-	ButtonsRightBox->AddChild(ButtonsRightPanel);
-
 	UVerticalBox* ButtonsRightStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ButtonsRightStack"));
-	ButtonsRightPanel->SetContent(ButtonsRightStack);
+	ButtonsRightBox->AddChild(ButtonsRightStack);
 
-	// Customize and Voice Test are circular icon buttons (JinzzaUI::MakeCircleIconButton) with
-	// purpose-built icons instead of NOOB-GAME's cat/headphones art: a masquerade mask
-	// (JinzzaUI::MakeMaskIcon, crimson - the "guilty"/Imitator accent) directly evokes the
-	// Imitator disguise premise for Customize, and a microphone (JinzzaUI::MakeMicIcon, gold - the
-	// "judge" accent) for Voice Test - both built from plain rounded-box primitives, no source art
-	// needed, so there's no dependency on finding an on-theme asset that doesn't exist.
-	UWidget* MaskIcon = JinzzaUI::MakeMaskIcon(WidgetTree, TEXT("CustomizationMaskIcon"), 40.f, JinzzaUI::Color_TextPrimary);
-	CustomizationButton = JinzzaUI::MakeCircleIconButton(WidgetTree, TEXT("CustomizationButton"), FText::FromString(TEXT("Customize")), MaskIcon, JinzzaUI::Color_AccentAlt);
+	// Mask (the "Imitator" disguise premise) for Customize, microphone for Voice Test - both drawn
+	// from primitives (JinzzaUI::MakeMaskIcon/MakeMicIcon), white on the colored circle.
+	UWidget* MaskIcon = JinzzaUI::MakeMaskIcon(WidgetTree, TEXT("CustomizationMaskIcon"), 56.f, JinzzaUI::Sticker_White);
+	CustomizationButton = MakeMainMenuRoundSticker(this, StickerFx, WidgetTree, TEXT("CustomizationButton"), FText::FromString(TEXT("Customize")), MaskIcon, JinzzaUI::Sticker_Pink);
 	if (UVerticalBoxSlot* ButtonSlot = JinzzaUI::AddSpaced(ButtonsRightStack, CustomizationButton, 0.f)) { ButtonSlot->SetHorizontalAlignment(HAlign_Center); }
 
 	// Voice Test button - opens VoiceTestWidget as a central switcher page (Page_VoiceTest),
-	// same pattern as Settings/Customization, rather than the old always-visible corner panel.
-	UWidget* MicIcon = JinzzaUI::MakeMicIcon(WidgetTree, TEXT("VoiceTestMicIcon"), 40.f, JinzzaUI::Color_Background);
-	VoiceTestButton = JinzzaUI::MakeCircleIconButton(WidgetTree, TEXT("VoiceTestButton"), FText::FromString(TEXT("Voice Test")), MicIcon, JinzzaUI::Color_Accent);
-	if (UVerticalBoxSlot* ButtonSlot = JinzzaUI::AddSpaced(ButtonsRightStack, VoiceTestButton, 20.f)) { ButtonSlot->SetHorizontalAlignment(HAlign_Center); }
+	// same pattern as Settings/Customization.
+	UWidget* MicIcon = JinzzaUI::MakeMicIcon(WidgetTree, TEXT("VoiceTestMicIcon"), 50.f, JinzzaUI::Sticker_White);
+	VoiceTestButton = MakeMainMenuRoundSticker(this, StickerFx, WidgetTree, TEXT("VoiceTestButton"), FText::FromString(TEXT("Voice Test")), MicIcon, JinzzaUI::Sticker_Teal);
+	if (UVerticalBoxSlot* ButtonSlot = JinzzaUI::AddSpaced(ButtonsRightStack, VoiceTestButton, 18.f)) { ButtonSlot->SetHorizontalAlignment(HAlign_Center); }
 
 	Switcher->AddChild(ButtonsPage);
 
@@ -266,10 +497,7 @@ void UjinzzaMainMenuWidget::NativeOnInitialized()
 		VoiceTestWidget->OnBackRequested.AddUObject(this, &UjinzzaMainMenuWidget::ShowButtonsPage);
 	}
 
-	if (Switcher)
-	{
-		Switcher->SetActiveWidgetIndex(Page_Buttons);
-	}
+	ShowPage(Page_Buttons);
 
 	TryWireCharacterPreview();
 
@@ -357,9 +585,19 @@ UjinzzaGameInstance* UjinzzaMainMenuWidget::GetJinzzaGameInstance() const
 
 void UjinzzaMainMenuWidget::ShowButtonsPage()
 {
+	ShowPage(Page_Buttons);
+}
+
+void UjinzzaMainMenuWidget::ShowPage(int32 PageIndex)
+{
 	if (Switcher)
 	{
-		Switcher->SetActiveWidgetIndex(Page_Buttons);
+		Switcher->SetActiveWidgetIndex(PageIndex);
+	}
+
+	if (Backdrop)
+	{
+		Backdrop->SetBrushColor(PageIndex == Page_Buttons ? BackdropClear : BackdropDimmed);
 	}
 }
 
@@ -373,29 +611,20 @@ void UjinzzaMainMenuWidget::OnHostClicked()
 
 void UjinzzaMainMenuWidget::OnSettingsClicked()
 {
-	if (Switcher)
-	{
-		Switcher->SetActiveWidgetIndex(Page_Settings);
-		PlayPanelOpenSound(this);
-	}
+	ShowPage(Page_Settings);
+	PlayPanelOpenSound(this);
 }
 
 void UjinzzaMainMenuWidget::OnCustomizationClicked()
 {
-	if (Switcher)
-	{
-		Switcher->SetActiveWidgetIndex(Page_Customization);
-		PlayPanelOpenSound(this);
-	}
+	ShowPage(Page_Customization);
+	PlayPanelOpenSound(this);
 }
 
 void UjinzzaMainMenuWidget::OnVoiceTestClicked()
 {
-	if (Switcher)
-	{
-		Switcher->SetActiveWidgetIndex(Page_VoiceTest);
-		PlayPanelOpenSound(this);
-	}
+	ShowPage(Page_VoiceTest);
+	PlayPanelOpenSound(this);
 }
 
 void UjinzzaMainMenuWidget::OnQuitClicked()
@@ -412,4 +641,65 @@ void UjinzzaMainMenuWidget::HandleSessionStatusChanged(EJinzzaSessionStatus Stat
 	{
 		StatusText->SetText(FText::FromString(Message));
 	}
+}
+
+void UJinzzaMenuStickerFx::Bind(UButton* InButton, UBorder* InFace, const FSlateBrush& InNormalBrush, const FSlateBrush& InHoverBrush)
+{
+	Face = InFace;
+	NormalBrush = InNormalBrush;
+	HoverBrush = InHoverBrush;
+
+	if (InButton)
+	{
+		InButton->OnHovered.AddDynamic(this, &UJinzzaMenuStickerFx::HandleHovered);
+		InButton->OnUnhovered.AddDynamic(this, &UJinzzaMenuStickerFx::HandleUnhovered);
+		InButton->OnPressed.AddDynamic(this, &UJinzzaMenuStickerFx::HandlePressed);
+		InButton->OnReleased.AddDynamic(this, &UJinzzaMenuStickerFx::HandleReleased);
+	}
+}
+
+void UJinzzaMenuStickerFx::AddText(UTextBlock* Text, const FLinearColor& NormalColor, const FLinearColor& HoverColor)
+{
+	Texts.Add(Text);
+	TextNormalColors.Add(NormalColor);
+	TextHoverColors.Add(HoverColor);
+}
+
+void UJinzzaMenuStickerFx::Apply(bool bHot, float LiftY)
+{
+	if (Face)
+	{
+		Face->SetBrush(bHot ? HoverBrush : NormalBrush);
+		Face->SetRenderTranslation(FVector2D(0.f, LiftY));
+	}
+	for (int32 Index = 0; Index < Texts.Num(); ++Index)
+	{
+		if (Texts[Index])
+		{
+			Texts[Index]->SetColorAndOpacity(FSlateColor(bHot ? TextHoverColors[Index] : TextNormalColors[Index]));
+		}
+	}
+}
+
+void UJinzzaMenuStickerFx::HandleHovered()
+{
+	bHovered = true;
+	Apply(true, -3.f);
+}
+
+void UJinzzaMenuStickerFx::HandleUnhovered()
+{
+	bHovered = false;
+	Apply(false, 0.f);
+}
+
+void UJinzzaMenuStickerFx::HandlePressed()
+{
+	// Sink most of the way onto the drop shadow.
+	Apply(true, JinzzaUI::StickerShadowDepth - 2.f);
+}
+
+void UJinzzaMenuStickerFx::HandleReleased()
+{
+	Apply(bHovered, bHovered ? -3.f : 0.f);
 }

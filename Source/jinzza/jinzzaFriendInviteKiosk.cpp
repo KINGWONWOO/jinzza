@@ -35,7 +35,7 @@ AjinzzaFriendInviteKiosk::AjinzzaFriendInviteKiosk()
 	Label->SetVerticalAlignment(EVRTA_TextCenter);
 	Label->SetWorldSize(28.f);
 	Label->SetText(FText::FromString(TEXT("INVITE FRIENDS")));
-	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
+	Label->SetTextRenderColor(JinzzaUI::Sticker_Yellow.ToFColor(true));
 
 	// No automatic WBP_FriendInvite lookup here: that Blueprint asset doesn't exist on disk at all
 	// (confirmed via AssetTools.find_assets - zero results) - a ConstructorHelpers::FClassFinder

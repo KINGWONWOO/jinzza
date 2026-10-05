@@ -35,7 +35,7 @@ AjinzzaWardrobeKiosk::AjinzzaWardrobeKiosk()
 	Label->SetVerticalAlignment(EVRTA_TextCenter);
 	Label->SetWorldSize(28.f);
 	Label->SetText(FText::FromString(TEXT("WARDROBE")));
-	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
+	Label->SetTextRenderColor(JinzzaUI::Sticker_Yellow.ToFColor(true));
 
 	static ConstructorHelpers::FClassFinder<UjinzzaCustomizationWidget> CustomizationWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_Customization"));
 	if (CustomizationWidgetBPClass.Succeeded())

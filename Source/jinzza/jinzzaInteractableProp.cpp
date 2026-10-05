@@ -13,6 +13,7 @@
 #include "jinzzaAudio.h"
 #include "jinzzaCharacter.h"
 #include "jinzzaInteractionPromptWidget.h"
+#include "jinzzaInteractHighlight.h"
 
 AjinzzaInteractableProp::AjinzzaInteractableProp()
 {
@@ -74,11 +75,14 @@ void AjinzzaInteractableProp::ShowInteractionPrompt()
 		PromptWidget->RefreshBoundKey();
 	}
 	InteractionPromptComponent->SetVisibility(true);
+	// White outline while this is the prop the local player would interact with.
+	JinzzaHighlight::SetHighlighted(this, true);
 }
 
 void AjinzzaInteractableProp::HideInteractionPrompt()
 {
 	InteractionPromptComponent->SetVisibility(false);
+	JinzzaHighlight::SetHighlighted(this, false);
 }
 
 void AjinzzaInteractableProp::AttachToHolder(APawn* NewHolder)

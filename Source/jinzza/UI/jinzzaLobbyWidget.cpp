@@ -19,6 +19,9 @@
 #include "Components/AudioComponent.h"
 #include "Sound/SoundBase.h"
 #include "Brushes/SlateColorBrush.h"
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
+#include "TimerManager.h"
 
 void UjinzzaLobbyWidget::BuildWidgetTree()
 {
@@ -30,8 +33,11 @@ void UjinzzaLobbyWidget::BuildWidgetTree()
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
 	WidgetTree->RootWidget = Root;
 
-	UBorder* InfoPanel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("InfoPanel"));
-	InfoPanel->SetPadding(FMargin(20.f));
+	// Top-left room info card - a black sticker (white outline + drop shadow), matching the main
+	// menu / T_Logo.
+	UBorder* InfoFace = nullptr;
+	UOverlay* InfoPanel = JinzzaUI::MakeSticker(WidgetTree, TEXT("InfoPanel"), JinzzaUI::Sticker_Ink, 24.f, InfoFace);
+	InfoFace->SetPadding(FMargin(22.f, 16.f, 22.f, 18.f));
 	if (UOverlaySlot* PanelSlot = Root->AddChildToOverlay(InfoPanel))
 	{
 		PanelSlot->SetHorizontalAlignment(HAlign_Left);
@@ -40,25 +46,39 @@ void UjinzzaLobbyWidget::BuildWidgetTree()
 	}
 
 	USizeBox* InfoBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("InfoBox"));
-	InfoBox->SetWidthOverride(360.f);
-	InfoPanel->SetContent(InfoBox);
+	InfoBox->SetWidthOverride(420.f);
+	InfoFace->SetContent(InfoBox);
 
 	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("InfoStack"));
 	InfoBox->AddChild(Stack);
 
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeTitleText(WidgetTree, TEXT("LobbyTitle"), FText::FromString(TEXT("Lobby")), 28), 0.f);
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("TitleDivider")));
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("RoomHeading"), FText::FromString(TEXT("Room"))), 16.f);
+	// "Lobby" title with a yellow dot, sticker-label style.
+	UHorizontalBox* TitleRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("LobbyTitleRow"));
+	if (UHorizontalBoxSlot* DotSlot = TitleRow->AddChildToHorizontalBox(JinzzaUI::MakeStickerDot(WidgetTree, TEXT("LobbyTitleDot"), JinzzaUI::Sticker_Yellow, 16.f)))
+	{
+		DotSlot->SetVerticalAlignment(VAlign_Center);
+		DotSlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
+	}
+	if (UHorizontalBoxSlot* TitleSlot = TitleRow->AddChildToHorizontalBox(JinzzaUI::MakeStickerHeading(WidgetTree, TEXT("LobbyTitle"), FText::FromString(TEXT("Lobby")), 38)))
+	{
+		TitleSlot->SetVerticalAlignment(VAlign_Center);
+	}
+	JinzzaUI::AddSpaced(Stack, TitleRow, 0.f);
 
-	SettingsText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("SettingsText"), FText::GetEmpty());
-	JinzzaUI::AddSpaced(Stack, SettingsText, 6.f);
+	// Auto-wrap so a long room name or settings line stays inside the 420px card instead of
+	// running past its right edge.
+	SettingsText = JinzzaUI::MakeStickerText(WidgetTree, TEXT("SettingsText"), FText::GetEmpty(), 20);
+	SettingsText->SetAutoWrapText(true);
+	JinzzaUI::AddSpaced(Stack, SettingsText, 10.f);
 
-	PlayerCountText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("PlayerCountText"), FText::GetEmpty(), true);
+	PlayerCountText = JinzzaUI::MakeStickerText(WidgetTree, TEXT("PlayerCountText"), FText::GetEmpty(), 20, true);
+	PlayerCountText->SetAutoWrapText(true);
 	JinzzaUI::AddSpaced(Stack, PlayerCountText, 4.f);
 
 	// Same key cap + label look as the in-world prop prompt (UjinzzaInteractionPromptWidget).
-	UBorder* PromptPanel = JinzzaUI::MakeNoteBackground(WidgetTree, TEXT("InteractPrompt"));
-	PromptPanel->SetPadding(FMargin(16.f, 10.f));
+	UBorder* PromptFace = nullptr;
+	UOverlay* PromptPanel = JinzzaUI::MakeSticker(WidgetTree, TEXT("InteractPrompt"), JinzzaUI::Sticker_Ink, 26.f, PromptFace);
+	PromptFace->SetPadding(FMargin(12.f, 8.f, 18.f, 8.f));
 	if (UOverlaySlot* PromptSlot = Root->AddChildToOverlay(PromptPanel))
 	{
 		PromptSlot->SetHorizontalAlignment(HAlign_Center);
@@ -68,10 +88,10 @@ void UjinzzaLobbyWidget::BuildWidgetTree()
 	InteractPrompt = PromptPanel;
 
 	UHorizontalBox* PromptRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("InteractPromptRow"));
-	PromptPanel->SetContent(PromptRow);
+	PromptFace->SetContent(PromptRow);
 
 	UTextBlock* KeyLabel = nullptr;
-	UWidget* KeyCap = JinzzaUI::MakeKeyCap(WidgetTree, TEXT("InteractKeyCap"), KeyLabel, 30.f);
+	UWidget* KeyCap = JinzzaUI::MakeStickerKeyCap(WidgetTree, TEXT("InteractKeyCap"), KeyLabel, 42.f);
 	InteractKeyText = KeyLabel;
 	if (UHorizontalBoxSlot* KeySlot = PromptRow->AddChildToHorizontalBox(KeyCap))
 	{
@@ -79,51 +99,11 @@ void UjinzzaLobbyWidget::BuildWidgetTree()
 		KeySlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 	}
 
-	InteractPromptText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("InteractPromptText"), FText::GetEmpty());
+	InteractPromptText = JinzzaUI::MakeStickerText(WidgetTree, TEXT("InteractPromptText"), FText::GetEmpty(), 24);
 	if (UHorizontalBoxSlot* TextSlot = PromptRow->AddChildToHorizontalBox(InteractPromptText))
 	{
 		TextSlot->SetVerticalAlignment(VAlign_Center);
 	}
-
-	// Welcome overlay shown once when the lobby first opens - see NativeOnInitialized/HideIntro.
-	// Added last so it draws on top of InfoPanel/InteractPromptText.
-	UBorder* IntroScrim = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("IntroScrim"));
-	IntroScrim->SetBrush(FSlateColorBrush(FLinearColor(0.f, 0.f, 0.f, 0.75f)));
-	IntroScrim->SetHorizontalAlignment(HAlign_Center);
-	IntroScrim->SetVerticalAlignment(VAlign_Center);
-	if (UOverlaySlot* ScrimSlot = Root->AddChildToOverlay(IntroScrim))
-	{
-		ScrimSlot->SetHorizontalAlignment(HAlign_Fill);
-		ScrimSlot->SetVerticalAlignment(VAlign_Fill);
-	}
-	IntroOverlay = IntroScrim;
-
-	UBorder* IntroPanel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("IntroPanel"));
-	IntroPanel->SetPadding(FMargin(36.f));
-	IntroScrim->SetContent(IntroPanel);
-
-	USizeBox* IntroBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("IntroBox"));
-	IntroBox->SetWidthOverride(520.f);
-	IntroPanel->SetContent(IntroBox);
-
-	UVerticalBox* IntroStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("IntroStack"));
-	IntroBox->AddChild(IntroStack);
-
-	JinzzaUI::AddSpaced(IntroStack, JinzzaUI::MakeTitleText(WidgetTree, TEXT("IntroTitle"), FText::FromString(TEXT("JINZZA")), 36), 0.f);
-	JinzzaUI::AddSpaced(IntroStack, JinzzaUI::MakeDivider(WidgetTree, TEXT("IntroDivider")));
-
-	const FText InteractKey = JinzzaInput::GetKeyCapText(JinzzaInput::GetBoundKey(JinzzaInput::ResolveLocalPlayer(this), JinzzaInput::GetInteractAction()));
-	UTextBlock* IntroBody = JinzzaUI::MakeBodyText(WidgetTree, TEXT("IntroBody"), FText::Format(FText::FromString(TEXT(
-		"Welcome to the lobby. Wait for everyone to join, visit the Wardrobe kiosk to customize "
-		"your look, and press {0} at any kiosk to interact. The host can invite friends and start "
-		"the match when ready.")), InteractKey));
-	IntroBody->SetAutoWrapText(true);
-	IntroBody->SetJustification(ETextJustify::Center);
-	JinzzaUI::AddSpaced(IntroStack, IntroBody, 16.f);
-
-	UTextBlock* IntroHint = JinzzaUI::MakeBodyText(WidgetTree, TEXT("IntroHint"), FText::FromString(TEXT("This will close automatically...")), true);
-	IntroHint->SetJustification(ETextJustify::Center);
-	JinzzaUI::AddSpaced(IntroStack, IntroHint, 16.f);
 }
 
 void UjinzzaLobbyWidget::NativeOnInitialized()
@@ -142,11 +122,6 @@ void UjinzzaLobbyWidget::NativeOnInitialized()
 		MusicComponent = UGameplayStatics::SpawnSound2D(this, Bgm, 1.f, 1.f, 0.f, nullptr, true, false);
 	}
 
-	if (IntroOverlay)
-	{
-		GetWorld()->GetTimerManager().SetTimer(IntroTimerHandle, this, &UjinzzaLobbyWidget::HideIntro, 5.f, false);
-	}
-
 	// TEMP placeholder one-shot entry sound - swap for real SFX later.
 	if (USoundBase* EntrySound = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/UISounds/LobbyPannelOpen__cut_1sec_.LobbyPannelOpen__cut_1sec_")))
 	{
@@ -162,20 +137,7 @@ void UjinzzaLobbyWidget::NativeDestruct()
 		MusicComponent = nullptr;
 	}
 
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(IntroTimerHandle);
-	}
-
 	Super::NativeDestruct();
-}
-
-void UjinzzaLobbyWidget::HideIntro()
-{
-	if (IntroOverlay)
-	{
-		IntroOverlay->SetVisibility(ESlateVisibility::Collapsed);
-	}
 }
 
 void UjinzzaLobbyWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -198,7 +160,7 @@ void UjinzzaLobbyWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTi
 		{
 			const FJinzzaMatchSettings& Settings = LobbyGameState->MatchSettings;
 			SettingsText->SetText(FText::FromString(FString::Printf(
-				TEXT("%s\nMax Players: %d | Judges: %d | Votes: %d | Question Cycles: %d\nPhase Speed: %s | Roles: %s"),
+				TEXT("%s\nMax Players: %d | Judges: %d | Votes: %d\nQuestion Cycles: %d\nPhase Speed: %s | Roles: %s"),
 				*Settings.RoomName, Settings.MaxPlayers, Settings.JudgeCount, Settings.VoteCount,
 				Settings.QuestionTimeCycles, *Settings.PhaseSpeed, *Settings.RoleAssignMethod)));
 		}

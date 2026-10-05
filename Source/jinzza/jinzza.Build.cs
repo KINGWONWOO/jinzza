@@ -30,6 +30,10 @@ public class jinzza : ModuleRules
 			// UjinzzaVoiceTestWidget) are AUDIOMIXER_API - AudioCapture only re-exposes the
 			// headers transitively, jinzza still needs AudioMixer directly to link against them.
 			"AudioMixer",
+			// Audio::FAudioCapture (UjinzzaMicLoopbackComponent opens a chosen mic by device index -
+			// UAudioCaptureComponent can only open the default one). NEW dependency - needs a full
+			// rebuild (editor closed).
+			"AudioCaptureCore",
 			// USourceEffectRingModulationPreset/USourceEffectSimpleDelayPreset (robot/cave voice
 			// DSP in UjinzzaVoiceTestWidget) live in the Synthesis plugin's own module - the plugin
 			// was already enabled in jinzza.uproject, but linking against its classes needs this

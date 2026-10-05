@@ -3220,3 +3220,629 @@ Megaphone, StunGun, StandMic (all /Game/JINZZA/Props/Meshes/*).
   * Not tested this session: pick-up/drop/throw through real input on the new CCD
     setting (needs a real client), and the sound/attenuation changes from session 6.
 - Files: BP_Bat, BP_Boombox, BP_Megaphone, BP_StunGun (CCD). Not committed.
+
+DONE THIS SESSION (2026-10-04, by Claude) - main menu: seal visible behind the menu,
+bigger title, redesigned bottom-left buttons
+- WHY THE CHARACTER WASN'T VISIBLE (two causes):
+  1. UjinzzaMainMenuWidget's root Border painted an OPAQUE Color_Background over the whole
+     viewport, so the 3D menu scene was never visible at all.
+  2. The auto-spawned AjinzzaMenuBackgroundCharacter was a bare ACharacter with no mesh, spawned
+     at Z=0 (half in the floor). The fallback camera rig sat at (0,0,150), INSIDE the stand-in
+     Mannequin of Lvl_MainMenu's placed jinzzaCharacterPreviewCapture_0 at the origin.
+- AjinzzaMenuBackgroundCharacter: now has SealMesh (SM_Seal, scale 2, on the capsule bottom,
+  yaw -90 because SM_Seal's own forward is local +Y - checked by eye in the editor), a warm
+  KeyLight + cool RimLight spotlight (candelas 60/80), and a Tick idle (slight breathing
+  squash + slow +-6 deg sway), since the seal has no animation.
+- AjinzzaMenuPlayerController::SetupMenuBackgroundScene fallback: seal at (900,0,88) yaw 180,
+  camera rig at (450,0,110) pitch -2 with FOV 55 - away from the origin preview actor.
+- UjinzzaMainMenuWidget:
+  * Backdrop is clear on the button page and dimmed (0.82 alpha) behind Settings/Customize/
+    Voice Test (new ShowPage()). Every page switch goes through it.
+  * Top-right title 44 -> 76pt with a drop shadow, tagline 15 -> 22pt, divider 120 -> 220 wide.
+  * Bottom-left Host/Settings/Quit: replaced the small pills + shared panel with wide
+    (400px) dark bars (MakeMainMenuEntryButton in the .cpp): accent stripe, big label,
+    Korean sub-label (방 만들기 / 설정 / 게임 종료), diamond marker, accent outline on hover.
+    Host is taller and gold; Quit is crimson.
+  * The right column (Customize/Voice Test circles) is unchanged.
+- Judgment calls: Korean sub-label wording; lighting values were tuned on a temporary copy
+  in the editor at FOV 90, not the final FOV 55 framing.
+- NOT VERIFIED:
+  * Compile-checked only (Build.bat -SingleFile on the 3 changed .cpp files: Succeeded). The
+    running editor had OLD binaries loaded (UnrealEditor-jinzza-4870.dll from 2026-09-13; its
+    MenuCameraRig still had FlashLightA/B/C components that aren't in the source), so the new
+    code was NOT run. Needs a full rebuild + editor restart, then PIE Lvl_MainMenu.
+  * Final framing (seal size/position at FOV 55) and the new buttons' look were not seen in a
+    screenshot. Only the seal + spotlights were previewed, using temporary actors that were
+    removed again.
+  * Lvl_MainMenu shows as unsaved after those temporary actors were added and removed. Its
+    contents are unchanged, so it's safe to discard (don't need to save it).
+- Files: jinzzaMenuBackgroundCharacter.h/.cpp, jinzzaMenuPlayerController.cpp,
+  UI/jinzzaMainMenuWidget.h/.cpp. Not committed.
+
+DONE THIS SESSION (2026-10-04, later, by Claude) - main menu backdrop: 5 rotating scenes, overhead
+spotlight, dark surroundings, a different camera move per cut, 10 s per cut
+- NEW AjinzzaMenuSceneDirector (jinzzaMenuSceneDirector.h/.cpp). Spawned at (20000,0,0) by
+  AjinzzaMenuPlayerController::SetupMenuBackgroundScene if none is hand-placed, then Start()ed with
+  the background character + camera rig. It:
+  * builds 5 scenes side by side, 5000cm apart along +X (far from Lvl_MainMenu's own floor/walls
+    and the preview-capture Mannequin at the origin). Each scene has a 30m dark floor plane (MID of
+    /Engine/BasicShapes/BasicShapeMaterial, "Color" param), props, and 3 movable spotlights:
+    an OVERHEAD lamp straight above the seal (250cd, 26 deg cone, white lightly tinted 30% to the
+    scene color), a soft front fill (25cd) and a scene-colored rim light (220cd).
+  * darkens the surroundings: hides the level's DirectionalLight/SkyLight at runtime (both
+    Stationary; the level asset isn't changed) + fixed exposure EV100 3.0 and vignette 0.9 on the
+    menu camera, so auto-exposure can't lift the black back to grey.
+  * every ShotDuration = 10 s: fades to black (0.6 s), moves the seal to the next scene, restarts
+    the camera and fades back in. Loops forever.
+  * Scenes / camera moves (all EditAnywhere on the director, so a placed instance can re-dress them):
+    1 Interrogation (cold white/blue): desk + stun gun "evidence" - slow PUSH-IN
+    2 Stage (magenta): stand mic + boombox - ORBIT 80 deg around the seal
+    3 Court (orange): pole/backboard/hoop behind, basketball - CRANE UP from a low angle
+    4 Alley (crimson): stacked crates + bat - lateral TRUCK past the seal
+    5 Announcement (gold): podium + megaphone - PULL-OUT from a face close-up (FOV 38 -> 50)
+- AjinzzaMenuBackgroundCharacter: removed its own Key/Rim spotlights (the director now lights it).
+  Breathing/sway idle kept.
+- Preview: all 5 scenes were built in the editor as temporary actors (TMPMENU_*) and captured at
+  the start and end of each move. The first contact sheet showed:
+  * a fully colored overhead lamp turns the seal solid magenta/red, so the lamp is only lightly
+    tinted and the color is carried by the rim light;
+  * the alley shot was too tight (widened) and the stage mic blocked the face (moved).
+  The adjusted values went into C++ without a re-capture. Temp actors, PPV and fog were removed
+  and the level lights restored to Intensity 10 / 1.
+- Tooling notes: CaptureViewport's first capture after a big camera jump is stale (capture twice).
+  ObjectTools LightColor wants lowercase float channels {"r","g","b","a"}. The PPV struct
+  property is lowercase "settings".
+- NOT VERIFIED:
+  * Compile-checked only (Build.bat -SingleFile on all 4 changed .cpp: Succeeded). The editor
+    still runs the OLD 2026-09-13 binaries, so the director itself has NOT run. Needs a full
+    rebuild + editor restart + PIE Lvl_MainMenu.
+  * The final light values (250/25/220cd, EV 3.0) differ from the previewed ones (400/40/150cd,
+    EV 3.5). The look may need a pass on exposure or intensity after the rebuild.
+  * Not checked: the "Color" parameter name on BasicShapeMaterial (if wrong, the floors render
+    white); the camera fade timing; the menu UI fade-in on top of the first camera fade.
+  * Prop facing (hoop/backboard yaw 90, boombox) is by eye from the preview, not checked
+    against each mesh's intended front.
+  * Lvl_MainMenu shows as unsaved again. Its contents are back to the original, so it's safe to
+    discard.
+- Files: jinzzaMenuSceneDirector.h/.cpp (new), jinzzaMenuBackgroundCharacter.h/.cpp,
+  jinzzaMenuPlayerController.h/.cpp. Not committed.
+
+DONE THIS SESSION (2026-10-04, last, by Claude) - main menu uses the real game logo
+- UjinzzaMainMenuWidget: the top-right "JINZZA" text title is replaced by an image of
+  /Game/JINZZA/UI/Textures/T_Logo (seal + "who is? JINZZA", source E:/Downloads/
+  Firefly_RemoveBackground.png, 1509x704 with alpha). 480px wide, height from the texture's
+  aspect, right-aligned. The Korean tagline, gold divider and status text below it are kept.
+  If the texture is missing, it falls back to the old text title.
+- T_Logo: LODGroup World -> UI (saved). Compression (TC_EditorIcon = uncompressed) and
+  NoMipmaps were left as imported.
+- The top-left mask badge (company-logo placeholder) is unchanged.
+- NOT VERIFIED: compile-checked only (Build.bat -SingleFile: Succeeded). Not seen on screen,
+  for the same stale-binaries reason as above. Rebuild + restart, then PIE Lvl_MainMenu.
+
+DONE THIS SESSION (2026-10-04, sticker restyle, by Claude) - main menu restyled to match T_Logo
+- Request: logo a bit bigger, remove the "진짜를 찾아라" tagline, make the rest cuter / more
+  cartoonish to match the logo.
+- Logo 480 -> 600px wide. Tagline and gold divider removed; status text stays under the logo
+  (white, 18pt, drop shadow).
+- New "sticker" style, all in UI/jinzzaMainMenuWidget.cpp: near-black face, 4px white outline,
+  fully rounded corners, a solid dark drop shadow 6px below, candy accent colors.
+  * Host/Settings/Quit: wide pill stickers (430/400px wide, 92/76px tall) with a white round
+    badge icon drawn from bars (plus / three lines / X), a big label and a Korean sub-label.
+  * Hover: the pill fills with its color (Host yellow, Settings sky blue, Quit coral), the text
+    turns dark and the face lifts 3px off its shadow. Press sinks it onto the shadow.
+  * Customize/Voice Test: 100px round stickers (pink / teal) with white mask/mic icons, a small
+    black caption pill under each, and no panel behind them. Hover lightens the circle.
+  * Top-left company-logo placeholder badge: a matching rounded-square sticker with a white mask.
+- New UCLASS UJinzzaMenuStickerFx (in jinzzaMainMenuWidget.h) handles hover/press, held by the
+  widget's StickerFx array so it isn't garbage collected. (Note: the older pattern of
+  NewObject<UJinzzaUIButtonSounds>(Button), bound only through a dynamic delegate, has no strong
+  ref and could be GC'd - left as is, not part of this task.)
+- Popup pages (Settings / Customization / Voice Test) and the lobby are still in the old noir
+  style. Not touched this round.
+- NOT VERIFIED: compile-checked only (Build.bat -SingleFile: Succeeded). Not seen in-engine
+  (stale editor binaries). Only a rough PIL mockup of the layout was checked (sizes/positions
+  vs the logo; no icons, stand-in font). Needs rebuild + restart + PIE Lvl_MainMenu. Watch
+  for: sub-label overlapping the label (negative top padding -4), and the mask icon's dark eye
+  holes on the pink circle.
+
+DONE THIS SESSION (2026-10-04, popup restyle, by Claude) - Settings / Customization / Voice Test in the sticker style
+- The sticker toolkit is now shared in JinzzaUI (jinzzaUIStyle.h/.cpp):
+  * Sticker_* colors, StickerOutline/StickerShadowDepth
+  * MakeSticker, MakeStickerPanel, MakeStickerHeading, MakeStickerDot
+  * MakeStickerButton / MakeStickerButtonStyle / SetStickerButtonSelected
+  * ApplyStickerStyle(USlider / UCheckBox / UComboBoxString / USpinBox)
+  The main menu now uses the shared palette and MakeSticker (its local copies were removed).
+- Sticker buttons are plain UButtons styled through FButtonStyle: black pill + 3px white outline +
+  white text, filling with the accent color (dark text) on hover. The label uses
+  FSlateColor::UseForeground() so it follows the button's foreground colors. No UButton
+  subclass (UButton is MinimalAPI and the -SingleFile check doesn't link) and no hover-fx objects.
+  The button's child 0 is still the label UTextBlock, so VoiceTest's ToggleListenButtonText
+  lookup still works.
+- Settings: the opaque full-screen background is gone. It is now a centered 1040x620 sticker panel
+  over the main menu's dimmed backdrop, with a 'Settings' heading. Sidebar tabs are sticker
+  pills; the active one is filled yellow and has a yellow dot (the old accent bar). Rebind
+  buttons are sky blue, Back is sky blue, Apply is filled yellow. Sliders, checkboxes, combos
+  and spin boxes get the sticker look via ApplyStickerStyle (the checkbox has no tick mark:
+  filled yellow = on).
+- Customization: sticker panel, white heading (gold divider removed), the preview in a rounded
+  sticker frame. Tabs are pink sticker pills and the active tab is now shown filled pink
+  instead of disabled (ShowTab). Prev/Next are sky blue, Done is filled yellow.
+- Voice Test: sticker panel, heading 'Voice Test' (was 'Voice Modulation Test'), dividers
+  removed. 'Speak & Listen' is filled teal, the presets are teal pills, Back is sky blue,
+  sliders are restyled.
+- Side effect, intended: AjinzzaWardrobeKiosk and AjinzzaVoiceTestKiosk in the lobby reuse the
+  Customization and Voice Test widgets, so they get the new style too. Other lobby UI (room
+  settings, friend invite, lobby widget...) still uses the old noir helpers.
+- NOT VERIFIED: compile-checked only (Build.bat -SingleFile on all 5 .cpp: Succeeded). Not seen
+  in-engine (stale editor binaries). Things to check after rebuild:
+  * combo box dropdown list (item style left at engine default),
+  * spin box fill brush look,
+  * pill corner radius (fixed 20px) on the smaller 16-17pt buttons,
+  * whether the 1040x620 Settings panel fits at lower resolutions.
+
+DONE THIS SESSION (2026-10-04, lobby restyle, by Claude) - rest of the lobby UI in the sticker style
+- New shared helpers in JinzzaUI: ApplyStickerStyle(UEditableTextBox*) (black rounded field,
+  yellow outline while typing) and MakeStickerKeyCap (white key, yellow rim, dark key name).
+- Lobby HUD (jinzzaLobbyWidget):
+  * top-left room info is a black sticker card with a yellow-dot 'Lobby' heading (the gold
+    divider and the separate 'Room' heading are gone);
+  * the bottom interact prompt is a black sticker pill with the new key cap;
+  * the welcome intro card is a sticker panel that shows the T_Logo image instead of the
+    'JINZZA' text title (text fallback if the texture is missing).
+  Also added the missing #include TimerManager.h, a pre-existing gap the unity build had hidden;
+  the -SingleFile compile exposed it.
+- Room Settings: sticker panel, the white HeaderNote heading, text field / spin boxes / combos
+  styled. Close sky blue, Apply filled yellow, Start Game filled teal.
+- Friend Invite: sticker panel and heading. Close sky blue, Refresh filled yellow, per-friend
+  Invite teal pills (offline friends' buttons stay disabled, grey sticker).
+- Boombox: sticker panel and headings, link text box styled, Play Link filled pink, Play/Pause
+  filled yellow, Close sky blue. The current song's row is a filled pink pill, the others black.
+  Link error text is coral.
+- Interaction prompt (in-world prop prompt) and prop-usage card: black sticker pill/card with
+  the new key cap (was the parchment note + parchment key).
+- Emote wheel: near-black circle with a 5px white outline and soft white X dividers (was gold);
+  labels are white sticker headings and the hovered one turns yellow (and still scales up).
+- NOT changed: the kiosks' 3D TextRender labels (still gold, set via JinzzaUI::Color_Accent in
+  each kiosk .cpp), the in-game End Game button (UjinzzaGameEndWidget), and the old noir helpers
+  themselves (still in jinzzaUIStyle; nothing in the lobby or menus calls them now except
+  GameEnd).
+- NOT VERIFIED: compile-checked only (Build.bat -SingleFile on all 8 .cpp: Succeeded). Not seen
+  in-engine (stale editor binaries). After rebuild, check:
+  * the world-space interaction prompt's size/readability (new 32px key cap + shadow);
+  * the emote wheel's label contrast;
+  * the room-settings combo dropdown list (engine default item style).
+
+DONE THIS SESSION (2026-10-04, settings redesign, by Claude) - Settings screen re-laid out
+- Layout (UjinzzaSettingsWidget::BuildWidgetTree):
+  * 1100x680 sticker panel;
+  * header row: big 'Settings' title left, horizontal tab pills right (was a left sidebar). The
+    active pill is filled yellow with a yellow dot under it (the old Accent members are now
+    the dots);
+  * per tab, a scrollable page of titled cards on a lighter rounded surface:
+    - Graphics: Display / Quality
+    - Audio: Volume / Microphone
+    - Controls: Mouse / Key Bindings
+    - Gameplay: Accessibility
+  * each row: 18pt white label (optional small grey hint) left, control in a fixed 440px box
+    right;
+  * footer: grey hint left ('Changes take effect when you press Apply.'), Back + filled Apply
+    right.
+- Segmented pill selectors replace the spin boxes / combos for fixed choices: Window Mode
+  (Fullscreen / Borderless / Windowed), Overall Quality + 9 per-feature qualities (Low / Med /
+  High / Epic / Cine), Mic Input Mode, Colorblind Mode. Picking an Overall preset also sets all 9
+  detail rows.
+  How it works: each group writes into the ORIGINAL USpinBox / UComboBoxString (kept in the
+  row, Collapsed), so PopulateXxxPage / OnApplyClicked are unchanged. New
+  UJinzzaSettingsSegmentHandler UCLASS per pill (held in SegmentHandlers);
+  SelectSegment / RefreshSegments.
+- Sliders show a live readout ('80%', '1.25x' for sensitivity) via HandleSliderValueChanged.
+- Key bindings: the bound key as a sticker key cap (its text block IS the XxxRebindLabel, so
+  StartRebind's 'Press a key...' shows in the cap) + a sky blue 'Change' button.
+- Resolution and Mic Device stay combos (dynamic lists). Frame Rate Limit stays a spin box with a
+  '0 = unlimited' hint.
+- NOT VERIFIED: compile-checked only (-SingleFile: Succeeded). The editor is on a Live Coding
+  build from earlier today (seal scene + first menu round only); new UCLASSes / UPROPERTYs need
+  a full rebuild + restart. Check after rebuild:
+  * UComboBoxString::SetSelectedIndex / GetSelectedIndex on a Collapsed combo (should be
+    data-only, not verified);
+  * pill text fitting (Cine / Borderless at 15pt);
+  * long key names ('F (Default)') in the key cap.
+
+DONE THIS SESSION (2026-10-04, settings simplified, by Claude) - simpler, bigger, cartoon Settings
+- User feedback: make it simple and cartoony like the other UIs / the logo; things were too
+  small to read.
+- Settings layout rewritten again (UjinzzaSettingsWidget::BuildWidgetTree):
+  * 1240x780 black sticker panel, 48pt title, 24pt tab pills (Graphics / Sound / Controls /
+    Gameplay);
+  * no inner cards. Sections are white speech-bubble labels with a little tail (the logo's
+    'who is?' bubble);
+  * rows have a 24pt white label and a 580px control area. Back (26pt) and Apply (28pt) are
+    bottom-right.
+  * Almost everything is big 20pt pill rows:
+    - Window (Full / Borderless / Window)
+    - Quality (Low / Med / High / Epic / Max)
+    - FPS Limit (30 / 60 / 120 / 144 / None)
+    - VSync, Invert Y and Subtitles as Off/On
+    - Talk (Push to Talk / Always On)
+    - Colorblind (Off / Deutan / Protan / Tritan)
+  * Sliders show a 24pt yellow % readout. Key bindings use a 46px key cap + a 'Change' button;
+    rows are relabeled Jump / Run / Use / Talk.
+  * Simplified: the 9 per-feature quality rows are gone from view. Their spin boxes are parked
+    collapsed in HiddenHolders and set by the Quality preset (Apply still writes them all).
+    Frame-rate spin box -> FPS pills (FSegmentGroup::Values maps a pill to a cap value).
+    Checkboxes -> Off/On pills (FSegmentGroup::Check).
+- Shared toolkit: ApplyStickerStyle(USlider) is now a chunky slider (10px bar, 30px yellow thumb
+  with white outline) - also affects Voice Test sliders. ApplyStickerStyle(UComboBoxString) sets
+  a 20pt white font (writes the deprecated Font/ForegroundColor UPROPERTYs directly, since
+  InitFont is protected) - also affects Room Settings combos.
+- NOT VERIFIED: compile-checked only. Not seen in-engine (needs full rebuild + restart). Check:
+  * hidden-holder combo/checkbox SetSelectedIndex / IsChecked behave while Collapsed;
+  * panel fits at 1280x720 (Slate DPI scaling should shrink it, unverified);
+  * the bubble tail position.
+
+DONE THIS SESSION (2026-10-04, match everything, by Claude) - every C++ UI matches the new Settings
+- Shared toolkit (JinzzaUI): the Settings building blocks are now shared:
+  * AddStickerSection - white speech-bubble section label, like the logo's 'who is?';
+  * AddStickerRow - 24pt white label left, control right in a fixed box;
+  * MakeStickerText - 17-24pt body text;
+  * spin box and text box fonts bumped to 20pt.
+  Settings now calls these instead of its local copies.
+- Bigger + same structure everywhere:
+  * Customization: 1060 wide, 48pt 'Customize' title, 22pt pink tabs, 24pt rows (big 24pt
+    < > pills, 24pt value text, 30px swatch), 320x480 preview, 28pt Done.
+  * Voice Test: 720 wide, 48pt title, 20pt hint, 28pt Speak & Listen, 'Effects' and 'Presets'
+    speech bubbles, 24pt slider rows with 22pt yellow readouts, 22pt preset pills, 26pt Back.
+  * Room Settings: 900 wide, 44pt header, 'Room' bubble, 24pt rows (20pt fields). Close / Apply /
+    Start Game are 26/26/28pt, right-aligned.
+  * Invite Friends: 760 wide, 48pt title, 20pt status line, each friend a 24pt row with a 20pt
+    Invite pill; list area 400px tall.
+  * Boombox: 760 wide, 48pt title, 22pt status, 'Songs' and 'Play a Link' bubbles, 20pt song
+    pills, 20pt link field; buttons 22-28pt.
+  * Lobby HUD: info card 420 wide (38pt title, 20pt lines), 42px key cap + 24pt prompt text,
+    intro card 640 wide with a 460px logo and 21pt text.
+  * In-world prop prompt: 40px key cap + 22pt text (the widget component draws at desired
+    size, so no clipping). Prop card: 20pt text, 52px icon. Emote wheel: 460px, 26pt labels.
+- Also restyled:
+  * the in-game End Game button (UjinzzaGameEndWidget) is a filled coral sticker pill, 28pt;
+  * all kiosk 3D TextRender labels use Sticker_Yellow instead of the old gold.
+- Added missing includes in existing code that the -SingleFile compile exposed:
+  Engine/World.h in jinzzaLobbyClock.cpp and jinzzaStartMatchKiosk.cpp.
+- NOT CHANGED: WBP_WorldSign (the zone signs in Lvl_Game) is Blueprint-authored. Its look lives
+  in the widget Blueprint, not C++. The old noir helpers stay in jinzzaUIStyle; now unused
+  except the main menu's text-title fallback.
+- NOT VERIFIED: compile-checked only (18 .cpp, -SingleFile: Succeeded). Not seen in-engine
+  (needs full rebuild + restart). Check panel sizes at 1280x720 and the friend list / song list
+  row layouts.
+
+DONE THIS SESSION (2026-10-04, voice test loudness + devices, by Claude)
+- Problem: the voice test played your voice back too weakly to judge, and you couldn't pick the
+  mic or the speakers.
+- Why it was weak: UAudioCaptureComponent plays the mic back at raw mic level (speech peaks are
+  often around -20 dBFS) with no gain. It also only ever opens the system default mic.
+- NEW UjinzzaMicLoopbackComponent (jinzzaMicLoopbackComponent.h/.cpp, a USynthComponent),
+  replacing UAudioCaptureComponent in UjinzzaVoiceTestWidget:
+  * opens any capture device by index through Audio::FAudioCapture (new Build.cs dependency
+    AudioCaptureCore -> full rebuild with the editor closed);
+  * SUMS the input channels to mono (a stereo USB mic with the voice on one channel would
+    otherwise lose 6 dB);
+  * gain ('Mic Boost', default 3x = +9.5 dB) through a soft limiter x/sqrt(1+x^2);
+  * exposes the input peak for a meter;
+  * ~0.1s prime buffer, ~1s max queue (drops old audio rather than drifting).
+  SourceEffectChain and the pitch multiplier work as before.
+- Voice Test UI:
+  * new 'Devices' bubble with three rows: Mic (combo: System Default + every capture device;
+    the choice is saved to UjinzzaGameUserSettings MicDeviceId, the same setting as the Settings
+    screen's Mic Device), Speaker (combo of output devices via UAudioMixerBlueprintLibrary;
+    picking one calls SwapAudioOutputDevice, which moves ALL game audio right away), and Mic
+    Boost (1x-6x slider, yellow readout);
+  * a live 'Mic Level' meter under Speak & Listen (dB scale -50..0, fast attack / slow fall);
+  * changing the mic while listening restarts the loopback on the new device.
+- NOT DONE: the Speaker choice isn't saved across restarts (no OutputDeviceId setting yet; it
+  would need applying at startup with a world context).
+- NOT VERIFIED: compile-checked only (-SingleFile, no link). Not heard in-engine - needs the
+  editor CLOSED for a full rebuild (Build.cs change), then the Voice Test in the main menu.
+  Check:
+  * the loopback is clearly louder at 3x and doesn't distort at 6x;
+  * the meter moves with speech;
+  * a non-default mic opens (watch Logjinzza 'MicLoopback: opened ...');
+  * the Speaker swap result in the log;
+  * whether FAudioCapture's DeviceId matches the Settings screen's (UAudioCaptureBlueprintLibrary)
+    DeviceId for the same mic - if not, the two screens won't share the saved selection.
+
+DONE THIS SESSION (2026-10-04, voice quality, by Claude)
+- Reported: mic monitoring sounds poor; Robot / Cave make the voice unintelligible; changing a
+  setting mid-test cut the voice until Stop/Start.
+- Root causes:
+  * Voice Test pitch used the audio component's pitch multiplier, which is resampling. It
+    changes playback SPEED, so the capture queue ran dry (crackle) or piled up delay. Applying it
+    needed CaptureComponent->Stop()/Start() on EVERY slider change - dragging a slider (or any
+    preset, since they all set pitch) silenced the loopback.
+  * The old limiter x/sqrt(1+x^2) bent ALL samples (audible harmonic distortion on normal
+    speech). An underrun never re-primed, so it crackled block after block.
+  * Robot was nearly fully wet; Cave was 0.65 pitch + heavy echo.
+- UjinzzaMicLoopbackComponent DSP rewrite (per sample, audio render thread):
+  80 Hz one-pole high-pass -> gain -> real-time pitch shifter (two delay-line taps half a 50 ms
+  window apart, sin^2 crossfade, linear interpolation; bypassed with a 10 ms ramp at pitch ~1)
+  -> limiter (linear below 0.7, tanh knee above).
+  SetPitch() is live (atomic) - no restart. Buffering: about 40 ms prime, re-prime after an
+  underrun, ~120 ms max latency (drops older audio). ApplyPitch now only calls SetPitch.
+- Gentler effects:
+  * Robot: 40 Hz ring mod, dry 1-0.5a, wet 0.7a;
+  * Echo: delay 0.12+0.18a s, wet 0.55a, feedback 0.35a.
+  Presets: Cave 0.85 / 0 / 0.55, Helium 1.45, Robot 0.95 / 0.75 / 0.1.
+- Offline check: ran the same DSP (Python port) on a 150 Hz harmonic test tone.
+  * Output pitch is correct at 0.5 / 0.85 / 1.45 / 2.0x (74 / 126 / 214 / 296 Hz).
+  * No click-sized discontinuities.
+  * Limiter peak <= 1.0 even with 4x hot input at 6x gain.
+- In-game voice (what other players hear) is a separate path: engine VOIP + UjinzzaProximityVoice
+  filters. Its defaults were chopping speech (noise gate and silence detection at 0.08 linear
+  ~ -22 dBFS, 1x gain, 16 kHz). DefaultEngine.ini now has:
+  * [ConsoleVariables] voice.MicNoiseGateThreshold=0.01, voice.SilenceDetectionThreshold=0.01,
+    voice.MicNoiseReleaseTime=0.5, voice.MicInputGain=2.0;
+  * [/Script/Engine.AudioSettings] VoiPSampleRate=Normal24000Hz.
+  (The in-game Robot/High/Low disguise filters in UjinzzaProximityVoiceComponent were NOT
+  re-tuned this time.)
+- NOT VERIFIED: compile-checked only (-SingleFile); the DSP was only checked offline. Not heard
+  in-engine. Needs the editor closed for a full rebuild (Build.cs change from last session). The
+  VOIP config changes need a 2-player test - check the noise floor isn't too audible with the
+  gate at 0.01 (raise towards 0.02-0.03 if it is).
+
+DONE THIS SESSION (2026-10-04, lobby pass, by Claude) - Lvl_Lobby optimized, re-laid-out, re-lit
+- Full write-up + mesh list + your to-do: docs/LOBBY_PLAN.md
+- Saved: Lvl_Lobby, plus 3 Megascans meshes switched to Nanite (S_Firewood_vddjehsaa_lod0_Var1,
+  S_Wooden_Floor_Lamp_vi5hbjgga_lod0_Var1/_Var2).
+- Optimization: deleted the duplicate fireplace StaticMeshActor_179; Nanite on firewood (36 x 12k
+  tris) and floor lamps.
+- Layout:
+  * kiosks were floating ~1 m above the floor and bunched at the centre - now Start Match at the
+    fireplace, Room Settings board by the sofa, Invite desk by the door, Wardrobe in the bedroom
+    corner, all floor-snapped and facing the room;
+  * LobbyClock newly placed on the west wall (2.5x);
+  * 12 PlayerStarts moved from a 20 m ring (slot 1 was inside the fireplace) to a 7 m ring on
+    the rug;
+  * labels moved (LOBBY title was outside the room).
+- Light:
+  * sun -25 / -100 through the north windows;
+  * new SkyAtmosphere; SkyLight Movable + real-time capture, intensity 3;
+  * new warm point lights in the 2 floor lamps, the fireplace and the bedroom;
+  * PPV histogram exposure EV -7..-4, bias 0, milder saturation / contrast / bloom.
+- C++ jinzzaLobbyGameState.cpp time-of-day presets updated to match (Day = level). Compile
+  -SingleFile: Succeeded.
+- NOT VERIFIED: editor viewport captures only (Day / Sunset / Night previewed by applying the
+  preset values in the editor); no PIE spawn / kiosk-reach test, no perf check of 4 shadowed
+  movable lights + SkyAtmosphere. Level saved from an editor running Live-Coding binaries
+  (only transforms / properties changed on the kiosk instances).
+
+DONE THIS SESSION (2026-10-04, outline + labels + intro, by Claude)
+- Lobby state saved as the baseline (Claude memory: project_jinzza_lobby_state; details in
+  docs/LOBBY_PLAN.md). Lvl_Lobby re-saved with the outline test reverted (no content change).
+- Removed the lobby welcome/intro overlay (UjinzzaLobbyWidget: IntroOverlay, HideIntro and the
+  5 s timer are gone).
+- White outline on the current interaction target:
+  * NEW material /Game/JINZZA/Materials/PostProcess/M_PP_InteractOutline (PostProcess, after
+    tonemapping). One Custom HLSL node: 3 px edge around CustomDepth meshes, drawn only where the
+    mesh isn't occluded (no outlines through walls). Built + compiled via MCP, and checked in the
+    editor on the Start Match kiosk (clean white border).
+  * NEW jinzzaInteractHighlight.h/.cpp:
+    - JinzzaHighlight::SetHighlighted(actor, bool) toggles RenderCustomDepth on the actor's meshes;
+    - UjinzzaInteractHighlightSubsystem (WorldSubsystem) spawns a transient unbound PPV carrying
+      the material in every game world (not on a dedicated server), so no level needs setup.
+  * Hooked in: AjinzzaLobbyPlayerController::CheckForNearbyKiosk (old kiosk off / new kiosk on)
+    and AjinzzaInteractableProp::Show/HideInteractionPrompt (the focused prop).
+- Labels always face the player: NEW UjinzzaFaceCameraComponent (same file, ticks in
+  TG_PostUpdateWork). Yaw-rotates every TextRender and world-space WidgetComponent on its owner so
+  +X points at the local camera. AjinzzaInteractableKiosk now has a constructor that adds it, so
+  every kiosk / clock / voice-test kiosk gets it. The free-standing TextRenderActors in the lobby
+  (READY AREA, LOBBY, START MATCH (Host Only)) are NOT items and were left as is.
+- Missing includes in existing code exposed by -SingleFile: TimerManager.h + GameFramework/Pawn.h
+  in jinzzaLobbyPlayerController.cpp.
+- NOT VERIFIED: compile-checked only (8 .cpp -SingleFile: Succeeded). Not run in PIE - needs a full
+  rebuild (new UCLASSes). Check:
+  * the outline appears and disappears with the E prompt;
+  * the outline on Nanite meshes (custom depth with Nanite is supported in UE5, not tested here);
+  * kiosk labels turning smoothly;
+  * the clock label doesn't clip into the wall when you stand beside it.
+
+DONE THIS SESSION (2026-10-05, lobby info card / light bleed / kiosk outline, by Claude)
+- Lobby info card text overflow (top-left): the "Max Players | Judges | Votes | Question Cycles"
+  line was wider than the 420 px card and ran past its right edge (seen in PIE). UjinzzaLobbyWidget:
+  SettingsText + PlayerCountText now auto-wrap, and Question Cycles moved to its own line.
+- Light bleed in Lvl_Lobby (user request, so the 2026-10-04 light values were changed): the warm
+  point lights lit most of the room and blew out the walls next to them. New values (level saved):
+  * Light_FloorLamp_East / _West: 40 -> 15 cd, attenuation radius 1600 -> 900;
+  * Light_Fireplace: 60 -> 30 cd, radius 2200 -> 1200;
+  * Light_Bedroom: 25 -> 8 cd, radius 1400 -> 800;
+  * all four: IndirectLightingIntensity 1 -> 0.5 (less Lumen bounce onto the walls).
+  Sun / sky / PPV exposure unchanged. Compared in before/after editor viewport captures.
+- Interactive objects highlighted in white: before, only the kiosk within E range (220 cm) got
+  the outline, so walking around the lobby showed nothing. AjinzzaLobbyPlayerController::BeginPlay
+  now outlines every AjinzzaInteractableKiosk (4 kiosks + clock) for the whole lobby;
+  CheckForNearbyKiosk no longer toggles the outline (it still drives the E prompt). Props in the
+  match still get the outline only while focused (unchanged, so it doesn't give props away).
+- NOT VERIFIED: compile-check only (2 .cpp -SingleFile: Succeeded). The new C++ hasn't run yet -
+  needs Live Coding (Ctrl+Alt+F11) or an editor restart. Check: all kiosks outlined from the
+  spawn ring; the card's text wraps inside the card with a long room name. A remaining warm
+  hotspot on the wall right behind the west floor lamp and the bedroom lamp (lights sit close
+  to those walls) - light positions were not moved. Lights only checked in editor captures, not
+  in PIE with auto-exposure.
+
+DONE THIS SESSION (2026-10-05 round 2, label glare / outline weight, by Claude)
+- Kiosk label glare: the 4 KoreanLabelWidget world-space widgets render unlit, so the lobby's
+  dark-interior auto-exposure (EV100 -7..-4) boosted their white text far past 1.0 and bloom
+  smeared it. Set TintColorAndOpacity 1 -> 0.15 on all 4 instances in Lvl_Lobby (saved). Checked in
+  PIE: StartMatch label is crisp, no halo. NOTE: the tint only takes effect when play starts
+  (the widget's material instance is built then); changing it during PIE does nothing.
+- Lobby PostProcessVolume_0 bloom intensity 0.5 -> 0.2 (general glare).
+- M_PP_InteractOutline: sample offset 3 px -> 1.5 px (thinner line) and the edge now blends 50%
+  toward 0.85 grey instead of replacing with pure white. Recompiled + saved; checked in PIE on the
+  StartMatch and RoomSettings kiosks.
+- Clock TextRender label checked in an editor capture: not glaring, left as is.
+- NOT VERIFIED: Lvl_test kiosk labels still at tint 1 (only Lvl_Lobby changed). The lobby looked
+  fairly dark in the last PIE capture (lights lowered earlier today + bloom down); if it reads too
+  dark, raise the PPV exposure bias rather than the point lights. Outline on prop meshes in the
+  match not re-checked with the new weight.
+
+DONE THIS SESSION (2026-10-05 round 3, cartoon look + label outlines, by Claude)
+- Kiosk label text outlines: WBP_Sign_16..20 (Wardrobe / RoomSettings / FriendInvite /
+  StartMatch / VoiceTest) TextBlock_0 now has a 4 px ink outline (sticker ink ~RGB 18,18,22) and
+  an ink drop shadow (3,4) with the outline applied to it - same look as the sticker UI. Compiled
+  + saved. Checked in PIE (StartMatch). The standalone Lvl_test signs (00..15) were NOT changed.
+- NEW /Game/JINZZA/Materials/PostProcess/M_PP_Toon (after tonemapping, BlendablePriority -1 so
+  the interact outline still draws on top). One Custom HLSL node:
+  * soft cel bands: luminance snapped toward 5 steps (45% blend), hue/saturation kept;
+  * ink lines: Laplacian of inverse depth (flat planes = 0, so floors at grazing angles stay
+    clean) + normal breaks (dot < 0.55), ~1 px at 1080p, fade out 25-65 m.
+  Tunables are the consts at the top of the HLSL. Added to Lvl_Lobby PostProcessVolume_0
+  blendables (lobby only - not in the match level).
+- Lvl_Lobby re-light for the cartoon look (saved):
+  * SkyLight 3 -> 10; PPV Lumen skylight leaking 0.08 (cool tint 0.85/0.9/1.0) = flat fill, so
+    shadows stay coloured instead of black;
+  * PPV: saturation 1.1 -> 1.25, contrast 1.05 -> 1.0, local exposure highlight/shadow contrast
+    0.6 (flatter), vignette 0.4 -> 0.2, lens flare 0 (was making orange blobs on the walls),
+    exposure bias 0 (unchanged). Bloom 0.2 from round 2.
+  * jinzzaLobbyGameState presets: sky intensity Day 3 -> 10, Sunset 1.6 -> 5, Night 0.3 -> 1
+    (Day is applied at BeginPlay, so it had to match). Compile -SingleFile: Succeeded.
+- NOT VERIFIED: the preset change needs Live Coding / restart (the PIE check ran the old code,
+  sky 3, and still looked right). Sunset / Night not previewed with the new look. Ink-line
+  noise on very detailed Megascans normal maps only checked at lobby distances. M_PP_Toon cost
+  (9 depth + 5 normal taps per pixel) not profiled. Kiosk labels' tint 0.15 rechecked only on
+  StartMatch.
+
+DONE THIS SESSION (2026-10-05 round 4, sun back / lighter toon / gear kiosk, by Claude)
+- Sunlight was washed out by the round-3 flat fill. Lvl_Lobby (saved): sun 10 -> 15, SkyLight
+  10 -> 6, PPV Lumen skylight leaking 0.08 -> 0.03, local exposure highlight contrast 0.6 -> 0.9,
+  shadow 0.6 -> 0.75. The sun patch on the rug reads again in editor captures.
+  jinzzaLobbyGameState presets to match: Day sun 15 / sky 6, Sunset sky 3, Night sky 0.6.
+  Compile -SingleFile: Succeeded.
+- Less cartoonish: M_PP_Toon CelAmount 0.45 -> 0.2, InkOpacity 0.9 -> 0.6; PPV saturation
+  1.25 -> 1.15.
+- Room Settings kiosk is now a floating gear (Lvl_Lobby instance only, no C++ change):
+  * NEW docs/models/make_gear.py (headless Blender 4.3) -> docs/models/SM_Gear.fbx, imported as
+    /Game/JINZZA/Props/Kiosk/SM_Gear (12 teeth, centre hole, 1 m, stands upright facing +/-Y);
+  * NEW /Game/JINZZA/Props/Kiosk/M_Gear: sticker yellow, roughness 0.45, WPO bob 6 cm (~3 s);
+  * jinzzaRoomSettingsKiosk_0: Mesh SM_Board -> SM_Gear; moved off the high wall spot
+    (810, -2340, 341, scale 4.5) to float in front of the south wall at (810, -2180, 150), scale
+    0.9; KoreanLabelWidget hidden; NEW RotatingMovementComponent "GearSpin" (25 deg/s around its
+    axle, local space); InteractionRadius 220 -> 280. The old board spot was out of E range for
+    a standing player anyway (actor centre 3.4 m up).
+  * Checked in PIE: spins, bobs, thin white highlight.
+- NOT VERIFIED: the E prompt / opening the Room Settings panel at the new radius (not pressed).
+  Lvl_test's Room Settings kiosk is unchanged. The gear has no simple collision (players can
+  walk through its bottom edge - it floats at 1.05-1.95 m). Sunset / Night still not previewed.
+  The new preset values need Live Coding / restart.
+
+DONE THIS SESSION (2026-10-05 round 5, dimmer room / gear label back, by Claude)
+- Room dimmed a bit so the sun patch and the fireplace stand out (Lvl_Lobby, saved): SkyLight
+  6 -> 3.5, PPV Lumen skylight leaking 0.03 -> 0.01, Light_Fireplace 30 -> 45 cd. Auto-exposure was
+  compensating for the dimmer fill, so PPV exposure min EV100 -7 -> -6 and bias 0 -> -0.8.
+  jinzzaLobbyGameState presets: sky Day 3.5 / Sunset 1.8 / Night 0.35 (sun unchanged).
+  Compile -SingleFile: Succeeded.
+- Room Settings label shown again above the gear: KoreanLabelWidget bVisible true, with
+  absolute location / rotation / scale (bAbsolute*) so it doesn't spin or orbit with the
+  rotating gear root - placed at world (810, -2160, 225), scale 1. FaceCamera still turns it.
+  Checked in PIE: "10. 방 설정" stays still above the spinning gear.
+- NOT VERIFIED: presets need Live Coding / restart. The south-wall corner with the gear is fairly
+  dark now; the gear reads, but it's dull yellow there. Sunset / Night not previewed.
+
+DONE THIS SESSION (2026-10-05 round 6, Tripo gear + closet kiosks as editable Blueprints, by Claude)
+- User's Tripo models (docs/modelFromTripo/gear, /closet) baked with bake_props.py (new CFG
+  entries Gear / Closet + new pivot mode 'bottom'): Gear stood upright (rot X 90), 100 cm across,
+  centre pivot; Closet rot Z -90 so its doors face UE -X (kiosk front), 200 cm tall, floor pivot.
+  Baked FBX in docs/modelFromTripo/baked/. Imported as /Game/JINZZA/Props/Kiosk/SM_Kiosk_Gear and
+  SM_Kiosk_Closet; materials/textures from a raw import live in Props/Kiosk/Gear and Props/Kiosk/
+  Closet (separate folders - both Tripo exports name their textures Color/Normal, which collided in
+  one folder). Roughness rewired off Metallic (sRGB off, LinearColor sampler) as usual.
+- NEW Blueprints (so size and text layout can be edited in the BP viewport):
+  * /Game/JINZZA/Props/Kiosk/BP_Kiosk_RoomSettings (parent AjinzzaRoomSettingsKiosk): inherited
+    Mesh emptied (scale 1) and C++ Label hidden; NEW components Model (SM_Kiosk_Gear, z 190,
+    scale 0.9, no collision), Sign (WidgetComponent, WBP_Sign_17_RoomSettings, World, 500x150,
+    Masked, two-sided, tint 0.15, z 270), Spin (RotatingMovement pitch 25/s). EventBeginPlay:
+    Spin.SetUpdatedComponent(Model) so only the gear turns, not the sign. Gear bob = WPO (6 cm,
+    Time-driven Custom node) added to its material tripo_mat_f4382657.
+  * /Game/JINZZA/Props/Kiosk/BP_Kiosk_Wardrobe (parent AjinzzaWardrobeKiosk): same pattern -
+    Model (SM_Kiosk_Closet, floor pivot, default collision), Sign (WBP_Sign_16_Wardrobe, z 235).
+  To adjust: open the BP, select Model to move/scale the mesh, Sign to move/scale the text (Draw
+  Size = text box); font/outline/wording are in the WBP_Sign_16/17 widgets.
+- Lvl_Lobby: old jinzzaRoomSettingsKiosk_0 / jinzzaWardrobeKiosk_0 instances deleted, replaced by
+  the BPs at floor level: RoomSettingsKiosk (810, -2180, -39) yaw 0, WardrobeKiosk (-950, -1900, -39)
+  yaw -90 (doors face the room). Interaction radius back to the default 220 (actor is on the floor
+  now). Deleted this session's procedural SM_Gear / M_Gear (superseded); docs/models/make_gear.py
+  and SM_Gear.fbx are left in docs but no longer used.
+- Checked in PIE (world state): gear model spins (~25 deg/s), actor + sign stay still, sign turns
+  to the camera, both models get the white highlight.
+- NOT VERIFIED: pressing E at either kiosk (prompt / panels); visual PIE check was blocked by the
+  Message Log window the FBX import opened (editor captures only). Lvl_test still uses the old C++
+  kiosk instances. The gear's colour is the Tripo texture (blue) - not recoloured.
+
+DONE THIS SESSION (2026-10-05 round 7, kiosk resize / notebook / play button / floating, by Claude)
+- Scale reference: Lvl_Lobby's cabin is built big (door 10 m, chairs ~3.9 m, sofa / nightstand+lamp
+  ~5 m), so the 2 m closet and 0.9 m gear looked tiny. BP_Kiosk_Wardrobe Model x2.25 (closet 4.5 m,
+  sign z 490); BP_Kiosk_RoomSettings Model x1.5 (gear 1.5 m, z 240, sign z 365).
+- NEW BP_Kiosk_FriendInvite (parent AjinzzaFriendInviteKiosk): Desk (SM_Desk x1.5, the old
+  instance look), Model = the spiral notebook stood upright (pitch 90, x1.2, z 300, no collision,
+  floating above the desk), Sign (WBP_Sign_18, z 420).
+- NEW play-button mesh: docs/models/make_play_button.py (Blender) -> SM_PlayButton.fbx ->
+  /Game/JINZZA/Props/Kiosk/SM_Kiosk_PlayButton (150 x 110 cm bevelled plate + raised triangle, slots
+  Plate / Icon) with NEW M_PlayButton_Plate (sticker coral) / M_PlayButton_Icon (white).
+  NEW BP_Kiosk_StartMatch (parent AjinzzaStartMatchKiosk): Model = play button (z 230, roll 180 so
+  the triangle points right for a player in front - the Blender-side Y-mirror guess was wrong),
+  Sign (WBP_Sign_19, z 350).
+- Floating: Start Match / Friend Invite / Room Settings BPs got variables BobHeight (10 cm) and
+  BobSpeed (1.4 rad/s), both Instance Editable under "Float", plus BaseLoc; BeginPlay stores the
+  Model's relative location and starts a 0.016 s looping timer calling function Bob, which sets
+  Model = BaseLoc + (0, 0, BobHeight * sin(time * BobSpeed)). Timer instead of Tick because the C++
+  kiosks set bCanEverTick = false. The gear's old WPO bob was removed from tripo_mat_f4382657.
+  Checked in PIE: all three drift +/-10 cm, the gear still spins.
+- Lvl_Lobby: old C++ FriendInvite (desk + in-level NotebookMesh) and StartMatch (cylinder)
+  instances deleted; all 4 kiosk BPs re-placed fresh (Room Settings / Wardrobe instances had
+  saved stale Model/Sign values because the BP templates were edited via MCP after placement -
+  edits made in the BP editor UI propagate normally). Same spots and yaw as before, on the floor
+  (z -39). Level saved and reloaded.
+- NOT VERIFIED: pressing E at any of the 4 kiosks; Start Match / Friend Invite C++ behaviour on the
+  BP subclasses (host-only start, Steam invite UI). All three floaters bob in the same phase.
+  Lvl_test still has the old C++ kiosks.
+
+DONE THIS SESSION (2026-10-05 round 8, play button restyle, by Claude)
+- User: the play button looked too much like YouTube (red rounded rectangle + white triangle).
+  docs/models/make_play_button.py rewritten: round 130 cm sticker-style button facing -X - disc
+  face (slot Plate), white rim torus (slot Rim), chunky rounded triangle (slot Icon). Imported as
+  /Game/JINZZA/Props/Kiosk/SM_Kiosk_PlayButtonRound; M_PlayButton_Plate recoloured to sticker
+  yellow, M_PlayButton_Icon to ink, NEW M_PlayButton_Rim (white). BP_Kiosk_StartMatch Model now uses
+  it (roll 180 kept - triangle points right from the front). Old SM_Kiosk_PlayButton deleted;
+  Start Match instance re-placed in Lvl_Lobby (same spot), level saved. Checked in editor captures.
+- NOT VERIFIED: PIE look with the fireplace behind it (the yellow reads a bit dark/ochre against
+  the fire's glow in editor captures).
+
+DONE THIS SESSION (2026-10-05 round 9, full lobby audit - design / optimization / functionality, by Claude)
+Functionality
+- PIE log clean (only the audio sample-rate notice).
+- Reachability test (pawn teleported in front of each kiosk, physics settled, distance measured
+  against InteractionRadius 220): Room Settings 140 OK, Start Match 129 OK, Friend Invite 215
+  (barely), Wardrobe 295 UNREACHABLE (user-resized: actor scale 1.75 at (180, -2180, -49) - the
+  closet's collision keeps the pawn ~3 m from its origin), Lobby Clock 289 UNREACHABLE (hangs at
+  z 340, the old 3D check could never reach it - the time-of-day toggle was dead).
+  FIX: AjinzzaLobbyPlayerController::CheckForNearbyKiosk now uses horizontal distance to the
+  kiosk's colliding parts' bounds (WidgetComponents skipped - their UI-profile collision would
+  inflate the box), falling back to the actor origin for kiosks with no colliding mesh (floating
+  gear / play button). Compile -SingleFile: Succeeded. Needs Live Coding / restart to run.
+- Code review: Start Match + Clock are host-only by design (HasAuthority), Room Settings opens
+  read-only for clients (no Apply). Friend Invite opens locally for anyone.
+Optimization
+- 194 actors, 167 mesh components (all shadow casting), 32 unique meshes, ~445k triangles,
+  19 meshes Nanite (the non-Nanite ones are the trees outside + the new kiosk meshes, all small).
+- Megascans Firewood + Wooden Floor Lamp used 4K textures (~150-170 MB source each) for small
+  props: MaxTextureSize 2048 set on T_Firewood_*_4K_D/DpR/N and T_Wooden_Floor_Lamp_*_4K_D/N
+  (saved) - ~4x less texture memory, no visible change at lobby distances.
+- Left as is (fine for PC): 4 shadowed Movable point lights + sun (VSM, MegaLights on), Lumen +
+  HW ray tracing, M_PP_Toon (~14 taps/px), 3 Bob timers at 0.016 s, FaceCamera ticks on kiosks.
+Design (open - need the user's call)
+- Lobby signs reuse Lvl_test's numbered widgets: "9. 옷장", "10. 방 설정", "12. 매치 시작 (주의: 레벨
+  이탈)" - the zone numbers / dev note leak into the lobby. Option: lobby-only WBP_Sign copies.
+- Old English TextRender actors still placed: Label_LobbyTitle "LOBBY" (z 1250),
+  Label_ReadyArea "READY AREA" (on the rug), Label_StartHostOnly "START MATCH (Host Only)" (z 330,
+  now overlapping the Start Match BP sign). Already an open question in LOBBY_PLAN.md.
+- Non-host players see the "Start Match" / "Change Time of Day" prompts but E does nothing for
+  them (no feedback).
+- Wardrobe instance sits 10 cm below the floor (z -49 vs floor -39) after the user's move.
+- No voice-test kiosk in the lobby (jinzzaVoiceTestKiosk exists, only placed in Lvl_test).
+NOT VERIFIED: the reachability fix at runtime (needs Live Coding); pressing E at the kiosks.

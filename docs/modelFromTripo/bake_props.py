@@ -10,7 +10,8 @@ Then import each <out_dir>/<Name>.fbx with import_materials=False and assign the
 (materials/textures were created by the first, raw import - see Content/JINZZA/Props/Meshes/*).
 
 Note: UE mirrors Blender's Y axis, so 'front(-Y)' in Blender is +Y in Unreal.
-Sizes/pivots/rotations per model are in CFG below (cm; pivot = bbox centre to match the old primitive placeholders).
+Sizes/pivots/rotations per model are in CFG below (cm; pivot = bbox centre to match the old primitive placeholders,
+or 'bottom' = bottom centre for floor-standing models).
 """
 """Rotate / re-pivot / scale each Tripo FBX to its placeholder's in-game size and export a clean FBX.
 Units: Blender 1 unit = 1 m, exported FBX default => 1 m = 100 UE cm. So size_cm/100 = Blender units."""
@@ -36,6 +37,12 @@ CFG = {
                     rot=(0,0,0),   fit=('Z',160.0), pivot='center'),
  "HoopRim":    dict(src=D+"low-poly ring 3d model.fbx",
                     rot=(0,0,180), fit=('X',50.0),  pivot='rimcenter'),  # X = rim diameter; 180 so bracket lands at UE -Y (board side)
+ # Lobby kiosks (2026-10-05). Gear lies flat in the source -> stand it up facing +/-Y; spun/floated by BP_Kiosk_RoomSettings.
+ "Gear":       dict(src=D+"gear/tripo_convert_f4382657-364f-4c83-832d-63defda2310b.fbx",
+                    rot=(90,0,0),  fit=('X',100.0), pivot='center'),
+ # Closet front is source -Y; rotate -90 about Z so it faces Blender -X = UE -X (kiosk front convention). Floor pivot.
+ "Closet":     dict(src=D+"closet/tripo_convert_490119a0-44a5-4048-bc39-19de4600cdd1.fbx",
+                    rot=(0,0,-90), fit=('Z',200.0), pivot='bottom'),
 }
 
 def bbox(obj):
@@ -72,6 +79,8 @@ for name, c in CFG.items():
     lo, hi, pts = bbox(obj)
     if c['pivot'] == 'center':
         pv = (lo + hi) / 2
+    elif c['pivot'] == 'bottom':  # bottom centre - stands on the floor at z 0
+        pv = mathutils.Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z))
     else:  # rimcenter: extreme-|x| verts lie on the rim's horizontal diameter -> give circle centre y and tube z
         w = max(abs(p.x) for p in pts)
         rim = [p for p in pts if abs(p.x) > w * 0.9]

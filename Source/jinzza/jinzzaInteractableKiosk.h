@@ -8,6 +8,7 @@
 
 class APlayerController;
 class UUserWidget;
+class UjinzzaFaceCameraComponent;
 
 /**
  * Common base for every walk-up-to lobby kiosk (AjinzzaRoomSettingsKiosk, AjinzzaWardrobeKiosk,
@@ -15,6 +16,9 @@ class UUserWidget;
  * for proximity and opens with E. Split out of AjinzzaRoomSettingsKiosk once a second kiosk type
  * (Wardrobe) needed the exact same polling/prompt/interact shape - see
  * AjinzzaLobbyPlayerController::CheckForNearbyKiosk.
+ *
+ * Every kiosk also gets a UjinzzaFaceCameraComponent, so its text labels always turn to face the
+ * local player, and is outlined white while it's the player's nearby kiosk (JinzzaHighlight).
  */
 UCLASS(Abstract)
 class JINZZA_API AjinzzaInteractableKiosk : public AActor
@@ -22,6 +26,8 @@ class JINZZA_API AjinzzaInteractableKiosk : public AActor
 	GENERATED_BODY()
 
 public:
+	AjinzzaInteractableKiosk();
+
 	/** How close a pawn needs to be (in cm) for AjinzzaLobbyPlayerController to consider this kiosk "nearby". */
 	UPROPERTY(EditAnywhere, Category = "Interaction")
 	float InteractionRadius = 220.f;
@@ -47,4 +53,8 @@ protected:
 	/** Restores Interactor to normal hidden-cursor/Game-only input. Call when a kiosk panel closes
 	 * (e.g. from its widget's OnNativeDestruct or an explicit "back"/"close" delegate). */
 	static void ExitKioskUIMode(APlayerController* Interactor);
+
+	/** Keeps this kiosk's labels facing the local player - see UjinzzaFaceCameraComponent. */
+	UPROPERTY(VisibleAnywhere, Category = "Interaction")
+	TObjectPtr<UjinzzaFaceCameraComponent> FaceCamera;
 };

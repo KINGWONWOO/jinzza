@@ -39,7 +39,7 @@ AjinzzaRoomSettingsKiosk::AjinzzaRoomSettingsKiosk()
 	Label->SetVerticalAlignment(EVRTA_TextCenter);
 	Label->SetWorldSize(28.f);
 	Label->SetText(FText::FromString(TEXT("ROOM SETTINGS")));
-	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
+	Label->SetTextRenderColor(JinzzaUI::Sticker_Yellow.ToFColor(true));
 
 	// No automatic WBP_RoomSettings lookup here: the on-disk WBP_RoomSettings Blueprint predates
 	// UjinzzaRoomSettingsWidget's C++-built-tree migration (2026-09-07) and is no longer parented

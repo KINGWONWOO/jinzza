@@ -20,16 +20,21 @@ namespace
 		FLinearColor SkyColor = FLinearColor::White;
 	};
 
-	// Day matches this room's existing hand-tuned sun angle exactly (see [[lobby-noobgame-decor]] -
-	// the windows were arranged around this exact rotation), Sunset/Night are new presets that swing
-	// the sun down toward the horizon and cool the ambient sky for evening/night.
+	// Day matches Lvl_Lobby's saved SunLight/SkyLight exactly (re-lit 2026-10-04): the sun comes in
+	// from the north, through the curtained window wall, at 25 degrees, so a sunbeam lands on the
+	// centre rug (the ready area). The level also has a SkyAtmosphere, a real-time-capture Movable
+	// SkyLight, and warm point lights in the floor lamps / fireplace / bedroom that these presets
+	// don't touch - at Night those carry the room. Sunset swings the sun lower and warmer through the
+	// same windows; Night dims and cools the sun and sky. 2026-10-05 re-light: the Day sun went
+	// 10 -> 15 and the sky fill is kept low (3.5) so the sun patch on the rug and the fireplace
+	// stand out against a slightly dimmer room.
 	const FJinzzaTimeOfDayPreset& GetPreset(EJinzzaLobbyTimeOfDay TimeOfDay)
 	{
 		static const FJinzzaTimeOfDayPreset Presets[] =
 		{
-			/* Day    */ { FRotator(-50.f, 20.f, 0.f), 10.f, FLinearColor::White,                        1.0f, FLinearColor::White },
-			/* Sunset */ { FRotator(-8.f, 20.f, 0.f),   6.f, FLinearColor(1.0f, 0.55f, 0.25f),            0.6f, FLinearColor(1.0f, 0.65f, 0.45f) },
-			/* Night  */ { FRotator(-70.f, 20.f, 0.f),  0.4f, FLinearColor(0.45f, 0.55f, 0.9f),           0.12f, FLinearColor(0.3f, 0.35f, 0.55f) },
+			/* Day    */ { FRotator(-25.f, -100.f, 0.f), 15.f, FLinearColor::White,                      3.5f, FLinearColor::White },
+			/* Sunset */ { FRotator(-10.f, -115.f, 0.f), 6.f, FLinearColor(1.0f, 0.55f, 0.25f),          1.8f, FLinearColor(1.0f, 0.65f, 0.45f) },
+			/* Night  */ { FRotator(-40.f, -120.f, 0.f), 0.4f, FLinearColor(0.45f, 0.55f, 0.9f),         0.35f, FLinearColor(0.3f, 0.35f, 0.55f) },
 		};
 		return Presets[static_cast<uint8>(TimeOfDay)];
 	}

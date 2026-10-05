@@ -4,6 +4,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
 #include "jinzzaUIStyle.h"
 #include "jinzzaLobbyGameState.h"
 #include "GameFramework/PlayerController.h"
@@ -92,7 +93,7 @@ AjinzzaLobbyClock::AjinzzaLobbyClock()
 	Label->SetVerticalAlignment(EVRTA_TextCenter);
 	Label->SetWorldSize(10.f);
 	Label->SetText(FText::FromString(TEXT("CLOCK")));
-	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
+	Label->SetTextRenderColor(JinzzaUI::Sticker_Yellow.ToFColor(true));
 
 	SetDisplayedTime(EJinzzaLobbyTimeOfDay::Day);
 }

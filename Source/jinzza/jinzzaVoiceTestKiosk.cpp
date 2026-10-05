@@ -42,7 +42,7 @@ AjinzzaVoiceTestKiosk::AjinzzaVoiceTestKiosk()
 	Label->SetVerticalAlignment(EVRTA_TextCenter);
 	Label->SetWorldSize(28.f);
 	Label->SetText(FText::FromString(TEXT("VOICE TEST")));
-	Label->SetTextRenderColor(JinzzaUI::Color_Accent.ToFColor(false));
+	Label->SetTextRenderColor(JinzzaUI::Sticker_Yellow.ToFColor(true));
 }
 
 void AjinzzaVoiceTestKiosk::Interact(APlayerController* Interactor)

@@ -44,10 +44,6 @@ public:
 private:
 	void BuildWidgetTree();
 
-	/** Hides IntroOverlay - called once from a timer set in NativeOnInitialized so the welcome
-	 * panel shown when the lobby first opens goes away on its own after a few seconds. */
-	void HideIntro();
-
 	UPROPERTY()
 	TObjectPtr<UTextBlock> SettingsText;
 
@@ -68,11 +64,4 @@ private:
 	/** Looping lobby BGM, started in NativeOnInitialized and stopped in NativeDestruct. */
 	UPROPERTY()
 	TObjectPtr<UAudioComponent> MusicComponent;
-
-	/** Full-screen welcome overlay shown when the lobby first opens, auto-hidden after a few
-	 * seconds by a timer set in NativeOnInitialized - see BuildWidgetTree/HideIntro. */
-	UPROPERTY()
-	TObjectPtr<UWidget> IntroOverlay;
-
-	FTimerHandle IntroTimerHandle;
 };

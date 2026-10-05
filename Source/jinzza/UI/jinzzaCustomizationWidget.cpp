@@ -59,8 +59,9 @@ void UjinzzaCustomizationWidget::BuildWidgetTree()
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
 	WidgetTree->RootWidget = Root;
 
-	UBorder* Panel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("Panel"));
-	Panel->SetPadding(FMargin(24.f));
+	// Sticker-style panel, matching the main menu / T_Logo.
+	UBorder* PanelFace = nullptr;
+	UOverlay* Panel = JinzzaUI::MakeStickerPanel(WidgetTree, TEXT("Panel"), PanelFace);
 	if (UOverlaySlot* PanelSlot = Root->AddChildToOverlay(Panel))
 	{
 		PanelSlot->SetHorizontalAlignment(HAlign_Center);
@@ -68,30 +69,31 @@ void UjinzzaCustomizationWidget::BuildWidgetTree()
 	}
 
 	USizeBox* PanelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelBox"));
-	PanelBox->SetWidthOverride(820.f);
-	Panel->SetContent(PanelBox);
+	PanelBox->SetWidthOverride(1060.f);
+	PanelFace->SetContent(PanelBox);
 
 	UVerticalBox* OuterStack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("OuterStack"));
 	PanelBox->AddChild(OuterStack);
 
-	JinzzaUI::AddSpaced(OuterStack, JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("Heading"), FText::FromString(TEXT("Customization"))), 0.f);
-	JinzzaUI::AddSpaced(OuterStack, JinzzaUI::MakeDivider(WidgetTree, TEXT("HeaderDivider")));
+	JinzzaUI::AddSpaced(OuterStack, JinzzaUI::MakeStickerHeading(WidgetTree, TEXT("Heading"), FText::FromString(TEXT("Customize")), 48), 0.f);
 
 	UHorizontalBox* SplitRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("SplitRow"));
 	JinzzaUI::AddSpaced(OuterStack, SplitRow, 16.f);
 
 	// --- Left: live character preview (AjinzzaCharacterPreviewCapture, spawned on demand - see RefreshCharacterPreview) ---
 	USizeBox* PreviewBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PreviewBox"));
-	PreviewBox->SetWidthOverride(260.f);
-	PreviewBox->SetHeightOverride(390.f);
+	PreviewBox->SetWidthOverride(320.f);
+	PreviewBox->SetHeightOverride(480.f);
 	if (UHorizontalBoxSlot* PreviewSlot = SplitRow->AddChildToHorizontalBox(PreviewBox))
 	{
 		PreviewSlot->SetVerticalAlignment(VAlign_Top);
 		PreviewSlot->SetPadding(FMargin(0.f, 0.f, 20.f, 0.f));
 	}
 
-	UBorder* PreviewFrame = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("PreviewFrame"));
-	PreviewBox->AddChild(PreviewFrame);
+	// Preview sits in its own rounded sticker frame (white outline, drop shadow).
+	UBorder* PreviewFrame = nullptr;
+	PreviewBox->AddChild(JinzzaUI::MakeSticker(WidgetTree, TEXT("PreviewFrame"), FLinearColor::FromSRGBColor(FColor(40, 40, 48)), 22.f, PreviewFrame));
+	PreviewFrame->SetPadding(FMargin(8.f));
 
 	CharacterPreviewImage = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("CharacterPreviewImage"));
 	PreviewFrame->SetContent(CharacterPreviewImage);
@@ -108,10 +110,10 @@ void UjinzzaCustomizationWidget::BuildWidgetTree()
 
 	auto AddTabButton = [this, TabRow](const TCHAR* Name, const FText& Label) -> UButton*
 	{
-		UButton* TabButton = JinzzaUI::MakeSecondaryButton(WidgetTree, Name, Label, 16.f);
+		UButton* TabButton = JinzzaUI::MakeStickerButton(WidgetTree, Name, Label, JinzzaUI::Sticker_Pink, 22.f);
 		if (UHorizontalBoxSlot* TabSlot = TabRow->AddChildToHorizontalBox(TabButton))
 		{
-			TabSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+			TabSlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 		}
 		return TabButton;
 	};
@@ -132,14 +134,14 @@ void UjinzzaCustomizationWidget::BuildWidgetTree()
 	{
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), *(FString(NamePrefix) + TEXT("_Row")));
 
-		OutPrev = JinzzaUI::MakeSecondaryButton(WidgetTree, *(FString(NamePrefix) + TEXT("_Prev")), FText::FromString(TEXT("<")), 16.f);
+		OutPrev = JinzzaUI::MakeStickerButton(WidgetTree, *(FString(NamePrefix) + TEXT("_Prev")), FText::FromString(TEXT("<")), JinzzaUI::Sticker_Sky, 24.f);
 		if (UHorizontalBoxSlot* PrevSlot = Row->AddChildToHorizontalBox(OutPrev))
 		{
 			PrevSlot->SetVerticalAlignment(VAlign_Center);
 			PrevSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
 		}
 
-		OutValue = JinzzaUI::MakeBodyText(WidgetTree, *(FString(NamePrefix) + TEXT("_Value")), FText::GetEmpty());
+		OutValue = JinzzaUI::MakeStickerText(WidgetTree, *(FString(NamePrefix) + TEXT("_Value")), FText::GetEmpty(), 24);
 		OutValue->SetJustification(ETextJustify::Center);
 		if (UHorizontalBoxSlot* ValueSlot = Row->AddChildToHorizontalBox(OutValue))
 		{
@@ -152,8 +154,8 @@ void UjinzzaCustomizationWidget::BuildWidgetTree()
 		{
 			UImage* Swatch = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), *(FString(NamePrefix) + TEXT("_Swatch")));
 			USizeBox* SwatchBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(FString(NamePrefix) + TEXT("_SwatchBox")));
-			SwatchBox->SetWidthOverride(20.f);
-			SwatchBox->SetHeightOverride(20.f);
+			SwatchBox->SetWidthOverride(30.f);
+			SwatchBox->SetHeightOverride(30.f);
 			SwatchBox->AddChild(Swatch);
 			if (UHorizontalBoxSlot* SwatchSlot = Row->AddChildToHorizontalBox(SwatchBox))
 			{
@@ -163,14 +165,14 @@ void UjinzzaCustomizationWidget::BuildWidgetTree()
 			*OutSwatch = Swatch;
 		}
 
-		OutNext = JinzzaUI::MakeSecondaryButton(WidgetTree, *(FString(NamePrefix) + TEXT("_Next")), FText::FromString(TEXT(">")), 16.f);
+		OutNext = JinzzaUI::MakeStickerButton(WidgetTree, *(FString(NamePrefix) + TEXT("_Next")), FText::FromString(TEXT(">")), JinzzaUI::Sticker_Sky, 24.f);
 		if (UHorizontalBoxSlot* NextSlot = Row->AddChildToHorizontalBox(OutNext))
 		{
 			NextSlot->SetVerticalAlignment(VAlign_Center);
 			NextSlot->SetPadding(FMargin(8.f, 0.f, 0.f, 0.f));
 		}
 
-		JinzzaUI::AddSpaced(Page, JinzzaUI::MakeLabeledRow(WidgetTree, *(FString(NamePrefix) + TEXT("_LabeledRow")), RowLabel, Row));
+		JinzzaUI::AddStickerRow(WidgetTree, Page, *(FString(NamePrefix) + TEXT("_LabeledRow")), RowLabel, Row, 400.f);
 	};
 
 	auto MakeTabPage = [this](const TCHAR* Name) -> UVerticalBox*
@@ -202,7 +204,7 @@ void UjinzzaCustomizationWidget::BuildWidgetTree()
 		ButtonRowSlot->SetHorizontalAlignment(HAlign_Right);
 	}
 
-	DoneButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("DoneButton"), FText::FromString(TEXT("Done")));
+	DoneButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("DoneButton"), FText::FromString(TEXT("Done")), JinzzaUI::Sticker_Yellow, 28.f, true);
 	ButtonRow->AddChildToHorizontalBox(DoneButton);
 }
 
@@ -264,12 +266,11 @@ void UjinzzaCustomizationWidget::ShowTab(int32 TabIndex)
 		TabSwitcher->SetActiveWidgetIndex(TabIndex);
 	}
 
-	// Cheap "you are here" indicator until a real visual design pass replaces these placeholder
-	// tab buttons - the active tab's button is disabled, the rest re-enabled.
-	if (HeadTabButton) HeadTabButton->SetIsEnabled(TabIndex != Tab_Head);
-	if (ClothesTabButton) ClothesTabButton->SetIsEnabled(TabIndex != Tab_Clothes);
-	if (AccessoriesTabButton) AccessoriesTabButton->SetIsEnabled(TabIndex != Tab_Accessories);
-	if (ColorsTabButton) ColorsTabButton->SetIsEnabled(TabIndex != Tab_Colors);
+	// "You are here": the active tab's sticker pill is filled pink, the rest plain black.
+	JinzzaUI::SetStickerButtonSelected(HeadTabButton, JinzzaUI::Sticker_Pink, TabIndex == Tab_Head);
+	JinzzaUI::SetStickerButtonSelected(ClothesTabButton, JinzzaUI::Sticker_Pink, TabIndex == Tab_Clothes);
+	JinzzaUI::SetStickerButtonSelected(AccessoriesTabButton, JinzzaUI::Sticker_Pink, TabIndex == Tab_Accessories);
+	JinzzaUI::SetStickerButtonSelected(ColorsTabButton, JinzzaUI::Sticker_Pink, TabIndex == Tab_Colors);
 }
 
 void UjinzzaCustomizationWidget::RefreshCharacterPreview()

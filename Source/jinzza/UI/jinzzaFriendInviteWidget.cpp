@@ -35,8 +35,9 @@ void UjinzzaFriendInviteWidget::BuildWidgetTree()
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
 	WidgetTree->RootWidget = Root;
 
-	UBorder* Panel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("Panel"));
-	Panel->SetPadding(FMargin(24.f));
+	// Sticker-style panel, matching the main menu / T_Logo.
+	UBorder* PanelFace = nullptr;
+	UOverlay* Panel = JinzzaUI::MakeStickerPanel(WidgetTree, TEXT("Panel"), PanelFace);
 	if (UOverlaySlot* PanelSlot = Root->AddChildToOverlay(Panel))
 	{
 		PanelSlot->SetHorizontalAlignment(HAlign_Center);
@@ -44,21 +45,20 @@ void UjinzzaFriendInviteWidget::BuildWidgetTree()
 	}
 
 	USizeBox* PanelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelBox"));
-	PanelBox->SetWidthOverride(460.f);
-	Panel->SetContent(PanelBox);
+	PanelBox->SetWidthOverride(760.f);
+	PanelFace->SetContent(PanelBox);
 
 	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Stack"));
 	PanelBox->AddChild(Stack);
 
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("Title"), FText::FromString(TEXT("Invite Friends"))), 0.f);
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("TitleDivider")));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeStickerHeading(WidgetTree, TEXT("Title"), FText::FromString(TEXT("Invite Friends")), 48), 0.f);
 
-	HeaderNote = JinzzaUI::MakeBodyText(WidgetTree, TEXT("HeaderNote"), FText::FromString(TEXT("Loading friends list...")), true);
+	HeaderNote = JinzzaUI::MakeStickerText(WidgetTree, TEXT("HeaderNote"), FText::FromString(TEXT("Loading friends list...")), 20, true);
 	JinzzaUI::AddSpaced(Stack, HeaderNote, 12.f);
 
 	FriendListScrollBox = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("FriendListScrollBox"));
 	USizeBox* ScrollHeightBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("FriendListHeightBox"));
-	ScrollHeightBox->SetHeightOverride(320.f);
+	ScrollHeightBox->SetHeightOverride(400.f);
 	ScrollHeightBox->AddChild(FriendListScrollBox);
 	JinzzaUI::AddSpaced(Stack, ScrollHeightBox, 10.f);
 
@@ -72,13 +72,13 @@ void UjinzzaFriendInviteWidget::BuildWidgetTree()
 		ButtonRowSlot->SetPadding(FMargin(0.f, 16.f, 0.f, 0.f));
 	}
 
-	CloseButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Close")));
+	CloseButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Close")), JinzzaUI::Sticker_Sky, 26.f);
 	if (UHorizontalBoxSlot* CloseSlot = ButtonRow->AddChildToHorizontalBox(CloseButton))
 	{
-		CloseSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		CloseSlot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
 	}
 
-	RefreshButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("RefreshButton"), FText::FromString(TEXT("Refresh")));
+	RefreshButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("RefreshButton"), FText::FromString(TEXT("Refresh")), JinzzaUI::Sticker_Yellow, 26.f, true);
 	ButtonRow->AddChildToHorizontalBox(RefreshButton);
 }
 
@@ -155,7 +155,7 @@ void UjinzzaFriendInviteWidget::HandleFriendsListReceived(const TArray<FJinzzaFr
 	{
 		const FName RowName = *FString::Printf(TEXT("FriendRow_%d"), NextRowId++);
 
-		UButton* InviteButton = JinzzaUI::MakeSecondaryButton(WidgetTree, *(RowName.ToString() + TEXT("_Invite")), FText::FromString(TEXT("Invite")), 15.f);
+		UButton* InviteButton = JinzzaUI::MakeStickerButton(WidgetTree, *(RowName.ToString() + TEXT("_Invite")), FText::FromString(TEXT("Invite")), JinzzaUI::Sticker_Teal, 20.f);
 		InviteButton->SetIsEnabled(Friend.bIsOnline);
 
 		UJinzzaFriendInviteRowHandler* Handler = NewObject<UJinzzaFriendInviteRowHandler>(this);
@@ -164,12 +164,8 @@ void UjinzzaFriendInviteWidget::HandleFriendsListReceived(const TArray<FJinzzaFr
 		InviteButton->OnClicked.AddDynamic(Handler, &UJinzzaFriendInviteRowHandler::HandleInviteClicked);
 
 		const FString RowLabel = Friend.bIsOnline ? Friend.DisplayName : FString::Printf(TEXT("%s (Offline)"), *Friend.DisplayName);
-		UWidget* Row = JinzzaUI::MakeLabeledRow(WidgetTree, RowName, FText::FromString(RowLabel), InviteButton);
-
-		if (UVerticalBoxSlot* RowSlot = FriendListBox->AddChildToVerticalBox(Row))
-		{
-			RowSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-		}
+		// Big name on the left, Invite pill on the right (same row helper as Settings).
+		JinzzaUI::AddStickerRow(WidgetTree, FriendListBox, RowName, FText::FromString(RowLabel), InviteButton, 150.f);
 	}
 }
 

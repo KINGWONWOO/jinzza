@@ -1,10 +1,16 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaInteractableKiosk.h"
+#include "jinzzaInteractHighlight.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
+
+AjinzzaInteractableKiosk::AjinzzaInteractableKiosk()
+{
+	FaceCamera = CreateDefaultSubobject<UjinzzaFaceCameraComponent>(TEXT("FaceCamera"));
+}
 
 void AjinzzaInteractableKiosk::EnterKioskUIMode(APlayerController* Interactor, UUserWidget* Widget)
 {

@@ -5,6 +5,7 @@
 #include "jinzzaInputKeys.h"
 #include "Components/TextBlock.h"
 #include "Components/Border.h"
+#include "Components/Overlay.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Blueprint/WidgetTree.h"
@@ -16,17 +17,19 @@ void UjinzzaInteractionPromptWidget::BuildWidgetTree()
 		return;
 	}
 
-	UBorder* Root = JinzzaUI::MakeNoteBackground(WidgetTree, TEXT("Root"));
+	// Black sticker pill (white outline + drop shadow), matching the main menu / T_Logo.
+	UBorder* Face = nullptr;
+	UOverlay* Root = JinzzaUI::MakeSticker(WidgetTree, TEXT("Root"), JinzzaUI::Sticker_Ink, 26.f, Face);
 	WidgetTree->RootWidget = Root;
-	Root->SetPadding(FMargin(16.f, 10.f));
-	Root->SetHorizontalAlignment(HAlign_Center);
-	Root->SetVerticalAlignment(VAlign_Center);
+	Face->SetPadding(FMargin(12.f, 8.f, 18.f, 8.f));
+	Face->SetHorizontalAlignment(HAlign_Center);
+	Face->SetVerticalAlignment(VAlign_Center);
 
 	UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Row"));
-	Root->SetContent(Row);
+	Face->SetContent(Row);
 
 	UTextBlock* KeyLabel = nullptr;
-	UWidget* KeyCap = JinzzaUI::MakeKeyCap(WidgetTree, TEXT("KeyCap"), KeyLabel, 30.f);
+	UWidget* KeyCap = JinzzaUI::MakeStickerKeyCap(WidgetTree, TEXT("KeyCap"), KeyLabel, 40.f);
 	KeyText = KeyLabel;
 	if (UHorizontalBoxSlot* KeySlot = Row->AddChildToHorizontalBox(KeyCap))
 	{
@@ -34,7 +37,7 @@ void UjinzzaInteractionPromptWidget::BuildWidgetTree()
 		KeySlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 	}
 
-	PromptText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("PromptText"), FText::GetEmpty());
+	PromptText = JinzzaUI::MakeStickerText(WidgetTree, TEXT("PromptText"), FText::GetEmpty(), 22);
 	if (UHorizontalBoxSlot* TextSlot = Row->AddChildToHorizontalBox(PromptText))
 	{
 		TextSlot->SetVerticalAlignment(VAlign_Center);

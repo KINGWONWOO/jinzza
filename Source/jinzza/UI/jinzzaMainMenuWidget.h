@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Styling/SlateBrush.h"
 #include "jinzzaGameInstance.h"
 #include "jinzzaMainMenuWidget.generated.h"
 
@@ -12,27 +13,70 @@ class UButton;
 class UWidgetSwitcher;
 class UWidget;
 class UImage;
+class UBorder;
 class UjinzzaSettingsWidget;
 class UjinzzaCustomizationWidget;
 class UjinzzaVoiceTestWidget;
 class UAudioComponent;
 
 /**
+ * Hover/press feedback for the main menu's "sticker" buttons (see MakeStickerButton in the .cpp):
+ * on hover the sticker face fills with its accent color, its text flips to dark and the face lifts
+ * a few pixels off its drop shadow; on press it sinks onto the shadow. Owned (kept alive) by
+ * UjinzzaMainMenuWidget::StickerFx.
+ */
+UCLASS()
+class UJinzzaMenuStickerFx : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	void Bind(UButton* InButton, UBorder* InFace, const FSlateBrush& InNormalBrush, const FSlateBrush& InHoverBrush);
+	void AddText(UTextBlock* Text, const FLinearColor& NormalColor, const FLinearColor& HoverColor);
+
+	UFUNCTION()
+	void HandleHovered();
+
+	UFUNCTION()
+	void HandleUnhovered();
+
+	UFUNCTION()
+	void HandlePressed();
+
+	UFUNCTION()
+	void HandleReleased();
+
+private:
+	void Apply(bool bHot, float LiftY);
+
+	UPROPERTY()
+	TObjectPtr<UBorder> Face;
+
+	UPROPERTY()
+	TArray<TObjectPtr<UTextBlock>> Texts;
+
+	TArray<FLinearColor> TextNormalColors;
+	TArray<FLinearColor> TextHoverColors;
+	FSlateBrush NormalBrush;
+	FSlateBrush HoverBrush;
+	bool bHovered = false;
+};
+
+/**
  * Main menu UI: a button-list page plus Settings/Customization/VoiceTest popup-pages swapped in
  * via a UWidgetSwitcher, plus a live character preview render.
  *
- * Button-page layout keeps the position split from an earlier round (title/divider/tagline/status
- * top-right; Host/Settings/Quit stacked bottom-left; Customize/Voice Test stacked bottom-right,
- * each column on its own JinzzaUI::MakePanelBackground noir panel), but the VISUAL STYLE was
- * reworked back to JINZZA's own established noir courtroom/interrogation theme (see JinzzaUI's own
- * header comment) after the user asked to match the game's concept rather than keep NOOB-GAME's
- * cute pastel look from earlier rounds: Host/Settings/Quit are the same
- * MakePrimaryButton/MakeSecondaryButton/MakeWarningButton pills every other jinzza screen uses;
- * Customize/Voice Test are circular icon buttons (JinzzaUI::MakeCircleIconButton) with purpose-
- * built icons instead of borrowed NOOB art - a masquerade mask (crimson) for Customize, evoking
- * the "Imitator" disguise premise directly, and a microphone (gold) for Voice Test - both built
- * from plain primitives (JinzzaUI::MakeMaskIcon/MakeMicIcon), not source images. The top-left logo
- * badge uses the same mask icon in place of the old "LOGO" text placeholder.
+ * Button-page layout: T_Logo image + status text top-right; Host/Settings/Quit stacked
+ * bottom-left; Customize/Voice Test stacked bottom-right. The page background is transparent so
+ * the 3D menu scene (AjinzzaMenuSceneDirector) shows behind it; the popup pages dim it instead
+ * (ShowPage).
+ *
+ * Visual style matches T_Logo's cartoon "sticker" look: near-black fills, thick white outlines,
+ * fully rounded shapes, a solid drop shadow under each sticker, and bright candy colors on hover
+ * (UJinzzaMenuStickerFx). Host/Settings/Quit are wide pill stickers with a white round badge icon
+ * (plus / lines / cross, drawn from primitives) and a Korean sub-label; Customize/Voice Test are
+ * colored round stickers with the mask/mic icons (JinzzaUI::MakeMaskIcon/MakeMicIcon) and a small
+ * caption pill. The top-left badge (company-logo placeholder) is a matching rounded-square sticker.
  *
  * TEMP C++-built (see docs/umg_widget_authoring_guide.md): builds its own tree in
  * BuildWidgetTree() instead of relying on a Designer-authored WBP_MainMenu layout, so PIE isn't
@@ -80,12 +124,18 @@ protected:
 private:
 	void BuildWidgetTree();
 	void ShowButtonsPage();
+	/** Switches Switcher to PageIndex and tints Backdrop to match (clear only on the button page). */
+	void ShowPage(int32 PageIndex);
 	void TryWireCharacterPreview();
 	void HandleSessionStatusChanged(EJinzzaSessionStatus Status, const FString& Message);
 	UjinzzaGameInstance* GetJinzzaGameInstance() const;
 
 	UPROPERTY()
 	TObjectPtr<UWidgetSwitcher> Switcher;
+
+	/** Full-screen root border: transparent over the 3D menu scene on the button page, dimmed behind the popup pages - see ShowPage. */
+	UPROPERTY()
+	TObjectPtr<UBorder> Backdrop;
 
 	UPROPERTY()
 	TObjectPtr<UTextBlock> StatusText;
@@ -124,6 +174,10 @@ private:
 	/** Voice-modification test panel (speak into the mic, hear it filtered back), shown as a central switcher page when VoiceTestButton is clicked - see UjinzzaVoiceTestWidget. */
 	UPROPERTY()
 	TObjectPtr<UjinzzaVoiceTestWidget> VoiceTestWidget;
+
+	/** Hover/press effect objects for the sticker buttons - held here so they aren't garbage collected (delegates only hold weak refs). */
+	UPROPERTY()
+	TArray<TObjectPtr<UJinzzaMenuStickerFx>> StickerFx;
 
 	/** Looping menu BGM, started in NativeOnInitialized and stopped in NativeDestruct. */
 	UPROPERTY()

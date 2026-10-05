@@ -5,6 +5,7 @@
 #include "jinzzaMainMenuWidget.h"
 #include "jinzzaMenuBackgroundCharacter.h"
 #include "jinzzaMenuCameraRig.h"
+#include "jinzzaMenuSceneDirector.h"
 #include "jinzza.h"
 #include "UObject/ConstructorHelpers.h"
 #include "EngineUtils.h"
@@ -69,8 +70,8 @@ void AjinzzaMenuPlayerController::SetupMenuBackgroundScene()
 	}
 	if (!BackgroundCharacter)
 	{
-		// Faces back toward the origin (Yaw 180), where the camera rig looks from - see below.
-		World->SpawnActor<AjinzzaMenuBackgroundCharacter>(FVector(500.f, 0.f, 0.f), FRotator(0.f, 180.f, 0.f));
+		// Placed into each backdrop scene by the scene director below - spawn location doesn't matter.
+		BackgroundCharacter = World->SpawnActor<AjinzzaMenuBackgroundCharacter>(FVector(0.f, 0.f, 5000.f), FRotator::ZeroRotator);
 	}
 
 	AjinzzaMenuCameraRig* CameraRig = nullptr;
@@ -81,12 +82,29 @@ void AjinzzaMenuPlayerController::SetupMenuBackgroundScene()
 	}
 	if (!CameraRig)
 	{
-		// Faces +X (ZeroRotator), toward the character spawned above.
-		CameraRig = World->SpawnActor<AjinzzaMenuCameraRig>(FVector(0.f, 0.f, 150.f), FRotator::ZeroRotator);
+		// Moved/aimed every frame by the scene director below.
+		CameraRig = World->SpawnActor<AjinzzaMenuCameraRig>(FVector::ZeroVector, FRotator::ZeroRotator);
 	}
 
 	if (CameraRig)
 	{
 		SetViewTarget(CameraRig);
+	}
+
+	// The backdrop scenes are built far out along +X (from X = 20000), clear of Lvl_MainMenu's own
+	// floor/walls and the AjinzzaCharacterPreviewCapture at the origin.
+	AjinzzaMenuSceneDirector* Director = nullptr;
+	for (TActorIterator<AjinzzaMenuSceneDirector> It(World); It; ++It)
+	{
+		Director = *It;
+		break;
+	}
+	if (!Director)
+	{
+		Director = World->SpawnActor<AjinzzaMenuSceneDirector>(FVector(20000.f, 0.f, 0.f), FRotator::ZeroRotator);
+	}
+	if (Director)
+	{
+		Director->Start(BackgroundCharacter, CameraRig, this);
 	}
 }

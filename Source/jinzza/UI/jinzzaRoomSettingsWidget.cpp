@@ -32,8 +32,9 @@ void UjinzzaRoomSettingsWidget::BuildWidgetTree()
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
 	WidgetTree->RootWidget = Root;
 
-	UBorder* Panel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("Panel"));
-	Panel->SetPadding(FMargin(24.f));
+	// Sticker-style panel, matching the main menu / T_Logo.
+	UBorder* PanelFace = nullptr;
+	UOverlay* Panel = JinzzaUI::MakeStickerPanel(WidgetTree, TEXT("Panel"), PanelFace);
 	if (UOverlaySlot* PanelSlot = Root->AddChildToOverlay(Panel))
 	{
 		PanelSlot->SetHorizontalAlignment(HAlign_Center);
@@ -41,53 +42,63 @@ void UjinzzaRoomSettingsWidget::BuildWidgetTree()
 	}
 
 	USizeBox* PanelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelBox"));
-	PanelBox->SetWidthOverride(460.f);
-	Panel->SetContent(PanelBox);
+	PanelBox->SetWidthOverride(900.f);
+	PanelFace->SetContent(PanelBox);
 
 	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Stack"));
 	PanelBox->AddChild(Stack);
 
-	HeaderNote = JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("HeaderNote"), FText::GetEmpty());
+	HeaderNote = JinzzaUI::MakeStickerHeading(WidgetTree, TEXT("HeaderNote"), FText::GetEmpty(), 44);
 	JinzzaUI::AddSpaced(Stack, HeaderNote, 0.f);
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("HeaderDivider")));
+	JinzzaUI::AddStickerSection(WidgetTree, Stack, TEXT("RoomSection"), FText::FromString(TEXT("Room")), true);
 
 	RoomNameBox = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomNameBox"));
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("RoomNameRow"), FText::FromString(TEXT("Room Name")), RoomNameBox), 16.f);
+	JinzzaUI::ApplyStickerStyle(RoomNameBox);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("RoomNameRow"), FText::FromString(TEXT("Room Name")), RoomNameBox, 380.f);
 
 	MaxPlayersSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("MaxPlayersSpinBox"));
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("MaxPlayersRow"), FText::FromString(TEXT("Max Players")), MaxPlayersSpinBox));
+	JinzzaUI::ApplyStickerStyle(MaxPlayersSpinBox);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("MaxPlayersRow"), FText::FromString(TEXT("Max Players")), MaxPlayersSpinBox, 380.f);
 
 	JudgeCountSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("JudgeCountSpinBox"));
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("JudgeCountRow"), FText::FromString(TEXT("Judge Count")), JudgeCountSpinBox));
+	JinzzaUI::ApplyStickerStyle(JudgeCountSpinBox);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("JudgeCountRow"), FText::FromString(TEXT("Judge Count")), JudgeCountSpinBox, 380.f);
 
 	VoteCountSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("VoteCountSpinBox"));
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("VoteCountRow"), FText::FromString(TEXT("Vote Count")), VoteCountSpinBox));
+	JinzzaUI::ApplyStickerStyle(VoteCountSpinBox);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("VoteCountRow"), FText::FromString(TEXT("Vote Count")), VoteCountSpinBox, 380.f);
 
 	QuestionTimeCyclesSpinBox = WidgetTree->ConstructWidget<USpinBox>(USpinBox::StaticClass(), TEXT("QuestionTimeCyclesSpinBox"));
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("QuestionTimeCyclesRow"), FText::FromString(TEXT("Question Time Cycles")), QuestionTimeCyclesSpinBox));
+	JinzzaUI::ApplyStickerStyle(QuestionTimeCyclesSpinBox);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("QuestionTimeCyclesRow"), FText::FromString(TEXT("Question Time Cycles")), QuestionTimeCyclesSpinBox, 380.f);
 
 	PhaseSpeedCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("PhaseSpeedCombo"));
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("PhaseSpeedRow"), FText::FromString(TEXT("Phase Speed")), PhaseSpeedCombo));
+	JinzzaUI::ApplyStickerStyle(PhaseSpeedCombo);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("PhaseSpeedRow"), FText::FromString(TEXT("Phase Speed")), PhaseSpeedCombo, 380.f);
 
 	RoleAssignCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("RoleAssignCombo"));
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(WidgetTree, TEXT("RoleAssignRow"), FText::FromString(TEXT("Role Assign Method")), RoleAssignCombo));
+	JinzzaUI::ApplyStickerStyle(RoleAssignCombo);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("RoleAssignRow"), FText::FromString(TEXT("Role Assign Method")), RoleAssignCombo, 380.f);
 
 	UHorizontalBox* ButtonRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("ButtonRow"));
-	JinzzaUI::AddSpaced(Stack, ButtonRow, 20.f);
+	if (UVerticalBoxSlot* ButtonRowSlot = JinzzaUI::AddSpaced(Stack, ButtonRow, 28.f))
+	{
+		ButtonRowSlot->SetHorizontalAlignment(HAlign_Right);
+	}
 
-	CloseButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Close")));
+	CloseButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Close")), JinzzaUI::Sticker_Sky, 26.f);
 	if (UHorizontalBoxSlot* CloseSlot = ButtonRow->AddChildToHorizontalBox(CloseButton))
 	{
-		CloseSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		CloseSlot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
 	}
 
-	ApplyButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("ApplyButton"), FText::FromString(TEXT("Apply")));
+	ApplyButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("ApplyButton"), FText::FromString(TEXT("Apply")), JinzzaUI::Sticker_Yellow, 26.f, true);
 	if (UHorizontalBoxSlot* ApplySlot = ButtonRow->AddChildToHorizontalBox(ApplyButton))
 	{
-		ApplySlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		ApplySlot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
 	}
 
-	StartGameButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("StartGameButton"), FText::FromString(TEXT("Start Game")));
+	StartGameButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("StartGameButton"), FText::FromString(TEXT("Start Game")), JinzzaUI::Sticker_Teal, 28.f, true);
 	ButtonRow->AddChildToHorizontalBox(StartGameButton);
 }
 

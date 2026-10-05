@@ -2,7 +2,12 @@
 
 #include "jinzzaVoiceTestWidget.h"
 #include "jinzzaUIStyle.h"
-#include "AudioCaptureComponent.h"
+#include "jinzzaMicLoopbackComponent.h"
+#include "jinzzaGameUserSettings.h"
+#include "jinzza.h"
+#include "AudioCaptureCore.h"
+#include "AudioMixerBlueprintLibrary.h"
+#include "Components/ComboBoxString.h"
 #include "Components/AudioComponent.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
@@ -15,6 +20,7 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/Border.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Blueprint/WidgetTree.h"
 #include "GameFramework/PlayerController.h"
 #include "Sound/SoundEffectSource.h"
@@ -23,6 +29,9 @@
 
 namespace
 {
+	/** Width of the mic level meter track (matches the row control width below). */
+	constexpr float VoiceTestMeterWidth = 400.f;
+
 	// One row: a fill-width slider plus a small fixed-width value label to its right.
 	USlider* AddSliderRow(UWidgetTree* Tree, UVerticalBox* Stack, const TCHAR* NamePrefix, const FText& RowLabel,
 		float MinValue, float MaxValue, TObjectPtr<UTextBlock>& OutValueText)
@@ -38,14 +47,22 @@ namespace
 			SliderSlot->SetSize(ESlateSizeRule::Fill);
 			SliderSlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 		}
+		JinzzaUI::ApplyStickerStyle(Slider);
 
-		OutValueText = JinzzaUI::MakeBodyText(Tree, *(FString(NamePrefix) + TEXT("_Value")), FText::GetEmpty());
-		if (UHorizontalBoxSlot* ValueSlot = Row->AddChildToHorizontalBox(OutValueText))
+		// Big yellow value readout, like the Settings sliders.
+		OutValueText = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), *(FString(NamePrefix) + TEXT("_Value")));
+		OutValueText->SetFont(JinzzaUI::HeadingFont(22));
+		OutValueText->SetColorAndOpacity(FSlateColor(JinzzaUI::Sticker_Yellow));
+		OutValueText->SetJustification(ETextJustify::Right);
+		USizeBox* ValueBox = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), *(FString(NamePrefix) + TEXT("_ValueBox")));
+		ValueBox->SetWidthOverride(80.f);
+		ValueBox->AddChild(OutValueText);
+		if (UHorizontalBoxSlot* ValueSlot = Row->AddChildToHorizontalBox(ValueBox))
 		{
 			ValueSlot->SetVerticalAlignment(VAlign_Center);
 		}
 
-		JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeLabeledRow(Tree, *(FString(NamePrefix) + TEXT("_LabeledRow")), RowLabel, Row));
+		JinzzaUI::AddStickerRow(Tree, Stack, *(FString(NamePrefix) + TEXT("_LabeledRow")), RowLabel, Row, 400.f);
 		return Slider;
 	}
 }
@@ -60,8 +77,9 @@ void UjinzzaVoiceTestWidget::BuildWidgetTree()
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
 	WidgetTree->RootWidget = Root;
 
-	UBorder* Panel = JinzzaUI::MakePanelBackground(WidgetTree, TEXT("Panel"));
-	Panel->SetPadding(FMargin(24.f));
+	// Sticker-style panel, matching the main menu / T_Logo.
+	UBorder* PanelFace = nullptr;
+	UOverlay* Panel = JinzzaUI::MakeStickerPanel(WidgetTree, TEXT("Panel"), PanelFace);
 	if (UOverlaySlot* PanelSlot = Root->AddChildToOverlay(Panel))
 	{
 		PanelSlot->SetHorizontalAlignment(HAlign_Center);
@@ -69,57 +87,95 @@ void UjinzzaVoiceTestWidget::BuildWidgetTree()
 	}
 
 	USizeBox* PanelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelBox"));
-	PanelBox->SetWidthOverride(440.f);
-	Panel->SetContent(PanelBox);
+	PanelBox->SetWidthOverride(720.f);
+	PanelFace->SetContent(PanelBox);
 
 	UVerticalBox* Stack = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Stack"));
 	PanelBox->AddChild(Stack);
 
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeSectionHeading(WidgetTree, TEXT("Heading"), FText::FromString(TEXT("Voice Modulation Test"))), 0.f);
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("HeaderDivider")));
+	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeStickerHeading(WidgetTree, TEXT("Heading"), FText::FromString(TEXT("Voice Test")), 48), 0.f);
 
-	UTextBlock* Hint = JinzzaUI::MakeBodyText(WidgetTree, TEXT("Hint"), FText::FromString(TEXT("Press Speak & Listen, then talk into your mic.")), true);
+	UTextBlock* Hint = JinzzaUI::MakeStickerText(WidgetTree, TEXT("Hint"), FText::FromString(TEXT("Press Speak & Listen, then talk into your mic.")), 20, true);
 	JinzzaUI::AddSpaced(Stack, Hint, 8.f);
 
-	ToggleListenButton = JinzzaUI::MakePrimaryButton(WidgetTree, TEXT("ToggleListenButton"), FText::FromString(TEXT("Speak & Listen")));
+	// --- Devices: which mic to record from, which speakers/headphones to play through, and how
+	// much to boost the mic so you can actually hear yourself. ---
+	JinzzaUI::AddStickerSection(WidgetTree, Stack, TEXT("DevicesSection"), FText::FromString(TEXT("Devices")));
+
+	MicDeviceCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("MicDeviceCombo"));
+	JinzzaUI::ApplyStickerStyle(MicDeviceCombo);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("MicDeviceRow"), FText::FromString(TEXT("Mic")), MicDeviceCombo, 400.f);
+
+	OutputDeviceCombo = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("OutputDeviceCombo"));
+	JinzzaUI::ApplyStickerStyle(OutputDeviceCombo);
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("OutputDeviceRow"), FText::FromString(TEXT("Speaker")), OutputDeviceCombo, 400.f);
+
+	BoostSlider = AddSliderRow(WidgetTree, Stack, TEXT("Boost"), FText::FromString(TEXT("Mic Boost")), 1.f, 6.f, BoostValueText);
+
+	ToggleListenButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("ToggleListenButton"), FText::FromString(TEXT("Speak & Listen")), JinzzaUI::Sticker_Teal, 28.f, true);
 	ToggleListenButtonText = nullptr;
 	if (UTextBlock* InnerText = Cast<UTextBlock>(ToggleListenButton->GetChildAt(0)))
 	{
 		ToggleListenButtonText = InnerText;
 	}
-	JinzzaUI::AddSpaced(Stack, ToggleListenButton, 14.f);
+	JinzzaUI::AddSpaced(Stack, ToggleListenButton, 18.f);
 
+	// Live mic level meter: a dim track with a yellow fill whose width follows the mic (NativeTick).
+	USizeBox* MeterTrackBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("MeterTrackBox"));
+	MeterTrackBox->SetWidthOverride(VoiceTestMeterWidth);
+	MeterTrackBox->SetHeightOverride(22.f);
+	UOverlay* MeterOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("MeterOverlay"));
+	MeterTrackBox->AddChild(MeterOverlay);
+	UBorder* MeterTrack = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("MeterTrack"));
+	MeterTrack->SetBrush(FSlateRoundedBoxBrush(JinzzaUI::Sticker_White.CopyWithNewOpacity(0.2f), 11.f));
+	if (UOverlaySlot* TrackSlot = MeterOverlay->AddChildToOverlay(MeterTrack))
+	{
+		TrackSlot->SetHorizontalAlignment(HAlign_Fill);
+		TrackSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	LevelFill = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("MeterFillBox"));
+	LevelFill->SetWidthOverride(0.f);
+	UBorder* MeterFill = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("MeterFill"));
+	MeterFill->SetBrush(FSlateRoundedBoxBrush(JinzzaUI::Sticker_Yellow, 11.f));
+	LevelFill->AddChild(MeterFill);
+	if (UOverlaySlot* FillSlot = MeterOverlay->AddChildToOverlay(LevelFill))
+	{
+		FillSlot->SetHorizontalAlignment(HAlign_Left);
+		FillSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	JinzzaUI::AddStickerRow(WidgetTree, Stack, TEXT("MicLevelRow"), FText::FromString(TEXT("Mic Level")), MeterTrackBox, 400.f);
+
+	JinzzaUI::AddStickerSection(WidgetTree, Stack, TEXT("EffectsSection"), FText::FromString(TEXT("Effects")));
 	PitchSlider = AddSliderRow(WidgetTree, Stack, TEXT("Pitch"), FText::FromString(TEXT("Pitch")), 0.5f, 2.f, PitchValueText);
 	RobotSlider = AddSliderRow(WidgetTree, Stack, TEXT("Robot"), FText::FromString(TEXT("Robot")), 0.f, 1.f, RobotValueText);
 	EchoSlider = AddSliderRow(WidgetTree, Stack, TEXT("Echo"), FText::FromString(TEXT("Cave Echo")), 0.f, 1.f, EchoValueText);
 
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeDivider(WidgetTree, TEXT("TemplateDivider")), 16.f);
-	JinzzaUI::AddSpaced(Stack, JinzzaUI::MakeBodyText(WidgetTree, TEXT("TemplateLabel"), FText::FromString(TEXT("Templates")), true), 8.f);
+	JinzzaUI::AddStickerSection(WidgetTree, Stack, TEXT("PresetSection"), FText::FromString(TEXT("Presets")));
 
 	UHorizontalBox* TemplateRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TemplateRow"));
-	JinzzaUI::AddSpaced(Stack, TemplateRow, 8.f);
+	JinzzaUI::AddSpaced(Stack, TemplateRow, 10.f);
 
-	CaveButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CaveButton"), FText::FromString(TEXT("Cave")), 16.f);
+	CaveButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("CaveButton"), FText::FromString(TEXT("Cave")), JinzzaUI::Sticker_Teal, 22.f);
 	if (UHorizontalBoxSlot* CaveSlot = TemplateRow->AddChildToHorizontalBox(CaveButton))
 	{
 		CaveSlot->SetSize(ESlateSizeRule::Fill);
 		CaveSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	}
 
-	HeliumButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("HeliumButton"), FText::FromString(TEXT("Helium")), 16.f);
+	HeliumButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("HeliumButton"), FText::FromString(TEXT("Helium")), JinzzaUI::Sticker_Teal, 22.f);
 	if (UHorizontalBoxSlot* HeliumSlot = TemplateRow->AddChildToHorizontalBox(HeliumButton))
 	{
 		HeliumSlot->SetSize(ESlateSizeRule::Fill);
 		HeliumSlot->SetPadding(FMargin(0.f, 0.f, 6.f, 0.f));
 	}
 
-	RobotPresetButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("RobotPresetButton"), FText::FromString(TEXT("Robot")), 16.f);
+	RobotPresetButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("RobotPresetButton"), FText::FromString(TEXT("Robot")), JinzzaUI::Sticker_Teal, 22.f);
 	if (UHorizontalBoxSlot* RobotSlot = TemplateRow->AddChildToHorizontalBox(RobotPresetButton))
 	{
 		RobotSlot->SetSize(ESlateSizeRule::Fill);
 	}
 
-	CloseButton = JinzzaUI::MakeSecondaryButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Back")));
+	CloseButton = JinzzaUI::MakeStickerButton(WidgetTree, TEXT("CloseButton"), FText::FromString(TEXT("Back")), JinzzaUI::Sticker_Sky, 26.f);
 	if (UVerticalBoxSlot* CloseSlot = JinzzaUI::AddSpaced(Stack, CloseButton, 20.f))
 	{
 		CloseSlot->SetHorizontalAlignment(HAlign_Right);
@@ -165,7 +221,185 @@ void UjinzzaVoiceTestWidget::NativeOnInitialized()
 		RobotPresetButton->OnClicked.AddDynamic(this, &UjinzzaVoiceTestWidget::OnRobotPresetClicked);
 	}
 
+	if (BoostSlider)
+	{
+		BoostSlider->SetValue(CurrentBoost);
+		BoostSlider->OnValueChanged.AddDynamic(this, &UjinzzaVoiceTestWidget::OnBoostChanged);
+	}
+
+	PopulateMicDevices();
+	if (MicDeviceCombo)
+	{
+		MicDeviceCombo->OnSelectionChanged.AddDynamic(this, &UjinzzaVoiceTestWidget::OnMicDeviceSelected);
+	}
+
+	// Output devices come back asynchronously - see OnOutputDevicesObtained.
+	if (OutputDeviceCombo)
+	{
+		OutputDeviceCombo->AddOption(TEXT("Loading..."));
+		OutputDeviceCombo->SetSelectedIndex(0);
+		OutputDeviceCombo->OnSelectionChanged.AddDynamic(this, &UjinzzaVoiceTestWidget::OnOutputDeviceSelected);
+		FOnAudioOutputDevicesObtained Obtained;
+		Obtained.BindDynamic(this, &UjinzzaVoiceTestWidget::OnOutputDevicesObtained);
+		UAudioMixerBlueprintLibrary::GetAvailableAudioOutputDevices(this, Obtained);
+	}
+
 	ApplyPreset(1.f, 0.f, 0.f);
+}
+
+void UjinzzaVoiceTestWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+
+	// Meter on a dB scale (-50 dB .. 0 dB -> empty .. full) so normal speech visibly moves it;
+	// fast attack, slower fall so it reads smoothly.
+	float Target = 0.f;
+	if (bIsListening && CaptureComponent)
+	{
+		const float Level = CaptureComponent->GetInputLevel();
+		if (Level > 0.f)
+		{
+			Target = FMath::Clamp((20.f * FMath::LogX(10.f, Level) + 50.f) / 50.f, 0.f, 1.f);
+		}
+	}
+	DisplayLevel = Target > DisplayLevel ? Target : FMath::Max(Target, DisplayLevel - InDeltaTime * 1.5f);
+
+	if (LevelFill)
+	{
+		LevelFill->SetWidthOverride(DisplayLevel * VoiceTestMeterWidth);
+	}
+}
+
+void UjinzzaVoiceTestWidget::PopulateMicDevices()
+{
+	if (!MicDeviceCombo)
+	{
+		return;
+	}
+
+	MicDeviceCombo->ClearOptions();
+	MicDeviceIndices = { INDEX_NONE };
+	MicDeviceIds = { FString() };
+	MicDeviceCombo->AddOption(TEXT("System Default"));
+
+	Audio::FAudioCapture Capture;
+	TArray<Audio::FCaptureDeviceInfo> Devices;
+	Capture.GetCaptureDevicesAvailable(Devices);
+	for (int32 Index = 0; Index < Devices.Num(); ++Index)
+	{
+		MicDeviceCombo->AddOption(Devices[Index].DeviceName);
+		MicDeviceIndices.Add(Index);
+		MicDeviceIds.Add(Devices[Index].DeviceId);
+	}
+
+	// Start on the mic saved in settings (shared with the Settings screen's Mic Device).
+	const UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get();
+	const FString SavedId = Settings ? Settings->GetMicDeviceId() : FString();
+	const int32 SavedOption = SavedId.IsEmpty() ? 0 : FMath::Max(0, MicDeviceIds.IndexOfByKey(SavedId));
+	SelectedMicDeviceIndex = MicDeviceIndices[SavedOption];
+	MicDeviceCombo->SetSelectedIndex(SavedOption);
+}
+
+void UjinzzaVoiceTestWidget::OnMicDeviceSelected(FString SelectedItem, ESelectInfo::Type SelectionType)
+{
+	// Direct = set from code (PopulateMicDevices), not a user pick.
+	if (SelectionType == ESelectInfo::Direct || !MicDeviceCombo)
+	{
+		return;
+	}
+
+	const int32 Option = MicDeviceCombo->GetSelectedIndex();
+	if (!MicDeviceIndices.IsValidIndex(Option))
+	{
+		return;
+	}
+
+	SelectedMicDeviceIndex = MicDeviceIndices[Option];
+	if (UjinzzaGameUserSettings* Settings = UjinzzaGameUserSettings::Get())
+	{
+		Settings->SetMicDeviceId(MicDeviceIds[Option]);
+		Settings->SaveSettings();
+	}
+
+	RecreateCapture();
+}
+
+void UjinzzaVoiceTestWidget::OnOutputDevicesObtained(const TArray<FAudioOutputDeviceInfo>& AvailableDevices)
+{
+	if (!OutputDeviceCombo)
+	{
+		return;
+	}
+
+	OutputDeviceCombo->ClearOptions();
+	OutputDeviceIds.Reset();
+	int32 CurrentOption = 0;
+	for (const FAudioOutputDeviceInfo& Device : AvailableDevices)
+	{
+		if (Device.bIsCurrentDevice)
+		{
+			CurrentOption = OutputDeviceIds.Num();
+		}
+		OutputDeviceCombo->AddOption(Device.bIsSystemDefault ? FString::Printf(TEXT("%s (Default)"), *Device.Name) : Device.Name);
+		OutputDeviceIds.Add(Device.DeviceId);
+	}
+
+	if (OutputDeviceIds.Num() == 0)
+	{
+		OutputDeviceCombo->AddOption(TEXT("System Default"));
+		OutputDeviceIds.Add(FString());
+	}
+	OutputDeviceCombo->SetSelectedIndex(CurrentOption);
+}
+
+void UjinzzaVoiceTestWidget::OnOutputDeviceSelected(FString SelectedItem, ESelectInfo::Type SelectionType)
+{
+	if (SelectionType == ESelectInfo::Direct || !OutputDeviceCombo)
+	{
+		return;
+	}
+
+	const int32 Option = OutputDeviceCombo->GetSelectedIndex();
+	if (!OutputDeviceIds.IsValidIndex(Option))
+	{
+		return;
+	}
+
+	// Moves ALL game audio to the chosen device right away (the loopback included).
+	FOnCompletedDeviceSwap Swapped;
+	Swapped.BindDynamic(this, &UjinzzaVoiceTestWidget::OnOutputDeviceSwapped);
+	UAudioMixerBlueprintLibrary::SwapAudioOutputDevice(this, OutputDeviceIds[Option], Swapped);
+}
+
+void UjinzzaVoiceTestWidget::OnOutputDeviceSwapped(const FSwapAudioOutputResult& SwapResult)
+{
+	UE_LOG(Logjinzza, Log, TEXT("VoiceTest: output device swap to '%s' finished (result %d)."),
+		*SwapResult.RequestedDeviceId, static_cast<int32>(SwapResult.Result));
+}
+
+void UjinzzaVoiceTestWidget::OnBoostChanged(float NewValue)
+{
+	CurrentBoost = NewValue;
+	RefreshValueLabels();
+	if (CaptureComponent)
+	{
+		CaptureComponent->SetGain(CurrentBoost);
+	}
+}
+
+void UjinzzaVoiceTestWidget::RecreateCapture()
+{
+	const bool bWasListening = bIsListening;
+	StopListening();
+	if (CaptureComponent)
+	{
+		CaptureComponent->DestroyComponent();
+		CaptureComponent = nullptr;
+	}
+	if (bWasListening)
+	{
+		StartListening();
+	}
 }
 
 void UjinzzaVoiceTestWidget::NativeDestruct()
@@ -224,6 +458,11 @@ void UjinzzaVoiceTestWidget::OnToggleListenClicked()
 		return;
 	}
 
+	StartListening();
+}
+
+void UjinzzaVoiceTestWidget::StartListening()
+{
 	APlayerController* PC = GetOwningPlayer();
 	if (!PC)
 	{
@@ -234,9 +473,11 @@ void UjinzzaVoiceTestWidget::OnToggleListenClicked()
 
 	if (!CaptureComponent)
 	{
-		CaptureComponent = NewObject<UAudioCaptureComponent>(PC);
+		CaptureComponent = NewObject<UjinzzaMicLoopbackComponent>(PC);
+		CaptureComponent->DeviceIndex = SelectedMicDeviceIndex;
 		CaptureComponent->RegisterComponentWithWorld(GetWorld());
 	}
+	CaptureComponent->SetGain(CurrentBoost);
 
 	CaptureComponent->SourceEffectChain = EffectChain;
 	CaptureComponent->CreateAudioComponent();
@@ -303,39 +544,29 @@ void UjinzzaVoiceTestWidget::ApplyPreset(float NewPitch, float NewRobot, float N
 
 void UjinzzaVoiceTestWidget::OnCaveClicked()
 {
-	// Deep, slowed-down pitch plus a long, feeding-back echo for a cavernous tail.
-	ApplyPreset(0.65f, 0.f, 0.6f);
+	// A bit deeper, plus a roomy echo - toned down so the voice stays clear.
+	ApplyPreset(0.85f, 0.f, 0.55f);
 }
 
 void UjinzzaVoiceTestWidget::OnHeliumClicked()
 {
-	// Classic chipmunk/helium effect - pitch alone, no other DSP.
-	ApplyPreset(1.7f, 0.f, 0.f);
+	// Chipmunk/helium - pitch alone, no other DSP.
+	ApplyPreset(1.45f, 0.f, 0.f);
 }
 
 void UjinzzaVoiceTestWidget::OnRobotPresetClicked()
 {
-	// Slightly flattened pitch plus a strong ring-modulator buzz, a touch of echo for texture.
-	ApplyPreset(0.9f, 0.85f, 0.15f);
+	// Slightly flattened pitch plus a ring-modulator buzz (voice still on top), a touch of echo.
+	ApplyPreset(0.95f, 0.75f, 0.1f);
 }
 
 void UjinzzaVoiceTestWidget::ApplyPitch()
 {
+	// Live: the loopback's own pitch shifter keeps playback real-time, so there's no restart (the
+	// old Stop/Start here is what cut the voice out while dragging a slider mid-test).
 	if (CaptureComponent)
 	{
-		if (UAudioComponent* AudioComp = CaptureComponent->GetAudioComponent())
-		{
-			AudioComp->SetPitchMultiplier(CurrentPitch);
-		}
-
-		// PitchMultiplier is read when the synth (re)starts generating - restart to pick up a
-		// change made while already listening (Robot/Echo don't need this - see ApplyRobotSettings/
-		// ApplyEchoSettings, which push live updates through the preset objects instead).
-		if (bIsListening)
-		{
-			CaptureComponent->Stop();
-			CaptureComponent->Start();
-		}
+		CaptureComponent->SetPitch(CurrentPitch);
 	}
 }
 
@@ -346,12 +577,14 @@ void UjinzzaVoiceTestWidget::ApplyRobotSettings()
 		return;
 	}
 
+	// Gentler than before (which went almost fully wet and buried the voice): even at 100% the dry
+	// voice stays at half level under the buzz, so words stay understandable.
 	FSourceEffectRingModulationSettings Settings;
 	Settings.ModulatorType = ERingModulatorTypeSourceEffect::Sine;
-	Settings.Frequency = 35.f;
-	Settings.Depth = CurrentRobotAmount;
-	Settings.DryLevel = 1.f - 0.8f * CurrentRobotAmount;
-	Settings.WetLevel = CurrentRobotAmount;
+	Settings.Frequency = 40.f;
+	Settings.Depth = 1.f;
+	Settings.DryLevel = 1.f - 0.5f * CurrentRobotAmount;
+	Settings.WetLevel = 0.7f * CurrentRobotAmount;
 	RingModPreset->SetSettings(Settings);
 }
 
@@ -365,10 +598,12 @@ void UjinzzaVoiceTestWidget::ApplyEchoSettings()
 	FSourceEffectSimpleDelaySettings Settings;
 	Settings.bDelayBasedOnDistance = false;
 	Settings.bUseDistanceOverride = false;
-	Settings.DelayAmount = 0.15f + 0.25f * CurrentEchoAmount;
+	// Shorter, quieter echo than before so it reads as a room/cave around the voice instead of
+	// a second voice talking over it.
+	Settings.DelayAmount = 0.12f + 0.18f * CurrentEchoAmount;
 	Settings.DryAmount = 1.f;
-	Settings.WetAmount = CurrentEchoAmount;
-	Settings.Feedback = 0.3f * CurrentEchoAmount;
+	Settings.WetAmount = 0.55f * CurrentEchoAmount;
+	Settings.Feedback = 0.35f * CurrentEchoAmount;
 	DelayPreset->SetSettings(Settings);
 }
 
@@ -385,5 +620,9 @@ void UjinzzaVoiceTestWidget::RefreshValueLabels()
 	if (EchoValueText)
 	{
 		EchoValueText->SetText(FText::FromString(FString::Printf(TEXT("%d%%"), FMath::RoundToInt(CurrentEchoAmount * 100.f))));
+	}
+	if (BoostValueText)
+	{
+		BoostValueText->SetText(FText::FromString(FString::Printf(TEXT("%.1fx"), CurrentBoost)));
 	}
 }

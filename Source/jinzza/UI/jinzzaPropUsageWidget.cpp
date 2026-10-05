@@ -22,15 +22,17 @@ void UjinzzaPropUsageWidget::BuildWidgetTree()
 	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("Root"));
 	WidgetTree->RootWidget = Root;
 
-	UBorder* Panel = JinzzaUI::MakeNoteBackground(WidgetTree, TEXT("Panel"));
-	Panel->SetPadding(FMargin(16.f, 10.f));
+	// Black sticker card (white outline + drop shadow), matching the main menu / T_Logo.
+	UBorder* PanelFace = nullptr;
+	UOverlay* Panel = JinzzaUI::MakeSticker(WidgetTree, TEXT("Panel"), JinzzaUI::Sticker_Ink, 22.f, PanelFace);
+	PanelFace->SetPadding(FMargin(16.f, 10.f, 20.f, 10.f));
 
 	UHorizontalBox* Content = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Content"));
-	Panel->SetContent(Content);
+	PanelFace->SetContent(Content);
 
 	USizeBox* IconBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("IconBox"));
-	IconBox->SetWidthOverride(40.f);
-	IconBox->SetHeightOverride(40.f);
+	IconBox->SetWidthOverride(52.f);
+	IconBox->SetHeightOverride(52.f);
 
 	UsageIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("UsageIcon"));
 	UsageIcon->SetVisibility(ESlateVisibility::Collapsed);
@@ -42,7 +44,7 @@ void UjinzzaPropUsageWidget::BuildWidgetTree()
 		IconSlot->SetPadding(FMargin(0.f, 0.f, 10.f, 0.f));
 	}
 
-	UsageText = JinzzaUI::MakeBodyText(WidgetTree, TEXT("UsageText"), FText::GetEmpty());
+	UsageText = JinzzaUI::MakeStickerText(WidgetTree, TEXT("UsageText"), FText::GetEmpty(), 20);
 	if (UHorizontalBoxSlot* TextSlot = Content->AddChildToHorizontalBox(UsageText))
 	{
 		TextSlot->SetVerticalAlignment(VAlign_Center);
