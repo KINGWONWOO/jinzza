@@ -18,6 +18,8 @@
 #include "jinzzaPauseMenuWidget.h"
 #include "jinzzaChatWidget.h"
 #include "jinzzaChatBoardComponent.h"
+#include "jinzzaLoadingScreenSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Components/Widget.h"
 #include "Engine/World.h"
 #include "jinzza.h"
@@ -200,7 +202,17 @@ void AjinzzaPlayerController::CreatePauseMenuAction()
 
 void AjinzzaPlayerController::OnPauseMenuPressed()
 {
-	TogglePauseMenu();
+	// Hidden under the loading screen it would still grab input.
+	if (!IsLoadingScreenUp())
+	{
+		TogglePauseMenu();
+	}
+}
+
+bool AjinzzaPlayerController::IsLoadingScreenUp() const
+{
+	const UjinzzaLoadingScreenSubsystem* Loading = GetGameInstance() ? GetGameInstance()->GetSubsystem<UjinzzaLoadingScreenSubsystem>() : nullptr;
+	return Loading && Loading->IsShowing();
 }
 
 void AjinzzaPlayerController::TogglePauseMenu()
@@ -261,7 +273,7 @@ void AjinzzaPlayerController::ClosePauseMenu()
 void AjinzzaPlayerController::OnChatPressed()
 {
 	// No character (e.g. spectating) = no board to write on.
-	if (ChatWidget && !ChatWidget->IsInputOpen() && !IsPauseMenuOpen() && CanOpenPauseMenu() && CanUseChat() && GetChatBoard())
+	if (ChatWidget && !ChatWidget->IsInputOpen() && !IsPauseMenuOpen() && !IsLoadingScreenUp() && CanOpenPauseMenu() && CanUseChat() && GetChatBoard())
 	{
 		ChatWidget->OpenInput();
 	}

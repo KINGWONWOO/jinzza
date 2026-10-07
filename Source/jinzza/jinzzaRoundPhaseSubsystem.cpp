@@ -130,8 +130,10 @@ float UjinzzaRoundPhaseSubsystem::GetPhaseDurationSeconds(EJinzzaRoundPhase Phas
 	case EJinzzaRoundPhase::RoleAssignment:
 		return 30.f;
 	case EJinzzaRoundPhase::SelfIntroduction:
-		// "자기소개 타임 시간 = 20초 x 후보 수(진짜+모방자)" - excludes the Judge.
-		return 20.f * FMath::Max(1, GetCandidateCount());
+		// "자기소개 타임 시간 = 20초 x 후보 수(진짜+모방자)". AjinzzaGameGameMode runs the 20 s turns and ends
+		// the phase right after the last one, so this is only a cap - sized for every player (not just
+		// candidates) so it can never cut the last turn short, e.g. with no Judge in a < 3 player test.
+		return 20.f * FMath::Max(1, GetTotalPlayerCount()) + 5.f;
 	case EJinzzaRoundPhase::FreeTime1:
 		return 120.f * FreeTimeMultiplier;
 	case EJinzzaRoundPhase::QuestionTime:

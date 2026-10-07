@@ -397,7 +397,7 @@ void AjinzzaGameGameMode::BeginSpeakTurn(EJinzzaSpeakTurnKind Kind, AjinzzaParty
 		{
 			if (UjinzzaChatBoardComponent* Board = Pawn->FindComponentByClass<UjinzzaChatBoardComponent>())
 			{
-				Board->ServerCancelWriting();
+				Board->ServerHideNow();
 			}
 		}
 	}
@@ -754,7 +754,7 @@ void AjinzzaGameGameMode::EnterInterviewZone()
 		{
 			Judge = PartyPS;
 		}
-		else if (!Candidate && PartyPS->ServerRole != EJinzzaPartyRole::None)
+		else if (!Candidate && PartyPS->ServerRole != EJinzzaPartyRole::None && !PartyPS->IsGhost())
 		{
 			Candidate = PartyPS;
 		}

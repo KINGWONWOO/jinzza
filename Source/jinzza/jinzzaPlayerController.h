@@ -41,6 +41,13 @@ public:
 	/** Re-reads Push to Talk / Open Mic from settings and starts/stops transmitting to match. */
 	void ApplyMicInputMode();
 
+	/** Puts input back the way this level plays once an overlay (ESC menu, chat line, emote wheel, held-prop
+	 * panel) closes. Default: game-only, no cursor; the match keeps a cursor (AjinzzaGamePlayerController). */
+	virtual void RestoreGameplayInputMode();
+
+	/** True while the loading screen covers the view - the ESC menu and chat stay closed then. */
+	bool IsLoadingScreenUp() const;
+
 	/** Opens the in-game ESC menu (UjinzzaPauseMenuWidget), or closes it if it's already open. */
 	void TogglePauseMenu();
 
@@ -129,9 +136,6 @@ protected:
 
 	/** False while something else owns the screen (e.g. a lobby kiosk panel) - ESC does nothing then. */
 	virtual bool CanOpenPauseMenu() const { return true; }
-
-	/** Puts input back the way this level plays once the ESC menu closes. Default: game-only, no cursor. */
-	virtual void RestoreGameplayInputMode();
 
 private:
 	/** Adds every runtime mapping context (DefaultMappingContexts, MobileExcludedMappingContexts, voice) to the local player. */

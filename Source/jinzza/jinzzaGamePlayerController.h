@@ -100,6 +100,8 @@ private:
 	TObjectPtr<ACameraActor> TurnCamera;
 
 	int32 AppliedTurnSerial = 0;
+	bool bAppliedAsSpeaker = false;
+	bool bLoadReported = false;
 	bool bTurnMovementLocked = false;
 	bool bWatchingTurnCamera = false;
 

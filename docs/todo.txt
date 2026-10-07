@@ -3997,3 +3997,24 @@ NEW (AjinzzaGameGameMode turn + vote system, replicated through AjinzzaGameGameS
 - Not built: final-decision role reveal / result screen (round just goes to RoundComplete).
 - Game target compiles; full editor build needed (editor CLOSED). NOT TESTED at runtime (needs 3+
   players for roles).
+
+REVIEW OF TODAY'S CHANGES (2026-10-07, by Claude) - fixed:
+1. Match never started for ~60 s in PIE started straight in Lvl_Game: players were only reported
+   loaded by the loading screen, which doesn't appear there. AjinzzaGamePlayerController now
+   reports itself once it has a pawn and no loading screen is up (idempotent).
+2. Emote wheel / held-prop panel closing forced game-only input + hidden cursor, which in the match
+   also hid the cursor for the End Game button and (new) the Judge's ballot. They now restore the
+   level's own mode via AjinzzaPlayerController::RestoreGameplayInputMode (now public).
+3. Interview auto-pick could seat a ghost - eliminations are real now; ghosts skipped.
+4. Self-intro phase timer was 20 s x (players - 1): with no Judge (< 3 player tests) it cut the last
+   turn short. Now a cap of 20 s x players + 5 s; the game mode ends the phase after the last turn.
+5. Loading-screen max display time counted from first show, so lobby prep + travel + waiting for
+   everyone could hit 120 s and drop one player's screen early. Now per stage.
+6. Seamless travel back to the lobby said "Loading the match...". Now "Loading...".
+7. ESC menu / chat could open hidden under the loading screen and grab input. Blocked while it's up.
+8. A board already showing a message stayed up when a speaking turn started. All boards now drop.
+9. Turn movement lock is re-asserted each frame (ClientRestart resets ignore-input counters), and the
+   turn view re-applies if the speaker reference replicates late.
+Known, not changed: Real One can be eliminated at mid-evaluation (the round goes on - win/lose rules
+not designed); the Real One quitting while already a ghost still sends everyone back to the lobby;
+held push-to-talk while opening chat can leave the mic on until PTT is pressed again.

@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaCharacter.h"
+#include "jinzzaPlayerController.h"
 #include "jinzzaNameplateWidget.h"
 #include "jinzzaChatBoardComponent.h"
 #include "jinzzaChatBoardWidget.h"
@@ -579,10 +580,20 @@ void AjinzzaCharacter::CloseHeldPropUI()
 		HeldPropWidget = nullptr;
 	}
 
-	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	RestoreControllerInputMode();
+}
+
+void AjinzzaCharacter::RestoreControllerInputMode()
+{
+	// The level's own input mode, not always game-only: the match keeps a visible cursor (End Game button,
+	// the Judge's ballot) - see AjinzzaGamePlayerController::RestoreGameplayInputMode.
+	if (AjinzzaPlayerController* JinzzaPC = Cast<AjinzzaPlayerController>(GetController()))
 	{
-		FInputModeGameOnly InputMode;
-		PC->SetInputMode(InputMode);
+		JinzzaPC->RestoreGameplayInputMode();
+	}
+	else if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		PC->SetInputMode(FInputModeGameOnly());
 		PC->bShowMouseCursor = false;
 	}
 }
@@ -899,12 +910,7 @@ void AjinzzaCharacter::DoCloseEmoteWheel()
 		EmoteWheelWidget = nullptr;
 	}
 
-	if (APlayerController* PC = Cast<APlayerController>(GetController()))
-	{
-		FInputModeGameOnly InputMode;
-		PC->SetInputMode(InputMode);
-		PC->bShowMouseCursor = false;
-	}
+	RestoreControllerInputMode();
 
 	if (SelectedEmote != EJinzzaEmoteType::None)
 	{

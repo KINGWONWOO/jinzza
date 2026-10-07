@@ -9,6 +9,8 @@
 #include "jinzzaSpeakTurnWidget.h"
 #include "jinzzaVoteWidget.h"
 #include "Camera/CameraActor.h"
+#include "jinzzaLoadingScreenSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Components/AudioComponent.h"
@@ -97,6 +99,13 @@ void AjinzzaGamePlayerController::PlayerTick(float DeltaTime)
 		return;
 	}
 
+	// Normally the loading screen reports us loaded once it's done; with no loading screen (e.g. PIE started
+	// straight in Lvl_Game) do it as soon as we have our character, or the round would only start on timeout.
+	if (!bLoadReported && GetPawn() && !IsLoadingScreenUp())
+	{
+		ReportLoadComplete();
+	}
+
 	UpdateSpeakTurn();
 	if (SpeakTurnWidget)
 	{
@@ -120,18 +129,25 @@ void AjinzzaGamePlayerController::UpdateSpeakTurn()
 	const bool bActive = MatchState->IsSpeakTurnActive();
 	const bool bSpeaker = MatchState->IsTurnSpeaker(PlayerState);
 
-	// Nobody moves during a turn (the speaker stays on the spotlight).
+	// Nobody moves during a turn (the speaker stays on the spotlight). Re-asserted every frame: a possession
+	// (ClientRestart) resets the engine's ignore-input counters.
 	if (bActive != bTurnMovementLocked)
 	{
 		bTurnMovementLocked = bActive;
 		SetIgnoreMoveInput(bActive);
 	}
+	else if (bActive && !IsMoveInputIgnored())
+	{
+		SetIgnoreMoveInput(true);
+	}
 
-	if (Turn.Serial == AppliedTurnSerial)
+	// Also re-applied if we turn out to be the speaker after all (speaker reference resolved late).
+	if (Turn.Serial == AppliedTurnSerial && bSpeaker == bAppliedAsSpeaker)
 	{
 		return;
 	}
 	AppliedTurnSerial = Turn.Serial;
+	bAppliedAsSpeaker = bSpeaker;
 
 	if (bActive && !bSpeaker)
 	{
@@ -165,7 +181,11 @@ void AjinzzaGamePlayerController::UpdateSpeakTurn()
 
 void AjinzzaGamePlayerController::ReportLoadComplete()
 {
-	Server_ReportLoaded();
+	if (!bLoadReported)
+	{
+		bLoadReported = true;
+		Server_ReportLoaded();
+	}
 }
 
 void AjinzzaGamePlayerController::Server_ReportLoaded_Implementation()

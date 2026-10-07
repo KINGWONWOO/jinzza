@@ -194,7 +194,7 @@ void UjinzzaLoadingScreenSubsystem::HandleSeamlessTravelStart(UWorld* CurrentWor
 	Stage = EStage::Travelling;
 	StageStartTime = FPlatformTime::Seconds();
 	PendingMapName = ToShortMapName(MapName);
-	StatusText = FText::FromString(TEXT("Loading the match..."));
+	StatusText = FText::FromString(PendingMapName == TEXT("Lvl_Game") ? TEXT("Loading the match...") : TEXT("Loading..."));
 	Progress.Reset();
 	Show();
 }
@@ -318,7 +318,8 @@ bool UjinzzaLoadingScreenSubsystem::Tick(float DeltaTime)
 	}
 
 	const double Now = FPlatformTime::Seconds();
-	if (Now - ShownTime > UjinzzaLoadingSettings::Get()->MaximumDisplaySeconds)
+	// Per stage: lobby preparation + travel + waiting for everyone can legitimately add up past the limit.
+	if (Now - StageStartTime > UjinzzaLoadingSettings::Get()->MaximumDisplaySeconds)
 	{
 		UE_LOG(Logjinzza, Warning, TEXT("Loading screen timed out - hiding it."));
 		Hide();

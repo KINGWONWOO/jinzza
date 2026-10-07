@@ -65,6 +65,8 @@ public:
 	// Server-only.
 	void ServerStartWriting();
 	void ServerCancelWriting();
+	/** Lowers the board whatever it's doing (a speaking turn starting). */
+	void ServerHideNow();
 	/** Text must already be cleaned/length-limited (AjinzzaPlayerController::Server_SendChatMessage). */
 	void ServerReveal(const FString& Text);
 

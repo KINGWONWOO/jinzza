@@ -259,6 +259,9 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+	/** After the emote wheel / held-prop panel closes: back to the level's normal input mode. */
+	void RestoreControllerInputMode();
 	virtual void Tick(float DeltaSeconds) override;
 
 	/** Called from Input Actions for movement input */

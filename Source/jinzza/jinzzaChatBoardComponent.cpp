@@ -83,6 +83,15 @@ void UjinzzaChatBoardComponent::ServerCancelWriting()
 	}
 }
 
+void UjinzzaChatBoardComponent::ServerHideNow()
+{
+	if (GetOwner() && GetOwner()->HasAuthority() && Board.State != EJinzzaChatBoardState::Hidden)
+	{
+		GetWorld()->GetTimerManager().ClearTimer(HideTimerHandle);
+		SetBoard(EJinzzaChatBoardState::Hidden, FString());
+	}
+}
+
 void UjinzzaChatBoardComponent::ServerReveal(const FString& Text)
 {
 	if (!GetOwner() || !GetOwner()->HasAuthority())
