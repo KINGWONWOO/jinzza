@@ -50,12 +50,7 @@ void AjinzzaGamePlayerController::BeginPlay()
 	{
 		GameEndWidget->AddToViewport();
 		GameEndWidget->SetIsFocusable(true);
-		bShowMouseCursor = true;
-
-		FInputModeGameAndUI InputMode;
-		InputMode.SetWidgetToFocus(GameEndWidget->TakeWidget());
-		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-		SetInputMode(InputMode);
+		RestoreGameplayInputMode();
 	}
 
 	// TEMP placeholder in-round BGM (see UjinzzaMainMenuWidget/UjinzzaLobbyWidget for the same
@@ -69,6 +64,22 @@ void AjinzzaGamePlayerController::BeginPlay()
 	{
 		PhaseChangedHandle = JinzzaGameState->OnPhaseChanged.AddUObject(this, &AjinzzaGamePlayerController::HandlePhaseChanged);
 	}
+}
+
+void AjinzzaGamePlayerController::RestoreGameplayInputMode()
+{
+	if (!GameEndWidget)
+	{
+		Super::RestoreGameplayInputMode();
+		return;
+	}
+
+	bShowMouseCursor = true;
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(GameEndWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(InputMode);
 }
 
 void AjinzzaGamePlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)

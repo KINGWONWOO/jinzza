@@ -10,6 +10,8 @@
 #include "Interfaces/OnlineIdentityInterface.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/Engine.h"
+#include "Kismet/GameplayStatics.h"
 #include "jinzza.h"
 
 namespace
@@ -55,6 +57,11 @@ void UjinzzaGameInstance::Init()
 	{
 		UE_LOG(Logjinzza, Warning, TEXT("No online subsystem session interface at startup - Steam sessions unavailable."));
 	}
+
+	if (GEngine)
+	{
+		NetworkFailureHandle = GEngine->OnNetworkFailure().AddUObject(this, &UjinzzaGameInstance::HandleNetworkFailure);
+	}
 }
 
 void UjinzzaGameInstance::Shutdown()
@@ -66,6 +73,11 @@ void UjinzzaGameInstance::Shutdown()
 		Sessions->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteHandle);
 		Sessions->ClearOnUpdateSessionCompleteDelegate_Handle(UpdateSessionCompleteHandle);
 		Sessions->ClearOnSessionUserInviteAcceptedDelegate_Handle(SessionUserInviteAcceptedHandle);
+	}
+
+	if (GEngine)
+	{
+		GEngine->OnNetworkFailure().Remove(NetworkFailureHandle);
 	}
 
 	Super::Shutdown();
@@ -397,4 +409,27 @@ void UjinzzaGameInstance::OnDestroySessionComplete(FName InSessionName, bool bWa
 		}
 		return;
 	}
+}
+
+void UjinzzaGameInstance::LeaveToTitle()
+{
+	DestroySession();
+	SetRichPresenceStatus(TEXT("In Menu"));
+
+	// Absolute travel: on the host this shuts down the listen server, on a client it drops the connection.
+	UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/JINZZA/Level/Lvl_MainMenu")), true);
+}
+
+void UjinzzaGameInstance::HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString)
+{
+	// Only a client losing its host - a listen server can also see failures (e.g. one client timing out)
+	// and must keep its session.
+	if (!World || World->GetNetMode() != NM_Client)
+	{
+		return;
+	}
+
+	UE_LOG(Logjinzza, Log, TEXT("Network failure (%s): %s - returning to title."), ENetworkFailure::ToString(FailureType), *ErrorString);
+	DestroySession();
+	SetRichPresenceStatus(TEXT("In Menu"));
 }

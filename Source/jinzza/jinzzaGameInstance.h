@@ -6,6 +6,7 @@
 #include "Engine/GameInstance.h"
 #include "Interfaces/OnlineSessionInterface.h"
 #include "OnlineSessionSettings.h"
+#include "Engine/EngineBaseTypes.h"
 #include "jinzzaMatchSettings.h"
 #include "jinzzaGameInstance.generated.h"
 
@@ -103,6 +104,13 @@ public:
 	/** Destroys the current session, if any. */
 	void DestroySession();
 
+	/**
+	 * In-game ESC menu > Quit Game: leaves the session and opens the title screen (Lvl_MainMenu).
+	 * For the host this also closes the lobby/match - every client loses the connection and the engine
+	 * sends them to the title screen too (see HandleNetworkFailure). Silent on both ends, no message.
+	 */
+	void LeaveToTitle();
+
 	/** Fired whenever the session flow changes state, for UI status text. */
 	FOnJinzzaSessionStatusChanged OnSessionStatusChanged;
 
@@ -123,6 +131,10 @@ private:
 	void OnUpdateSessionComplete(FName InSessionName, bool bWasSuccessful);
 	void OnSessionUserInviteAccepted(const bool bWasSuccessful, const int32 ControllerId, FUniqueNetIdPtr UserId, const FOnlineSessionSearchResult& InviteResult);
 
+	/** Client lost the host (host quit / crashed): drop the stale session. The engine itself then
+	 * travels to the default map (Lvl_MainMenu = title screen); no message is shown. */
+	void HandleNetworkFailure(UWorld* World, UNetDriver* NetDriver, ENetworkFailure::Type FailureType, const FString& ErrorString);
+
 	void OnReadFriendsListComplete(int32 LocalUserNum, bool bWasSuccessful, const FString& ListName, const FString& ErrorStr);
 
 	void TravelToConnectedSession();
@@ -134,6 +146,7 @@ private:
 	FDelegateHandle DestroySessionCompleteHandle;
 	FDelegateHandle UpdateSessionCompleteHandle;
 	FDelegateHandle SessionUserInviteAcceptedHandle;
+	FDelegateHandle NetworkFailureHandle;
 
 	/** Set when DestroySession was called in order to start a fresh host, so completion chains into it. */
 	bool bDestroyingToHost = false;

@@ -147,7 +147,7 @@ void AjinzzaLobbyPlayerController::CheckForNearbyKiosk()
 
 void AjinzzaLobbyPlayerController::OnInteractPressed()
 {
-	if (NearbyKiosk)
+	if (NearbyKiosk && !IsPauseMenuOpen())
 	{
 		NearbyKiosk->Interact(this);
 	}

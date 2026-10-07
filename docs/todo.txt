@@ -3878,3 +3878,25 @@ DONE THIS SESSION (2026-10-07, UI keeps proportions at any resolution / aspect r
   A NEW UCLASS needs a full build with the editor CLOSED (Live Coding can't add classes). Until
   then the engine can't load the rule class and the UI falls back to scale 1. Not checked in PIE
   at other aspect ratios yet.
+
+DONE THIS SESSION (2026-10-07, in-game ESC menu + leaving rules, by Claude)
+- ESC (or gamepad Start) in the lobby / match opens UI/jinzzaPauseMenuWidget: a small sticker panel
+  centered over the live game (no full-screen backdrop, nothing is paused - it's multiplayer):
+  Settings / Quit Game / Exit to Desktop / Cancel. ESC again (or Cancel) closes it; ESC on the
+  settings page goes back to the buttons. Movement + look are blocked while it's open.
+  * Lives on AjinzzaPlayerController (runtime IA_PauseMenu action, no .uasset, not rebindable), so
+    every jinzza level gets it. Lobby: won't open while a kiosk panel is up (cursor visible), and E
+    can't open kiosks while it's open. Game: closing restores the End Game overlay's input mode.
+- Settings opens the main menu's UjinzzaSettingsWidget in a new compact layout (SetCompactLayout:
+  960x640 instead of 1240x780), same Apply/Back. The widget is rebuilt on every open, so it always
+  shows the current values.
+- Quit Game -> UjinzzaGameInstance::LeaveToTitle: destroys the session, opens Lvl_MainMenu.
+- Host leaves (Quit Game / Exit / crash): the server closes, clients get a network failure and the
+  engine sends them to the default map (Lvl_MainMenu = title). GameInstance::HandleNetworkFailure
+  (clients only) destroys the stale session. No message is shown. They can't go back to the lobby -
+  the lobby lived on the host's machine.
+- Real One leaves mid-match: AjinzzaGameGameMode::Logout sends everyone left back to Lvl_Lobby
+  (EndGameReturnToLobby, next tick). No message. Any other non-host player leaving: game continues.
+- NOT COMPILED IN THE EDITOR / NOT TESTED: new UCLASS (UjinzzaPauseMenuWidget) needs a full build
+  with the editor CLOSED. In PIE, ESC stops PIE by default - test in Standalone, or change Editor
+  Preferences > Keyboard Shortcuts > Stop (PIE) to Shift+Escape.

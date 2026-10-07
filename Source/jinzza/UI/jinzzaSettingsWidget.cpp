@@ -100,7 +100,7 @@ void UjinzzaSettingsWidget::BuildWidgetTree()
 		PanelSlot->SetVerticalAlignment(VAlign_Center);
 	}
 
-	USizeBox* PanelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelBox"));
+	PanelBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PanelBox"));
 	PanelBox->SetWidthOverride(1240.f);
 	PanelBox->SetHeightOverride(780.f);
 	PanelFace->SetContent(PanelBox);
@@ -853,6 +853,17 @@ void UjinzzaSettingsWidget::OnTabGraphicsClicked() { SetActiveTab(Tab_Graphics);
 void UjinzzaSettingsWidget::OnTabAudioClicked() { SetActiveTab(Tab_Audio); }
 void UjinzzaSettingsWidget::OnTabControlsClicked() { SetActiveTab(Tab_Controls); }
 void UjinzzaSettingsWidget::OnTabGameplayClicked() { SetActiveTab(Tab_Gameplay); }
+
+void UjinzzaSettingsWidget::SetCompactLayout()
+{
+	// Still wide enough for the title + four tab pills and a readable label column beside the
+	// 580px controls; the pages already scroll, so the shorter height just means more scrolling.
+	if (PanelBox)
+	{
+		PanelBox->SetWidthOverride(960.f);
+		PanelBox->SetHeightOverride(640.f);
+	}
+}
 
 void UjinzzaSettingsWidget::OnBackClicked()
 {

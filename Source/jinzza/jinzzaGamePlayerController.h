@@ -55,6 +55,9 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	/** Back to the cursor-visible game-and-UI mode BeginPlay sets up for the End Game overlay. */
+	virtual void RestoreGameplayInputMode() override;
+
 private:
 	UPROPERTY()
 	TObjectPtr<UUserWidget> GameEndWidget;

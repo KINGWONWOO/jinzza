@@ -9,6 +9,7 @@
 class UInputAction;
 class UInputMappingContext;
 class UUserWidget;
+class UjinzzaPauseMenuWidget;
 
 /**
  *  Simple first person Player Controller
@@ -35,6 +36,13 @@ public:
 
 	/** Re-reads Push to Talk / Open Mic from settings and starts/stops transmitting to match. */
 	void ApplyMicInputMode();
+
+	/** Opens the in-game ESC menu (UjinzzaPauseMenuWidget), or closes it if it's already open. */
+	void TogglePauseMenu();
+
+	void ClosePauseMenu();
+
+	bool IsPauseMenuOpen() const { return PauseMenuWidget != nullptr; }
 
 	/** True while this player's mic is transmitting. */
 	UFUNCTION(BlueprintPure, Category = "Voice")
@@ -85,6 +93,12 @@ protected:
 
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	/** False while something else owns the screen (e.g. a lobby kiosk panel) - ESC does nothing then. */
+	virtual bool CanOpenPauseMenu() const { return true; }
+
+	/** Puts input back the way this level plays once the ESC menu closes. Default: game-only, no cursor. */
+	virtual void RestoreGameplayInputMode();
+
 private:
 	/** Adds every runtime mapping context (DefaultMappingContexts, MobileExcludedMappingContexts, voice) to the local player. */
 	void AddRuntimeMappingContexts();
@@ -92,6 +106,11 @@ private:
 	/** Push-to-talk has no .uasset - created here, named JinzzaInput::GetPushToTalkActionName() so the Settings
 	 *  screen can rebind it like any other action. */
 	void CreatePushToTalkAction();
+
+	/** The ESC menu action has no .uasset either - created here, mapped to Escape / gamepad Start. Not rebindable. */
+	void CreatePauseMenuAction();
+
+	void OnPauseMenuPressed();
 
 	void OnPushToTalkPressed();
 	void OnPushToTalkReleased();
@@ -101,6 +120,13 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> PushToTalkAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> PauseMenuAction;
+
+	/** Created on open, destroyed on close, so its settings page always loads the current values. */
+	UPROPERTY(Transient)
+	TObjectPtr<UjinzzaPauseMenuWidget> PauseMenuWidget;
 
 	bool bPushToTalkHeld = false;
 	bool bTransmittingVoice = false;

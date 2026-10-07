@@ -6,6 +6,7 @@
 #include "jinzzaPartyPlayerState.h"
 #include "jinzzaRoundPhaseSubsystem.h"
 #include "jinzzaAuditionCurtain.h"
+#include "jinzzaGameInstance.h"
 #include "jinzza.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -75,6 +76,34 @@ void AjinzzaGameGameMode::PostLogin(APlayerController* NewPlayer)
 	// lobby to hand off how many players it expected (which could be wrong anyway if someone
 	// disconnects mid-travel and never reconnects) at the cost of a small, one-time delay.
 	GetWorldTimerManager().SetTimer(RoundStartGraceTimerHandle, this, &AjinzzaGameGameMode::TryStartRound, 1.5f, false);
+}
+
+void AjinzzaGameGameMode::Logout(AController* Exiting)
+{
+	const AjinzzaPartyPlayerState* PartyState = Exiting ? Exiting->GetPlayerState<AjinzzaPartyPlayerState>() : nullptr;
+	const bool bRealOneLeft = PartyState && PartyState->ServerRole == EJinzzaPartyRole::RealOne;
+	// The host's own controller only "leaves" when the server itself is shutting down.
+	const bool bHostLeft = Exiting && Exiting->IsLocalController();
+
+	Super::Logout(Exiting);
+
+	UWorld* World = GetWorld();
+	if (!bRealOneLeft || bHostLeft || bReturningToLobby || !World || World->bIsTearingDown)
+	{
+		return;
+	}
+
+	bReturningToLobby = true;
+	UE_LOG(Logjinzza, Log, TEXT("Real One left mid-match - returning everyone to the lobby."));
+
+	// Next tick, not from inside Logout - the leaving connection is still being torn down.
+	GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		if (UjinzzaGameInstance* GI = GetGameInstance<UjinzzaGameInstance>())
+		{
+			GI->EndGameReturnToLobby();
+		}
+	}));
 }
 
 void AjinzzaGameGameMode::TryStartRound()

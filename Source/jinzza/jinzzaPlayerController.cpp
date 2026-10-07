@@ -15,6 +15,7 @@
 #include "jinzzaPartyPlayerState.h"
 #include "TimerManager.h"
 #include "Blueprint/UserWidget.h"
+#include "jinzzaPauseMenuWidget.h"
 #include "jinzza.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 #include "UObject/ConstructorHelpers.h"
@@ -81,6 +82,7 @@ void AjinzzaPlayerController::SetupInputComponent()
 	if (IsLocalPlayerController())
 	{
 		CreatePushToTalkAction();
+		CreatePauseMenuAction();
 		AddRuntimeMappingContexts();
 
 		if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent))
@@ -88,6 +90,7 @@ void AjinzzaPlayerController::SetupInputComponent()
 			EnhancedInputComponent->BindAction(PushToTalkAction, ETriggerEvent::Started, this, &AjinzzaPlayerController::OnPushToTalkPressed);
 			EnhancedInputComponent->BindAction(PushToTalkAction, ETriggerEvent::Completed, this, &AjinzzaPlayerController::OnPushToTalkReleased);
 			EnhancedInputComponent->BindAction(PushToTalkAction, ETriggerEvent::Canceled, this, &AjinzzaPlayerController::OnPushToTalkReleased);
+			EnhancedInputComponent->BindAction(PauseMenuAction, ETriggerEvent::Started, this, &AjinzzaPlayerController::OnPauseMenuPressed);
 		}
 
 		GetWorldTimerManager().SetTimer(VoiceUpdateTimerHandle, this, &AjinzzaPlayerController::UpdateVoiceTransmission, 0.25f, true);
@@ -136,6 +139,15 @@ void AjinzzaPlayerController::AddRuntimeMappingContexts()
 		RuntimeMappingContexts.Add(VoiceContext);
 		Subsystem->AddMappingContext(VoiceContext, 0);
 	}
+
+	if (PauseMenuAction)
+	{
+		UInputMappingContext* PauseContext = NewObject<UInputMappingContext>(this);
+		PauseContext->MapKey(PauseMenuAction, EKeys::Escape);
+		PauseContext->MapKey(PauseMenuAction, EKeys::Gamepad_Special_Right);
+		RuntimeMappingContexts.Add(PauseContext);
+		Subsystem->AddMappingContext(PauseContext, 0);
+	}
 }
 
 void AjinzzaPlayerController::RefreshKeyBindings()
@@ -153,6 +165,80 @@ void AjinzzaPlayerController::CreatePushToTalkAction()
 		// ValueType defaults to Boolean - a plain held/released button.
 		PushToTalkAction = NewObject<UInputAction>(this, JinzzaInput::GetPushToTalkActionName());
 	}
+}
+
+void AjinzzaPlayerController::CreatePauseMenuAction()
+{
+	if (!PauseMenuAction)
+	{
+		PauseMenuAction = NewObject<UInputAction>(this, TEXT("IA_PauseMenu"));
+	}
+}
+
+void AjinzzaPlayerController::OnPauseMenuPressed()
+{
+	TogglePauseMenu();
+}
+
+void AjinzzaPlayerController::TogglePauseMenu()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (PauseMenuWidget)
+	{
+		ClosePauseMenu();
+		return;
+	}
+
+	if (!CanOpenPauseMenu())
+	{
+		return;
+	}
+
+	PauseMenuWidget = CreateWidget<UjinzzaPauseMenuWidget>(this, UjinzzaPauseMenuWidget::StaticClass());
+	if (!PauseMenuWidget)
+	{
+		return;
+	}
+
+	PauseMenuWidget->OnCloseRequested.AddUObject(this, &AjinzzaPlayerController::ClosePauseMenu);
+	// Above the HUD/lobby widgets (Z 0) and any open prompts.
+	PauseMenuWidget->AddToViewport(100);
+
+	// Game-and-UI rather than UI-only so ESC still reaches OnPauseMenuPressed (and closes the menu) even if a
+	// click on the game view took keyboard focus away from the widget; movement and look are blocked instead.
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(PauseMenuWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetHideCursorDuringCapture(false);
+	SetInputMode(InputMode);
+	bShowMouseCursor = true;
+	SetIgnoreMoveInput(true);
+	SetIgnoreLookInput(true);
+}
+
+void AjinzzaPlayerController::ClosePauseMenu()
+{
+	if (!PauseMenuWidget)
+	{
+		return;
+	}
+
+	PauseMenuWidget->RemoveFromParent();
+	PauseMenuWidget = nullptr;
+
+	SetIgnoreMoveInput(false);
+	SetIgnoreLookInput(false);
+	RestoreGameplayInputMode();
+}
+
+void AjinzzaPlayerController::RestoreGameplayInputMode()
+{
+	SetInputMode(FInputModeGameOnly());
+	bShowMouseCursor = false;
 }
 
 void AjinzzaPlayerController::OnPushToTalkPressed()

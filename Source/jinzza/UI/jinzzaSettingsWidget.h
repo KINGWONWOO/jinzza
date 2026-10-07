@@ -15,6 +15,7 @@ class UCheckBox;
 class UButton;
 class UTextBlock;
 class UWidget;
+class USizeBox;
 
 class UjinzzaSettingsWidget;
 
@@ -66,6 +67,10 @@ public:
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	FSimpleMulticastDelegate OnBackRequested;
+
+	/** Shrinks the panel to a smaller 960x640 window for the in-game ESC menu, which shows it
+	 * centered over the live game instead of the main menu's full-size page. Content scrolls as before. */
+	void SetCompactLayout();
 
 	/** Called by UJinzzaSettingsSegmentHandler: picks option OptionIndex of segmented group GroupIndex. */
 	void SelectSegment(int32 GroupIndex, int32 OptionIndex);
@@ -147,6 +152,10 @@ private:
 	void SetActiveTab(int32 TabIndex);
 
 	void BuildWidgetTree();
+
+	/** Fixed-size box around the whole panel - resized by SetCompactLayout. */
+	UPROPERTY()
+	TObjectPtr<USizeBox> PanelBox;
 
 	UPROPERTY()
 	TObjectPtr<UWidgetSwitcher> TabSwitcher;

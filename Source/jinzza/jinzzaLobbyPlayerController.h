@@ -36,6 +36,9 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 
+	/** Kiosk panels show the cursor while open (AjinzzaInteractableKiosk::EnterKioskUIMode) - no ESC menu on top of one. */
+	virtual bool CanOpenPauseMenu() const override { return !bShowMouseCursor; }
+
 private:
 	void CheckForNearbyKiosk();
 	void OnInteractPressed();

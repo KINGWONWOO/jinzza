@@ -36,6 +36,11 @@ protected:
 	virtual void StartPlay() override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 
+	/** If the Real One quits mid-match the round can't go on: everyone left is sent back to Lvl_Lobby,
+	 * silently. (The host quitting closes the server, so its clients end up on the title screen instead -
+	 * see UjinzzaGameInstance::LeaveToTitle.) */
+	virtual void Logout(AController* Exiting) override;
+
 private:
 	void OnRoundPhaseEntered(EJinzzaRoundPhase NewPhase);
 	void AssignRoles();
@@ -58,6 +63,7 @@ private:
 	void ExitInterviewZone();
 
 	bool bRoundStarted = false;
+	bool bReturningToLobby = false;
 	FTimerHandle RoundStartGraceTimerHandle;
 
 	TWeakObjectPtr<APawn> SeatedJudgePawn;
