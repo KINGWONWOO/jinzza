@@ -123,8 +123,11 @@ void UjinzzaEmoteWheelWidget::NativeTick(const FGeometry& MyGeometry, float InDe
 
 	EJinzzaEmoteType NewHovered = EJinzzaEmoteType::None;
 
-	// Dead zone at screen center so resting the mouse there doesn't commit to a direction.
-	constexpr float DeadZoneSq = 20.f * 20.f;
+	// Dead zone at screen center so resting the mouse there doesn't commit to a direction. Mouse and
+	// viewport size are in pixels, so the 20-unit radius is scaled by the UI scale to stay the same
+	// size relative to the wheel at any resolution (see UjinzzaUIScalingRule).
+	const float DeadZone = 20.f * UWidgetLayoutLibrary::GetViewportScale(this);
+	const float DeadZoneSq = DeadZone * DeadZone;
 	if (Delta.SizeSquared() >= DeadZoneSq)
 	{
 		if (FMath::Abs(Delta.X) >= FMath::Abs(Delta.Y))

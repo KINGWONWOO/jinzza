@@ -3846,3 +3846,35 @@ Design (open - need the user's call)
 - Wardrobe instance sits 10 cm below the floor (z -49 vs floor -39) after the user's move.
 - No voice-test kiosk in the lobby (jinzzaVoiceTestKiosk exists, only placed in Lvl_test).
 NOT VERIFIED: the reachability fix at runtime (needs Live Coding); pressing E at the kiosks.
+
+DONE THIS SESSION (2026-10-07, lobby cartoon look -> all JINZZA levels, by Claude)
+- Copied Lvl_Lobby PostProcessVolume_0's cartoon look into Lvl_Game, Lvl_test and Lvl_MainMenu
+  (all saved): M_PP_Toon blendable, saturation 1.15, contrast 1.0, cool-shadow / warm-highlight
+  gains, bloom 0.2, local exposure highlight/shadow contrast 0.9/0.75, lens flare 0, vignette 0.2,
+  Lumen skylight leaking 0.01 (cool tint).
+  * Lvl_Game: added to its existing unbound PPV (GameZones_PostProcess); fixed exposure EV100 3 kept.
+  * Lvl_test / Lvl_MainMenu had no PPV: NEW unbound PostProcessVolume_0 in each. Exposure left at
+    engine default (not copied - lobby's exposure is tuned to its own lights).
+  * Lvl_MainMenu: the menu director's camera PP still overrides exposure + vignette (0.9) there.
+- Soft sun to match the lobby: DirectionalLight_0 LightSourceAngle 0.54 -> 3, SoftAngle 0 -> 1.5 in
+  all three levels. Light intensities / sky light / point lights unchanged (level-specific).
+- NOT VERIFIED visually (no PIE screenshots taken). M_PP_Toon's ink lines were tuned at lobby
+  distances; Lvl_Game's small rooms and Lvl_test's long sightlines may need InkOpacity/CelAmount
+  tweaks. Template levels (FirstPerson / Shooter / Horror / Noob Lobby) not touched.
+
+DONE THIS SESSION (2026-10-07, UI keeps proportions at any resolution / aspect ratio, by Claude)
+- Cause: all UI is built in C++ with fixed slate-unit sizes for a 1920x1080 design (Settings panel
+  1240x780, Customization 1060, main-menu columns, paddings, fonts), and the project used the
+  engine default DPI rule (ShortestSide curve = height only). Anything narrower than 16:9 (4:3,
+  16:10, narrow PIE window) kept the height-based scale, so wide panels overflowed / overlapped the
+  side columns, and the UI's size relative to the screen changed with the aspect ratio.
+- NEW UI/jinzzaUIScalingRule (UDPICustomScalingRule): scale = min(W/1920, H/1080), floor 0.25.
+  DefaultEngine.ini [/Script/Engine.UserInterfaceSettings] UIScaleRule=Custom,
+  CustomScalingRuleClass=/Script/jinzza.jinzzaUIScalingRule. The whole 1920x1080 layout always
+  fits; corner/edge/center-aligned elements keep their relative spot; extra space on wider or
+  taller screens goes between them. Applies to every UMG/Slate screen + screen-space prompts.
+- Emote wheel: 20-unit center dead zone now scaled by the viewport scale (mouse is in pixels).
+- NOT COMPILED: UBT refused while Live Coding was active (UHT pass on the new header was clean).
+  A NEW UCLASS needs a full build with the editor CLOSED (Live Coding can't add classes). Until
+  then the engine can't load the rule class and the UI falls back to scale 1. Not checked in PIE
+  at other aspect ratios yet.
