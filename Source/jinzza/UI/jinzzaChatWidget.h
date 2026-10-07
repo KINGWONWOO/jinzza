@@ -5,22 +5,18 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "Types/SlateEnums.h"
-#include "jinzzaChatTypes.h"
 #include "jinzzaChatWidget.generated.h"
 
-class UBorder;
-class UScrollBox;
 class UEditableTextBox;
 
 /**
- * Text chat, bottom-left of the screen (lobby and match - created by AjinzzaPlayerController).
+ * The chat input line (bottom-left, created by AjinzzaPlayerController). There is no chat log: what you
+ * type is written on your character's hand-held board (UjinzzaChatBoardComponent) and shown to the
+ * players around you when you send it.
  *
- * Enter opens the input line (UI-only input, so typing never moves the character or presses E/Space);
- * Enter again sends, ESC or clicking away cancels. Recent lines stay visible for a few seconds, then
- * fade out until the next message or until the input is opened again.
- *
- * Sender names come from the server (AjinzzaPartyPlayerState::GetDisplayName): nicknames in the lobby,
- * "User1".."UserN" / "Judge" in the match. Ghost lines are grey with a [Ghost] tag and only reach ghosts.
+ * Enter opens the line and raises the board (UI-only input, so typing never moves the character or
+ * presses E/Space); each keystroke updates your own side of the board; Enter sends (the board flips to
+ * face everyone); ESC or clicking away cancels (the board is lowered).
  *
  * TEMP C++-built like the other jinzza widgets (see docs/umg_widget_authoring_guide.md).
  */
@@ -31,9 +27,6 @@ class JINZZA_API UjinzzaChatWidget : public UUserWidget
 
 public:
 	virtual void NativeOnInitialized() override;
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-
-	void AddMessage(const FJinzzaChatMessage& Message);
 
 	/** Shows the input line and focuses it. The owning controller switches input to UI-only. */
 	void OpenInput();
@@ -42,6 +35,9 @@ public:
 
 protected:
 	UFUNCTION()
+	void HandleTextChanged(const FText& Text);
+
+	UFUNCTION()
 	void HandleTextCommitted(const FText& Text, ETextCommit::Type CommitMethod);
 
 private:
@@ -49,14 +45,7 @@ private:
 	void CloseInput();
 
 	UPROPERTY()
-	TObjectPtr<UBorder> Panel;
-
-	UPROPERTY()
-	TObjectPtr<UScrollBox> MessageList;
-
-	UPROPERTY()
 	TObjectPtr<UEditableTextBox> InputBox;
 
 	bool bInputOpen = false;
-	double LastActivityTime = -1000.0;
 };

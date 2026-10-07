@@ -3948,3 +3948,22 @@ DONE THIS SESSION (2026-10-07, nameplates + match aliases + text chat, by Claude
   A ghost's messages go only to other ghosts, tagged [Ghost] (same rule as voice). Not available
   while the ESC menu or a lobby kiosk panel is open.
 - Game target compiles; needs a full editor build (editor CLOSED). NOT TESTED at runtime.
+
+DONE THIS SESSION (2026-10-07, chat -> hand-held chalkboard, by Claude) - REPLACES the chat log above
+- No chat log / history any more. NEW UjinzzaChatBoardComponent on AjinzzaCharacter + MOCKUP board:
+  ChatBoardPivot (45 cm in front, chest height) > ChatBoardMesh (engine cube 2x62x42 cm, chalk
+  green via BasicShapeMaterial "Color") + ChatBoardTextComponent (one-sided world widget,
+  UjinzzaChatBoardWidget, chalk-white text).
+- Enter: input line opens (UjinzzaChatWidget is now only that line) and the board rises with its
+  written side toward the writer - they see their text live as they type (local preview only);
+  everyone else sees the blank back. Enter again: server takes the text (trim, 120 chars, 0.5 s
+  rate limit) and the board flips 180 deg to face outward for 4-10 s (by length), then lowers.
+  ESC / click away / empty Enter / rejected message: board lowers.
+- State (Hidden / Writing / Showing + text) is server-set and replicated; raise (0.2 s) and flip
+  (0.35 s) are lerped locally. Text is only replicated once shown. A ghost's board is only visible
+  to other ghosts.
+- TODO when the writing animation exists: play it while GetBoardState() == Writing, attach the
+  board to a hand socket instead of the fixed pivot, replace the cube with a real board mesh.
+- Game target compiles; full editor build needed (editor CLOSED). NOT TESTED at runtime -
+  especially check the text faces the right way (world widgets face +X) and the board isn't
+  clipped by the first-person camera.

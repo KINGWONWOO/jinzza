@@ -62,6 +62,20 @@ class AjinzzaCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UWidgetComponent> NameplateComponent;
 
+	/** Hand-held chalkboard used for chat (UjinzzaChatBoardComponent). MOCKUP: an engine cube + world-space
+	 * text widget on a pivot in front of the chest; the pivot is what the board component raises/flips. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> ChatBoardPivot;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UStaticMeshComponent> ChatBoardMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UWidgetComponent> ChatBoardTextComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UjinzzaChatBoardComponent> ChatBoardComponent;
+
 protected:
 
 	/** Jump Input Action */

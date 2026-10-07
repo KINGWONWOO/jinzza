@@ -17,6 +17,7 @@
 #include "Blueprint/UserWidget.h"
 #include "jinzzaPauseMenuWidget.h"
 #include "jinzzaChatWidget.h"
+#include "jinzzaChatBoardComponent.h"
 #include "Components/Widget.h"
 #include "Engine/World.h"
 #include "jinzza.h"
@@ -259,7 +260,8 @@ void AjinzzaPlayerController::ClosePauseMenu()
 
 void AjinzzaPlayerController::OnChatPressed()
 {
-	if (ChatWidget && !ChatWidget->IsInputOpen() && !IsPauseMenuOpen() && CanOpenPauseMenu())
+	// No character (e.g. spectating) = no board to write on.
+	if (ChatWidget && !ChatWidget->IsInputOpen() && !IsPauseMenuOpen() && CanOpenPauseMenu() && GetChatBoard())
 	{
 		ChatWidget->OpenInput();
 	}
@@ -287,52 +289,52 @@ void AjinzzaPlayerController::ExitChatInputMode()
 void AjinzzaPlayerController::Server_SendChatMessage_Implementation(const FString& Text)
 {
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-	if (Now - LastChatMessageTime < JinzzaChat::MinSecondsBetweenMessages)
-	{
-		return;
-	}
-
 	FString Clean = Text.Replace(TEXT("\r"), TEXT(" ")).Replace(TEXT("\n"), TEXT(" ")).TrimStartAndEnd();
 	Clean.LeftInline(JinzzaChat::MaxMessageLength);
-	if (Clean.IsEmpty())
+	if (Clean.IsEmpty() || Now - LastChatMessageTime < JinzzaChat::MinSecondsBetweenMessages)
 	{
+		// Rejected - don't leave the board raised and blank.
+		if (UjinzzaChatBoardComponent* Board = GetChatBoard())
+		{
+			Board->ServerCancelWriting();
+		}
 		return;
 	}
 	LastChatMessageTime = Now;
 
-	const AjinzzaPartyPlayerState* SenderState = GetPlayerState<AjinzzaPartyPlayerState>();
-
-	FJinzzaChatMessage Message;
-	Message.SenderName = AjinzzaPartyPlayerState::GetDisplayNameFor(PlayerState);
-	Message.Text = Clean;
-	Message.bFromGhost = SenderState && SenderState->IsGhost();
-
-	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	// Who can see it (ghost boards only to ghosts) is decided on each viewer's machine by the board itself.
+	if (UjinzzaChatBoardComponent* Board = GetChatBoard())
 	{
-		AjinzzaPlayerController* Recipient = Cast<AjinzzaPlayerController>(It->Get());
-		if (!Recipient)
-		{
-			continue;
-		}
-		// Ghosts can't talk to the living (same rule as voice) - only to each other.
-		if (Message.bFromGhost)
-		{
-			const AjinzzaPartyPlayerState* RecipientState = Recipient->GetPlayerState<AjinzzaPartyPlayerState>();
-			if (!RecipientState || !RecipientState->IsGhost())
-			{
-				continue;
-			}
-		}
-		Recipient->Client_ReceiveChatMessage(Message);
+		Board->ServerReveal(Clean);
 	}
 }
 
-void AjinzzaPlayerController::Client_ReceiveChatMessage_Implementation(const FJinzzaChatMessage& Message)
+void AjinzzaPlayerController::Server_SetChatWriting_Implementation(bool bWriting)
 {
-	if (ChatWidget)
+	if (UjinzzaChatBoardComponent* Board = GetChatBoard())
 	{
-		ChatWidget->AddMessage(Message);
+		if (bWriting)
+		{
+			Board->ServerStartWriting();
+		}
+		else
+		{
+			Board->ServerCancelWriting();
+		}
 	}
+}
+
+void AjinzzaPlayerController::UpdateChatPreview(const FString& Text)
+{
+	if (UjinzzaChatBoardComponent* Board = GetChatBoard())
+	{
+		Board->SetLocalPreviewText(Text);
+	}
+}
+
+UjinzzaChatBoardComponent* AjinzzaPlayerController::GetChatBoard() const
+{
+	return GetPawn() ? GetPawn()->FindComponentByClass<UjinzzaChatBoardComponent>() : nullptr;
 }
 
 void AjinzzaPlayerController::RestoreGameplayInputMode()

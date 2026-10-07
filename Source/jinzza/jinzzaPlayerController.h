@@ -12,6 +12,7 @@ class UInputMappingContext;
 class UUserWidget;
 class UjinzzaPauseMenuWidget;
 class UjinzzaChatWidget;
+class UjinzzaChatBoardComponent;
 class UWidget;
 
 /**
@@ -47,13 +48,17 @@ public:
 
 	bool IsPauseMenuOpen() const { return PauseMenuWidget != nullptr; }
 
-	/** Chat: the server cleans up Text (trim, MaxMessageLength, rate limit), stamps the sender's display name
-	 * (nickname, or the match alias) and sends it to every player - a ghost's message only to other ghosts. */
+	/** Chat board: the server cleans up Text (trim, MaxMessageLength, rate limit) and flips this player's
+	 * board (UjinzzaChatBoardComponent) to show it to everyone around. Nothing is logged anywhere. */
 	UFUNCTION(Server, Reliable)
 	void Server_SendChatMessage(const FString& Text);
 
-	UFUNCTION(Client, Reliable)
-	void Client_ReceiveChatMessage(const FJinzzaChatMessage& Message);
+	/** Chat input opened (true: board raised, blank side out) or cancelled (false: board lowered). */
+	UFUNCTION(Server, Reliable)
+	void Server_SetChatWriting(bool bWriting);
+
+	/** Local: what's being typed, drawn on our own side of the board. */
+	void UpdateChatPreview(const FString& Text);
 
 	/** Called by UjinzzaChatWidget when its input line opens/closes: UI-only input focused on FocusTarget, so
 	 * typing never reaches the character, then back to this level's normal input. */
@@ -130,6 +135,9 @@ private:
 
 	/** Enter: opens the chat input line (not while the ESC menu or a kiosk panel is up). */
 	void OnChatPressed();
+
+	/** The possessed character's chat board, if it has one. */
+	UjinzzaChatBoardComponent* GetChatBoard() const;
 
 	void OnPushToTalkPressed();
 	void OnPushToTalkReleased();

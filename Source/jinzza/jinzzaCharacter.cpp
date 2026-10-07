@@ -2,6 +2,11 @@
 
 #include "jinzzaCharacter.h"
 #include "jinzzaNameplateWidget.h"
+#include "jinzzaChatBoardComponent.h"
+#include "jinzzaChatBoardWidget.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Components/WidgetComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
@@ -90,6 +95,40 @@ AjinzzaCharacter::AjinzzaCharacter()
 	NameplateComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	NameplateComponent->SetWidgetClass(UjinzzaNameplateWidget::StaticClass());
 
+	// Chat board, held at chest height ~45 cm in front. The pivot's +X is the written side: the board
+	// component turns it to 180 (toward this character) while writing and 0 (toward everyone) to show.
+	ChatBoardPivot = CreateDefaultSubobject<USceneComponent>(TEXT("ChatBoardPivot"));
+	ChatBoardPivot->SetupAttachment(GetCapsuleComponent());
+	ChatBoardPivot->SetRelativeLocation(FVector(45.f, 0.f, 25.f));
+
+	// 2 x 62 x 42 cm slab (engine cube is 100 cm).
+	ChatBoardMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ChatBoardMesh"));
+	ChatBoardMesh->SetupAttachment(ChatBoardPivot);
+	ChatBoardMesh->SetRelativeScale3D(FVector(0.02f, 0.62f, 0.42f));
+	ChatBoardMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	ChatBoardMesh->SetCastShadow(false);
+	static ConstructorHelpers::FObjectFinder<UStaticMesh> BoardCubeFinder(TEXT("/Engine/BasicShapes/Cube.Cube"));
+	if (BoardCubeFinder.Succeeded())
+	{
+		ChatBoardMesh->SetStaticMesh(BoardCubeFinder.Object);
+	}
+
+	// 560 x 360 px at 0.1 scale = 56 x 36 cm, just proud of the front face. One-sided, so from behind
+	// (while its owner is writing) the board is blank.
+	ChatBoardTextComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("ChatBoardTextComponent"));
+	ChatBoardTextComponent->SetupAttachment(ChatBoardPivot);
+	ChatBoardTextComponent->SetRelativeLocation(FVector(1.2f, 0.f, 0.f));
+	ChatBoardTextComponent->SetRelativeScale3D(FVector(0.1f));
+	ChatBoardTextComponent->SetWidgetSpace(EWidgetSpace::World);
+	ChatBoardTextComponent->SetDrawSize(FVector2D(560.f, 360.f));
+	ChatBoardTextComponent->SetTwoSided(false);
+	ChatBoardTextComponent->SetBlendMode(EWidgetBlendMode::Transparent);
+	ChatBoardTextComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	ChatBoardTextComponent->SetWidgetClass(UjinzzaChatBoardWidget::StaticClass());
+
+	ChatBoardComponent = CreateDefaultSubobject<UjinzzaChatBoardComponent>(TEXT("ChatBoardComponent"));
+	ChatBoardComponent->Bind(ChatBoardPivot, ChatBoardTextComponent);
+
 	static ConstructorHelpers::FClassFinder<UjinzzaEmoteWheelWidget> EmoteWheelWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_EmoteWheel"));
 	if (EmoteWheelWidgetBPClass.Succeeded())
 	{
@@ -166,6 +205,12 @@ void AjinzzaCharacter::BeginPlay()
 	if (UjinzzaNameplateWidget* Nameplate = Cast<UjinzzaNameplateWidget>(NameplateComponent->GetUserWidgetObject()))
 	{
 		Nameplate->SetOwnerPawn(this);
+	}
+
+	// Chalkboard green (BasicShapeMaterial's Color parameter).
+	if (UMaterialInstanceDynamic* BoardMaterial = ChatBoardMesh->CreateDynamicMaterialInstance(0))
+	{
+		BoardMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.03f, 0.12f, 0.07f));
 	}
 
 	if (IsLocallyControlled() && PropUsageWidgetClass)
