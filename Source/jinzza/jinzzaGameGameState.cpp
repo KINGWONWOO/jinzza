@@ -13,6 +13,32 @@ void AjinzzaGameGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(AjinzzaGameGameState, LoadedPlayerCount);
 	DOREPLIFETIME(AjinzzaGameGameState, ExpectedPlayerCount);
 	DOREPLIFETIME(AjinzzaGameGameState, bAllPlayersLoaded);
+	DOREPLIFETIME(AjinzzaGameGameState, SpeakTurn);
+	DOREPLIFETIME(AjinzzaGameGameState, bVoteOpen);
+	DOREPLIFETIME(AjinzzaGameGameState, VotePhase);
+	DOREPLIFETIME(AjinzzaGameGameState, VoteEndServerTime);
+}
+
+float AjinzzaGameGameState::GetSpeakTurnTimeRemaining() const
+{
+	return IsSpeakTurnActive() ? FMath::Max(0.f, static_cast<float>(SpeakTurn.EndServerTime - GetServerWorldTimeSeconds())) : 0.f;
+}
+
+float AjinzzaGameGameState::GetVoteTimeRemaining() const
+{
+	return bVoteOpen ? FMath::Max(0.f, static_cast<float>(VoteEndServerTime - GetServerWorldTimeSeconds())) : 0.f;
+}
+
+void AjinzzaGameGameState::ServerSetSpeakTurn(const FJinzzaSpeakTurn& NewTurn)
+{
+	SpeakTurn = NewTurn;
+}
+
+void AjinzzaGameGameState::ServerSetVote(bool bOpen, EJinzzaRoundPhase Phase, double EndServerTime)
+{
+	bVoteOpen = bOpen;
+	VotePhase = Phase;
+	VoteEndServerTime = EndServerTime;
 }
 
 void AjinzzaGameGameState::ServerSetLoadProgress(int32 InLoaded, int32 InExpected, bool bInAllLoaded)

@@ -24,6 +24,11 @@ void AjinzzaPartyPlayerState::ServerSetDisplayAlias(const FString& NewAlias)
 	}
 }
 
+int32 AjinzzaPartyPlayerState::GetAliasUserNumber() const
+{
+	return DisplayAlias.StartsWith(TEXT("User")) ? FCString::Atoi(*DisplayAlias.Mid(4)) : 0;
+}
+
 FString AjinzzaPartyPlayerState::GetDisplayNameFor(const APlayerState* PlayerState)
 {
 	if (const AjinzzaPartyPlayerState* PartyState = Cast<AjinzzaPartyPlayerState>(PlayerState))

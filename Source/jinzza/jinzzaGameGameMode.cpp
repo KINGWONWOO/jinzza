@@ -8,6 +8,7 @@
 #include "jinzzaAuditionCurtain.h"
 #include "jinzzaGameInstance.h"
 #include "jinzzaLoadingSettings.h"
+#include "jinzzaChatBoardComponent.h"
 #include "jinzza.h"
 #include "Engine/World.h"
 #include "Engine/GameInstance.h"
@@ -192,10 +193,49 @@ void AjinzzaGameGameMode::Logout(AController* Exiting)
 	const bool bRealOneLeft = PartyState && PartyState->ServerRole == EJinzzaPartyRole::RealOne;
 	// The host's own controller only "leaves" when the server itself is shutting down.
 	const bool bHostLeft = Exiting && Exiting->IsLocalController();
+	const AjinzzaGameGameState* MatchStateBefore = GetGameState<AjinzzaGameGameState>();
+	const bool bSpeakerLeft = MatchStateBefore && PartyState && MatchStateBefore->IsTurnSpeaker(PartyState);
+	const bool bWasSelfIntro = bSpeakerLeft && MatchStateBefore->GetSpeakTurn().Kind == EJinzzaSpeakTurnKind::SelfIntroduction;
+	if (PartyState && PartyState == CondemnedPlayer.Get())
+	{
+		// They left - nothing to eliminate, but still end the phase after the (now empty) argument.
+		CondemnedPlayer.Reset();
+	}
 
 	Super::Logout(Exiting);
 
 	UWorld* World = GetWorld();
+
+	if (World && !World->bIsTearingDown)
+	{
+		if (bSpeakerLeft)
+		{
+			// Their spotlight turn is over - move on next tick (they're still mid-removal here).
+			SpotlightPawn.Reset();
+			if (bWasSelfIntro)
+			{
+				GetWorldTimerManager().SetTimerForNextTick(this, &AjinzzaGameGameMode::AdvanceSelfIntroduction);
+			}
+			else
+			{
+				GetWorldTimerManager().SetTimerForNextTick(this, &AjinzzaGameGameMode::FinishFinalArgument);
+			}
+		}
+
+		// A Judge left mid-vote: their vote is gone; if the rest have voted, close now.
+		if (const AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>(); MatchState && MatchState->IsVoteOpen())
+		{
+			Votes.Remove(Cast<APlayerController>(Exiting));
+			GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+			{
+				const int32 Judges = CountConnectedJudges();
+				if (Judges > 0 && Votes.Num() >= Judges)
+				{
+					CloseVote();
+				}
+			}));
+		}
+	}
 
 	// Someone dropped before the match started - stop waiting for them.
 	if (!bAllPlayersLoaded && World && !World->bIsTearingDown)
@@ -240,12 +280,342 @@ void AjinzzaGameGameMode::TryStartRound()
 
 void AjinzzaGameGameMode::OnRoundPhaseEntered(EJinzzaRoundPhase NewPhase)
 {
+	// Before the zone teleport, so a spotlight speaker is put back with everyone else first.
+	CancelTurnsAndVote();
+
 	if (NewPhase == EJinzzaRoundPhase::RoleAssignment)
 	{
 		AssignRoles();
 	}
 
 	UpdateZoneForPhase(NewPhase);
+
+	if (NewPhase == EJinzzaRoundPhase::SelfIntroduction)
+	{
+		StartSelfIntroductions();
+	}
+	else if (NewPhase == EJinzzaRoundPhase::MidEvaluation || NewPhase == EJinzzaRoundPhase::FinalDecision)
+	{
+		OpenVote(NewPhase);
+	}
+}
+
+// --- Speaking turns -------------------------------------------------------------------------------
+
+TArray<AjinzzaPartyPlayerState*> AjinzzaGameGameMode::GetLivingCandidates() const
+{
+	TArray<AjinzzaPartyPlayerState*> Candidates;
+	if (const AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>())
+	{
+		for (APlayerState* PS : MatchState->PlayerArray)
+		{
+			AjinzzaPartyPlayerState* PartyPS = Cast<AjinzzaPartyPlayerState>(PS);
+			if (PartyPS && PartyPS->IsLivingCandidate() && PartyPS->ServerRole != EJinzzaPartyRole::Judge)
+			{
+				Candidates.Add(PartyPS);
+			}
+		}
+	}
+	Candidates.Sort([](const AjinzzaPartyPlayerState& A, const AjinzzaPartyPlayerState& B)
+	{
+		return A.GetAliasUserNumber() < B.GetAliasUserNumber();
+	});
+	return Candidates;
+}
+
+int32 AjinzzaGameGameMode::CountConnectedJudges() const
+{
+	int32 Count = 0;
+	if (const AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>())
+	{
+		for (APlayerState* PS : MatchState->PlayerArray)
+		{
+			const AjinzzaPartyPlayerState* PartyPS = Cast<AjinzzaPartyPlayerState>(PS);
+			Count += (PartyPS && PartyPS->ServerRole == EJinzzaPartyRole::Judge && PartyPS->GetPlayerController()) ? 1 : 0;
+		}
+	}
+	return Count;
+}
+
+void AjinzzaGameGameMode::StartSelfIntroductions()
+{
+	SelfIntroOrder.Reset();
+	for (AjinzzaPartyPlayerState* Candidate : GetLivingCandidates())
+	{
+		SelfIntroOrder.Add(Candidate);
+	}
+	SelfIntroIndex = INDEX_NONE;
+
+	UE_LOG(Logjinzza, Log, TEXT("Self-introduction: %d candidates, User1 first."), SelfIntroOrder.Num());
+	AdvanceSelfIntroduction();
+}
+
+void AjinzzaGameGameMode::AdvanceSelfIntroduction()
+{
+	EndSpeakTurn();
+
+	// Next candidate still in the game (someone may have left mid-phase).
+	while (++SelfIntroIndex < SelfIntroOrder.Num())
+	{
+		AjinzzaPartyPlayerState* Speaker = SelfIntroOrder[SelfIntroIndex].Get();
+		if (Speaker && Speaker->GetPlayerController())
+		{
+			BeginSpeakTurn(EJinzzaSpeakTurnKind::SelfIntroduction, Speaker, SelfIntroSecondsPerCandidate,
+				SelfIntroIndex + 1, SelfIntroOrder.Num(), TEXT("Zone.SelfIntro"));
+			GetWorldTimerManager().SetTimer(SpeakTurnTimerHandle, this, &AjinzzaGameGameMode::AdvanceSelfIntroduction, SelfIntroSecondsPerCandidate, false);
+			return;
+		}
+	}
+
+	// Everyone has spoken - don't wait out the rest of the phase timer.
+	SelfIntroOrder.Reset();
+	if (UjinzzaRoundPhaseSubsystem* RoundPhase = GetGameInstance() ? GetGameInstance()->GetSubsystem<UjinzzaRoundPhaseSubsystem>() : nullptr)
+	{
+		RoundPhase->NotifyPhaseConditionMet(EJinzzaRoundPhase::SelfIntroduction);
+	}
+}
+
+void AjinzzaGameGameMode::BeginSpeakTurn(EJinzzaSpeakTurnKind Kind, AjinzzaPartyPlayerState* Speaker, float Seconds, int32 Number, int32 Total, const FString& ZoneTag)
+{
+	AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>();
+	if (!MatchState || !Speaker)
+	{
+		return;
+	}
+
+	auto FindTagged = [this](const FString& Tag) -> AActor*
+	{
+		TArray<AActor*> Found;
+		UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName(*Tag), Found);
+		return Found.Num() > 0 ? Found[0] : nullptr;
+	};
+
+	// Nobody holds a board up during a turn - the speaker's lines become speech bubbles.
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (APawn* Pawn = It->Get() ? It->Get()->GetPawn() : nullptr)
+		{
+			if (UjinzzaChatBoardComponent* Board = Pawn->FindComponentByClass<UjinzzaChatBoardComponent>())
+			{
+				Board->ServerCancelWriting();
+			}
+		}
+	}
+
+	APlayerController* SpeakerPC = Speaker->GetPlayerController();
+	APawn* Pawn = SpeakerPC ? SpeakerPC->GetPawn() : nullptr;
+	if (AActor* Spotlight = FindTagged(ZoneTag + TEXT(".Spotlight")); Spotlight && Pawn)
+	{
+		SpotlightPawn = Pawn;
+		SpotlightReturnLocation = Pawn->GetActorLocation();
+		SpotlightReturnRotation = Pawn->GetActorRotation();
+		Pawn->TeleportTo(Spotlight->GetActorLocation(), Spotlight->GetActorRotation());
+		// Control rotation is the owning client's - turn them to face the audience there.
+		SpeakerPC->ClientSetRotation(Spotlight->GetActorRotation());
+	}
+	else if (!Spotlight)
+	{
+		UE_LOG(Logjinzza, Warning, TEXT("No '%s.Spotlight' actor in the level - the speaker stays where they are."), *ZoneTag);
+	}
+
+	FJinzzaSpeakTurn Turn;
+	Turn.Kind = Kind;
+	Turn.Speaker = Speaker;
+	Turn.EndServerTime = MatchState->GetServerWorldTimeSeconds() + Seconds;
+	Turn.Number = Number;
+	Turn.Total = Total;
+	Turn.Serial = ++SpeakTurnSerial;
+
+	if (AActor* CameraMarker = FindTagged(ZoneTag + TEXT(".Camera")))
+	{
+		Turn.CameraLocation = CameraMarker->GetActorLocation();
+		Turn.CameraRotation = CameraMarker->GetActorRotation();
+	}
+	else if (Pawn)
+	{
+		// 2.6 m in front of the speaker, a little above head height, looking at their face.
+		const FVector Face = Pawn->GetActorLocation() + FVector(0.f, 0.f, 60.f);
+		// The first-person character's yaw follows its controller, so this is where they're facing.
+		const FVector Forward = Pawn->GetActorForwardVector().GetSafeNormal2D();
+		Turn.CameraLocation = Face + Forward * 260.f + FVector(0.f, 0.f, 25.f);
+		Turn.CameraRotation = (Face - Turn.CameraLocation).Rotation();
+	}
+
+	MatchState->ServerSetSpeakTurn(Turn);
+	UE_LOG(Logjinzza, Log, TEXT("Speak turn %d/%d: %s (%s)."), Number, Total, *Speaker->GetDisplayName(),
+		Kind == EJinzzaSpeakTurnKind::FinalArgument ? TEXT("final argument") : TEXT("self-introduction"));
+}
+
+void AjinzzaGameGameMode::EndSpeakTurn()
+{
+	GetWorldTimerManager().ClearTimer(SpeakTurnTimerHandle);
+
+	if (APawn* Pawn = SpotlightPawn.Get())
+	{
+		Pawn->TeleportTo(SpotlightReturnLocation, SpotlightReturnRotation);
+	}
+	SpotlightPawn.Reset();
+
+	if (AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>())
+	{
+		if (MatchState->IsSpeakTurnActive())
+		{
+			FJinzzaSpeakTurn Cleared;
+			Cleared.Serial = ++SpeakTurnSerial;
+			MatchState->ServerSetSpeakTurn(Cleared);
+		}
+	}
+}
+
+void AjinzzaGameGameMode::BroadcastTurnMessage(APlayerState* Speaker, const FString& Text)
+{
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (AjinzzaGamePlayerController* PC = Cast<AjinzzaGamePlayerController>(It->Get()))
+		{
+			PC->Client_ReceiveTurnMessage(Speaker, Text);
+		}
+	}
+}
+
+// --- Judge vote -----------------------------------------------------------------------------------
+
+void AjinzzaGameGameMode::OpenVote(EJinzzaRoundPhase Phase)
+{
+	AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>();
+	if (!MatchState)
+	{
+		return;
+	}
+
+	VotePhase = Phase;
+	Votes.Reset();
+	CondemnedPlayer.Reset();
+
+	if (GetLivingCandidates().Num() == 0)
+	{
+		UE_LOG(Logjinzza, Warning, TEXT("Vote: no living candidates - skipping."));
+		return;
+	}
+
+	MatchState->ServerSetVote(true, Phase, MatchState->GetServerWorldTimeSeconds() + VoteSeconds);
+	GetWorldTimerManager().SetTimer(VoteTimerHandle, this, &AjinzzaGameGameMode::CloseVote, VoteSeconds, false);
+
+	if (CountConnectedJudges() == 0)
+	{
+		UE_LOG(Logjinzza, Warning, TEXT("Vote: no Judge connected - the vote will be settled at random."));
+	}
+}
+
+void AjinzzaGameGameMode::HandleVote(APlayerController* Voter, APlayerState* Target)
+{
+	const AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>();
+	const AjinzzaPartyPlayerState* VoterState = Voter ? Voter->GetPlayerState<AjinzzaPartyPlayerState>() : nullptr;
+	AjinzzaPartyPlayerState* TargetState = Cast<AjinzzaPartyPlayerState>(Target);
+	if (!MatchState || !MatchState->IsVoteOpen() || !VoterState || VoterState->ServerRole != EJinzzaPartyRole::Judge
+		|| !TargetState || !TargetState->IsLivingCandidate() || TargetState->ServerRole == EJinzzaPartyRole::Judge)
+	{
+		return;
+	}
+
+	Votes.Add(Voter, TargetState);
+	UE_LOG(Logjinzza, Log, TEXT("Vote: a Judge voted for %s."), *TargetState->GetDisplayName());
+
+	// Every Judge has voted - no need to wait out the timer.
+	if (Votes.Num() >= CountConnectedJudges())
+	{
+		CloseVote();
+	}
+}
+
+void AjinzzaGameGameMode::CloseVote()
+{
+	AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>();
+	if (!MatchState || !MatchState->IsVoteOpen())
+	{
+		return;
+	}
+	GetWorldTimerManager().ClearTimer(VoteTimerHandle);
+	MatchState->ServerSetVote(false, VotePhase, 0.0);
+
+	TMap<AjinzzaPartyPlayerState*, int32> Tally;
+	for (const TPair<TWeakObjectPtr<APlayerController>, TWeakObjectPtr<AjinzzaPartyPlayerState>>& Vote : Votes)
+	{
+		AjinzzaPartyPlayerState* Target = Vote.Value.Get();
+		if (Target && Target->IsLivingCandidate())
+		{
+			++Tally.FindOrAdd(Target);
+		}
+	}
+	Votes.Reset();
+
+	TArray<AjinzzaPartyPlayerState*> Top;
+	int32 TopCount = 0;
+	for (const TPair<AjinzzaPartyPlayerState*, int32>& Entry : Tally)
+	{
+		if (Entry.Value > TopCount)
+		{
+			TopCount = Entry.Value;
+			Top.Reset();
+		}
+		if (Entry.Value == TopCount)
+		{
+			Top.Add(Entry.Key);
+		}
+	}
+
+	if (Top.Num() == 0)
+	{
+		// No vote cast in time: random, same fallback the design doc uses for an undesignated interview.
+		Top = GetLivingCandidates();
+		UE_LOG(Logjinzza, Log, TEXT("Vote: no votes cast - picking at random."));
+	}
+	if (Top.Num() == 0)
+	{
+		return;
+	}
+
+	StartFinalArgument(Top[FMath::RandRange(0, Top.Num() - 1)]);
+}
+
+void AjinzzaGameGameMode::StartFinalArgument(AjinzzaPartyPlayerState* Condemned)
+{
+	CondemnedPlayer = Condemned;
+	BeginSpeakTurn(EJinzzaSpeakTurnKind::FinalArgument, Condemned, FinalArgumentSeconds, 1, 1, TEXT("Zone.Evaluation"));
+	GetWorldTimerManager().SetTimer(SpeakTurnTimerHandle, this, &AjinzzaGameGameMode::FinishFinalArgument, FinalArgumentSeconds, false);
+}
+
+void AjinzzaGameGameMode::FinishFinalArgument()
+{
+	EndSpeakTurn();
+
+	if (AjinzzaPartyPlayerState* Condemned = CondemnedPlayer.Get())
+	{
+		UE_LOG(Logjinzza, Log, TEXT("Vote: %s eliminated."), *Condemned->GetDisplayName());
+		EliminateToGhost(Condemned);
+	}
+	CondemnedPlayer.Reset();
+
+	const EJinzzaRoundPhase Phase = VotePhase;
+	VotePhase = EJinzzaRoundPhase::None;
+	if (UjinzzaRoundPhaseSubsystem* RoundPhase = GetGameInstance() ? GetGameInstance()->GetSubsystem<UjinzzaRoundPhaseSubsystem>() : nullptr)
+	{
+		RoundPhase->NotifyPhaseConditionMet(Phase);
+	}
+}
+
+void AjinzzaGameGameMode::CancelTurnsAndVote()
+{
+	GetWorldTimerManager().ClearTimer(VoteTimerHandle);
+	EndSpeakTurn();
+	SelfIntroOrder.Reset();
+	Votes.Reset();
+	CondemnedPlayer.Reset();
+	VotePhase = EJinzzaRoundPhase::None;
+	if (AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>(); MatchState && MatchState->IsVoteOpen())
+	{
+		MatchState->ServerSetVote(false, EJinzzaRoundPhase::None, 0.0);
+	}
 }
 
 FName AjinzzaGameGameMode::GetZoneTagForPhase(EJinzzaRoundPhase Phase)

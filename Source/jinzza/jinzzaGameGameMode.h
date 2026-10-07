@@ -37,6 +37,19 @@ public:
 	 * the round starts. */
 	void NotifyPlayerLoaded(APlayerController* Player);
 
+	/** Server: a Judge's vote (AjinzzaGamePlayerController::Server_CastVote). Changes their vote if they already
+	 * voted. Ignored unless a vote is open, Voter is a Judge and Target a living candidate. */
+	void HandleVote(APlayerController* Voter, APlayerState* Target);
+
+	/** Server: the turn speaker's chat line - sent to everyone as a speech bubble (no board, no log). */
+	void BroadcastTurnMessage(APlayerState* Speaker, const FString& Text);
+
+	// Turn/vote timings (seconds). Self-intro matches UjinzzaRoundPhaseSubsystem's 20 s x candidates phase
+	// length; vote + final argument fit inside the 60 s MidEvaluation / FinalDecision phases.
+	static constexpr float SelfIntroSecondsPerCandidate = 20.f;
+	static constexpr float VoteSeconds = 30.f;
+	static constexpr float FinalArgumentSeconds = 20.f;
+
 protected:
 	virtual void StartPlay() override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
@@ -69,6 +82,35 @@ private:
 
 	static FName GetZoneTagForPhase(EJinzzaRoundPhase Phase);
 
+	// --- Spotlight speaking turns (self-introduction, final argument) ---------------------------------
+	// One speaker at a time: moved to the zone's spotlight ("<Zone>.Spotlight"-tagged actor, if placed),
+	// everyone else's camera turned on them (from "<Zone>.Camera" if placed, else a spot in front of the
+	// speaker), nobody can move, only the speaker's mic is heard, only the speaker can chat - as speech
+	// bubbles (AjinzzaGamePlayerController applies all of that on each machine from the replicated turn).
+
+	/** Self-introduction: living candidates in User1..UserN order, SelfIntroSecondsPerCandidate each. */
+	void StartSelfIntroductions();
+	void AdvanceSelfIntroduction();
+
+	void BeginSpeakTurn(EJinzzaSpeakTurnKind Kind, AjinzzaPartyPlayerState* Speaker, float Seconds, int32 Number, int32 Total, const FString& ZoneTag);
+	/** Ends the current turn (if any) and returns the speaker to where they were standing. */
+	void EndSpeakTurn();
+
+	// --- Judge vote -> final argument -> elimination (MidEvaluation and FinalDecision) ------------------
+
+	void OpenVote(EJinzzaRoundPhase Phase);
+	/** Tallies: most votes wins, ties and no-votes are settled at random. Then the final argument. */
+	void CloseVote();
+	void StartFinalArgument(AjinzzaPartyPlayerState* Condemned);
+	/** After the final argument: eliminate (ghost) the condemned and end the phase. */
+	void FinishFinalArgument();
+
+	/** Stops any turn/vote left over from the previous phase. */
+	void CancelTurnsAndVote();
+
+	TArray<AjinzzaPartyPlayerState*> GetLivingCandidates() const;
+	int32 CountConnectedJudges() const;
+
 	/** Placeholder stand-in for the real judge-picks-a-candidate targeting system (design doc's
 	 * "1대1 면담 대상 지정", decided during Free Time 2 - not built yet, Week 7). Auto-pairs the
 	 * Judge with the first non-Judge PartyPlayerState so the interview room/forced-seating is
@@ -86,6 +128,19 @@ private:
 	bool bAllPlayersLoaded = false;
 
 	bool bAliasesAssigned = false;
+
+	TArray<TWeakObjectPtr<AjinzzaPartyPlayerState>> SelfIntroOrder;
+	int32 SelfIntroIndex = INDEX_NONE;
+	int32 SpeakTurnSerial = 0;
+	FTimerHandle SpeakTurnTimerHandle;
+	TWeakObjectPtr<APawn> SpotlightPawn;
+	FVector SpotlightReturnLocation = FVector::ZeroVector;
+	FRotator SpotlightReturnRotation = FRotator::ZeroRotator;
+
+	EJinzzaRoundPhase VotePhase = EJinzzaRoundPhase::None;
+	TMap<TWeakObjectPtr<APlayerController>, TWeakObjectPtr<AjinzzaPartyPlayerState>> Votes;
+	TWeakObjectPtr<AjinzzaPartyPlayerState> CondemnedPlayer;
+	FTimerHandle VoteTimerHandle;
 	int32 NextUserAliasNumber = 1;
 	double LastJoinTime = 0.0;
 	TSet<TWeakObjectPtr<APlayerController>> LoadedPlayers;

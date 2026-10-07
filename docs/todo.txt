@@ -3967,3 +3967,33 @@ DONE THIS SESSION (2026-10-07, chat -> hand-held chalkboard, by Claude) - REPLAC
 - Game target compiles; full editor build needed (editor CLOSED). NOT TESTED at runtime -
   especially check the text faces the right way (world widgets face +X) and the board isn't
   clipped by the first-person camera.
+
+DONE THIS SESSION (2026-10-07, self-intro turns + Judge vote + final argument + speech bubbles, by Claude)
+AUDIT of what existed before: SelfIntroduction was ONE 20 s x candidates timer - no turn order, no
+spotlight teleport (everyone just went to Zone.SelfIntro PlayerStarts round-robin), no camera change,
+no mic/movement restrictions. No vote, no final argument; EliminateToGhost had no caller.
+NEW (AjinzzaGameGameMode turn + vote system, replicated through AjinzzaGameGameState):
+- Speaking turns (FJinzzaSpeakTurn: kind, speaker, end time, n/N, camera transform, serial):
+  * Self-introduction: living candidates in User1..UserN order, 20 s each; phase ends right after
+    the last one. Speaker who leaves -> next speaker immediately.
+  * Speaker is teleported to an actor tagged "Zone.SelfIntro.Spotlight" (final argument:
+    "Zone.Evaluation.Spotlight") and turned with it; put back where they stood afterwards.
+    !! Lvl_Game has NO such actors yet - place a TargetPoint with that tag (rotation = facing the
+    audience) in each zone. Without one the speaker stays where they are (logged warning).
+  * Everyone else's view blends to a local camera at an actor tagged "<Zone>.Camera" if placed,
+    else 2.6 m in front of the speaker at head height. Speaker keeps their own first-person view.
+  * Nobody can move during a turn (SetIgnoreMoveInput). Only the speaker can talk: non-speakers
+    stop transmitting AND every listener mutes non-speakers (UjinzzaProximityVoiceComponent).
+    Only the speaker can chat; their lines go to everyone as speech bubbles
+    (UjinzzaSpeakTurnWidget: speaker's lines on the LEFT for everyone else, your own on the RIGHT,
+    cleared when the turn ends) instead of the hand-held board. Top banner shows whose turn,
+    n/N and seconds left.
+- Judge vote, in BOTH MidEvaluation and FinalDecision (user decision 2026-10-07: Judges only vote):
+  UjinzzaVoteWidget (Judge only, right side) lists living candidates; Server_CastVote ->
+  HandleVote. Closes when every connected Judge voted or after 30 s. Most votes wins; ties and
+  no-votes are random. Top candidate gets a 20 s FINAL ARGUMENT turn (same spotlight/camera/
+  restriction/speech-bubble rules) at the Evaluation zone, then EliminateToGhost, then the phase
+  ends. Everyone else sees "The Judge is voting..." / "UserN got the most votes - final argument".
+- Not built: final-decision role reveal / result screen (round just goes to RoundComplete).
+- Game target compiles; full editor build needed (editor CLOSED). NOT TESTED at runtime (needs 3+
+  players for roles).

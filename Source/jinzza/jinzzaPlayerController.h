@@ -114,6 +114,19 @@ protected:
 
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
+	/** Turn rules (overridden in the match by AjinzzaGamePlayerController): */
+	/** Local: true while this player may not talk (e.g. someone else's speaking turn). */
+	virtual bool IsVoiceBlocked() const { return false; }
+	/** Local: false while this player may not chat (e.g. someone else's speaking turn). */
+	virtual bool CanUseChat() const { return true; }
+	/** Server: false while chat must not use the hand-held board (a speaking turn shows speech bubbles instead). */
+	virtual bool ShouldUseChatBoard() const { return true; }
+	/** Server: takes Clean (already validated) somewhere other than the board and returns true, or returns false. */
+	virtual bool RouteChatMessage(const FString& Clean) { return false; }
+
+	/** Closes the chat input line if it's open (lowering the board). */
+	void CancelChatInput();
+
 	/** False while something else owns the screen (e.g. a lobby kiosk panel) - ESC does nothing then. */
 	virtual bool CanOpenPauseMenu() const { return true; }
 

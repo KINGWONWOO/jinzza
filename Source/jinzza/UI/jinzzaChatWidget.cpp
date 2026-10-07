@@ -87,6 +87,19 @@ void UjinzzaChatWidget::CloseInput()
 	}
 }
 
+void UjinzzaChatWidget::CancelInput()
+{
+	if (!bInputOpen)
+	{
+		return;
+	}
+	if (AjinzzaPlayerController* PC = Cast<AjinzzaPlayerController>(GetOwningPlayer()))
+	{
+		PC->Server_SetChatWriting(false);
+	}
+	CloseInput();
+}
+
 void UjinzzaChatWidget::HandleTextChanged(const FText& Text)
 {
 	if (!bInputOpen)

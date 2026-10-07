@@ -5,6 +5,11 @@
 #include "jinzzaGameEndWidget.h"
 #include "jinzzaGameGameState.h"
 #include "jinzzaGameGameMode.h"
+#include "jinzzaPartyPlayerState.h"
+#include "jinzzaSpeakTurnWidget.h"
+#include "jinzzaVoteWidget.h"
+#include "Camera/CameraActor.h"
+#include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Components/AudioComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -28,6 +33,133 @@ void AjinzzaGamePlayerController::Client_ReceiveRoleAssignment_Implementation(EJ
 	if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/BasketballHoop/correctanswer.correctanswer")))
 	{
 		UGameplayStatics::PlaySound2D(this, Sound);
+	}
+}
+
+void AjinzzaGamePlayerController::Client_ReceiveTurnMessage_Implementation(APlayerState* Speaker, const FString& Text)
+{
+	if (SpeakTurnWidget)
+	{
+		SpeakTurnWidget->AddBubble(AjinzzaPartyPlayerState::GetDisplayNameFor(Speaker), Text, Speaker && Speaker == PlayerState);
+	}
+}
+
+void AjinzzaGamePlayerController::Server_CastVote_Implementation(APlayerState* Candidate)
+{
+	if (AjinzzaGameGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AjinzzaGameGameMode>() : nullptr)
+	{
+		GameMode->HandleVote(this, Candidate);
+	}
+}
+
+bool AjinzzaGamePlayerController::IsVoiceBlocked() const
+{
+	const AjinzzaGameGameState* MatchState = GetWorld() ? GetWorld()->GetGameState<AjinzzaGameGameState>() : nullptr;
+	return MatchState && MatchState->IsSpeakTurnActive() && !MatchState->IsTurnSpeaker(PlayerState);
+}
+
+bool AjinzzaGamePlayerController::CanUseChat() const
+{
+	return !IsVoiceBlocked();
+}
+
+bool AjinzzaGamePlayerController::ShouldUseChatBoard() const
+{
+	const AjinzzaGameGameState* MatchState = GetWorld() ? GetWorld()->GetGameState<AjinzzaGameGameState>() : nullptr;
+	return !MatchState || !MatchState->IsSpeakTurnActive();
+}
+
+bool AjinzzaGamePlayerController::RouteChatMessage(const FString& Clean)
+{
+	const AjinzzaGameGameState* MatchState = GetWorld() ? GetWorld()->GetGameState<AjinzzaGameGameState>() : nullptr;
+	if (!MatchState || !MatchState->IsSpeakTurnActive())
+	{
+		return false;
+	}
+
+	// During a turn only the speaker's lines go anywhere - as speech bubbles, to everyone.
+	if (MatchState->IsTurnSpeaker(PlayerState))
+	{
+		if (AjinzzaGameGameMode* GameMode = GetWorld()->GetAuthGameMode<AjinzzaGameGameMode>())
+		{
+			GameMode->BroadcastTurnMessage(PlayerState, Clean);
+		}
+	}
+	return true;
+}
+
+void AjinzzaGamePlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	UpdateSpeakTurn();
+	if (SpeakTurnWidget)
+	{
+		SpeakTurnWidget->Refresh();
+	}
+	if (VoteWidget)
+	{
+		VoteWidget->Refresh();
+	}
+}
+
+void AjinzzaGamePlayerController::UpdateSpeakTurn()
+{
+	const AjinzzaGameGameState* MatchState = GetWorld() ? GetWorld()->GetGameState<AjinzzaGameGameState>() : nullptr;
+	if (!MatchState)
+	{
+		return;
+	}
+
+	const FJinzzaSpeakTurn& Turn = MatchState->GetSpeakTurn();
+	const bool bActive = MatchState->IsSpeakTurnActive();
+	const bool bSpeaker = MatchState->IsTurnSpeaker(PlayerState);
+
+	// Nobody moves during a turn (the speaker stays on the spotlight).
+	if (bActive != bTurnMovementLocked)
+	{
+		bTurnMovementLocked = bActive;
+		SetIgnoreMoveInput(bActive);
+	}
+
+	if (Turn.Serial == AppliedTurnSerial)
+	{
+		return;
+	}
+	AppliedTurnSerial = Turn.Serial;
+
+	if (bActive && !bSpeaker)
+	{
+		// Mid-sentence chat is cancelled - only the speaker may write.
+		CancelChatInput();
+
+		if (!TurnCamera)
+		{
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			Params.ObjectFlags |= RF_Transient;
+			TurnCamera = GetWorld()->SpawnActor<ACameraActor>(Turn.CameraLocation, Turn.CameraRotation, Params);
+		}
+		if (TurnCamera)
+		{
+			TurnCamera->SetActorLocationAndRotation(Turn.CameraLocation, Turn.CameraRotation);
+			SetViewTargetWithBlend(TurnCamera, bWatchingTurnCamera ? 0.f : 0.4f, VTBlend_EaseInOut, 2.f);
+			bWatchingTurnCamera = true;
+		}
+	}
+	else if (bWatchingTurnCamera)
+	{
+		// Turn over, or it's our own turn: back to our own eyes.
+		bWatchingTurnCamera = false;
+		if (APawn* MyPawn = GetPawn())
+		{
+			SetViewTargetWithBlend(MyPawn, 0.4f, VTBlend_EaseInOut, 2.f);
+		}
 	}
 }
 
@@ -67,6 +199,18 @@ void AjinzzaGamePlayerController::BeginPlay()
 		RestoreGameplayInputMode();
 	}
 
+	// Turn banner + speech bubbles (everyone) and the Judge's ballot (shows itself only for the Judge).
+	SpeakTurnWidget = CreateWidget<UjinzzaSpeakTurnWidget>(this, UjinzzaSpeakTurnWidget::StaticClass());
+	if (SpeakTurnWidget)
+	{
+		SpeakTurnWidget->AddToViewport(30);
+	}
+	VoteWidget = CreateWidget<UjinzzaVoteWidget>(this, UjinzzaVoteWidget::StaticClass());
+	if (VoteWidget)
+	{
+		VoteWidget->AddToViewport(35);
+	}
+
 	// TEMP placeholder in-round BGM (see UjinzzaMainMenuWidget/UjinzzaLobbyWidget for the same
 	// pattern) - swap QuizGameBgm for a real match theme later.
 	if (USoundBase* Bgm = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/Game/QuizGameBgm.QuizGameBgm")))
@@ -102,6 +246,12 @@ void AjinzzaGamePlayerController::EndPlay(const EEndPlayReason::Type EndPlayReas
 	{
 		MusicComponent->Stop();
 		MusicComponent = nullptr;
+	}
+
+	if (TurnCamera)
+	{
+		TurnCamera->Destroy();
+		TurnCamera = nullptr;
 	}
 
 	if (AjinzzaGameGameState* JinzzaGameState = GetWorld() ? GetWorld()->GetGameState<AjinzzaGameGameState>() : nullptr)

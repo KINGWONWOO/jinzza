@@ -6,6 +6,7 @@
 #include "jinzzaGameUserSettings.h"
 #include "jinzzaMegaphoneProp.h"
 #include "jinzzaPartyPlayerState.h"
+#include "jinzzaGameGameState.h"
 #include "Components/AudioComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -156,6 +157,15 @@ void UjinzzaProximityVoiceComponent::UpdateActiveVoice()
 	const AjinzzaCharacter* Character = GetCharacter();
 	const AjinzzaPartyPlayerState* PartyState = Character ? Character->GetPlayerState<AjinzzaPartyPlayerState>() : nullptr;
 	if (PartyState && PartyState->IsGhost())
+	{
+		Volume = 0.f;
+	}
+
+	// Speaking turn (self-introduction / final argument): only the speaker is heard. Their own machine
+	// already stops everyone else transmitting (AjinzzaGamePlayerController::IsVoiceBlocked) - this also
+	// covers a modified client that ignores that.
+	const AjinzzaGameGameState* MatchState = GetWorld() ? GetWorld()->GetGameState<AjinzzaGameGameState>() : nullptr;
+	if (MatchState && MatchState->IsSpeakTurnActive() && !MatchState->IsTurnSpeaker(Character ? Character->GetPlayerState() : nullptr))
 	{
 		Volume = 0.f;
 	}

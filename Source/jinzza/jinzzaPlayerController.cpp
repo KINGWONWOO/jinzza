@@ -261,7 +261,7 @@ void AjinzzaPlayerController::ClosePauseMenu()
 void AjinzzaPlayerController::OnChatPressed()
 {
 	// No character (e.g. spectating) = no board to write on.
-	if (ChatWidget && !ChatWidget->IsInputOpen() && !IsPauseMenuOpen() && CanOpenPauseMenu() && GetChatBoard())
+	if (ChatWidget && !ChatWidget->IsInputOpen() && !IsPauseMenuOpen() && CanOpenPauseMenu() && CanUseChat() && GetChatBoard())
 	{
 		ChatWidget->OpenInput();
 	}
@@ -302,6 +302,11 @@ void AjinzzaPlayerController::Server_SendChatMessage_Implementation(const FStrin
 	}
 	LastChatMessageTime = Now;
 
+	if (RouteChatMessage(Clean))
+	{
+		return;
+	}
+
 	// Who can see it (ghost boards only to ghosts) is decided on each viewer's machine by the board itself.
 	if (UjinzzaChatBoardComponent* Board = GetChatBoard())
 	{
@@ -311,6 +316,10 @@ void AjinzzaPlayerController::Server_SendChatMessage_Implementation(const FStrin
 
 void AjinzzaPlayerController::Server_SetChatWriting_Implementation(bool bWriting)
 {
+	if (bWriting && !ShouldUseChatBoard())
+	{
+		return;
+	}
 	if (UjinzzaChatBoardComponent* Board = GetChatBoard())
 	{
 		if (bWriting)
@@ -329,6 +338,14 @@ void AjinzzaPlayerController::UpdateChatPreview(const FString& Text)
 	if (UjinzzaChatBoardComponent* Board = GetChatBoard())
 	{
 		Board->SetLocalPreviewText(Text);
+	}
+}
+
+void AjinzzaPlayerController::CancelChatInput()
+{
+	if (ChatWidget && ChatWidget->IsInputOpen())
+	{
+		ChatWidget->CancelInput();
 	}
 }
 
@@ -391,6 +408,7 @@ void AjinzzaPlayerController::UpdateVoiceTransmission()
 		{
 			bWantTransmit &= !PartyState->IsGhost();
 		}
+		bWantTransmit &= !IsVoiceBlocked();
 	}
 
 	if (bWantTransmit != bTransmittingVoice)

@@ -10,6 +10,9 @@
 class UUserWidget;
 class APlayerState;
 class UAudioComponent;
+class ACameraActor;
+class UjinzzaSpeakTurnWidget;
+class UjinzzaVoteWidget;
 
 /**
  * Spawns the minimal in-round overlay (host-only End Game button) for Lvl_Game, and receives
@@ -47,6 +50,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Party")
 	APlayerState* GetKnownRealOne() const { return KnownRealOne; }
 
+	/** A turn speaker's chat line, shown as a speech bubble (see UjinzzaSpeakTurnWidget). */
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveTurnMessage(APlayerState* Speaker, const FString& Text);
+
+	/** Judge ballot (UjinzzaVoteWidget) -> AjinzzaGameGameMode::HandleVote. */
+	UFUNCTION(Server, Reliable)
+	void Server_CastVote(APlayerState* Candidate);
+
 	/** Local: called once by UjinzzaLoadingScreenSubsystem when this player has loaded the match (level,
 	 * preload list, own pawn) - tells the server, which starts the round once everyone has. */
 	void ReportLoadComplete();
@@ -58,6 +69,14 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void PlayerTick(float DeltaTime) override;
+
+	// Speaking-turn rules (AjinzzaGameGameState::GetSpeakTurn): only the speaker talks / chats, and their
+	// chat goes to speech bubbles instead of the board.
+	virtual bool IsVoiceBlocked() const override;
+	virtual bool CanUseChat() const override;
+	virtual bool ShouldUseChatBoard() const override;
+	virtual bool RouteChatMessage(const FString& Clean) override;
 
 	/** Back to the cursor-visible game-and-UI mode BeginPlay sets up for the End Game overlay. */
 	virtual void RestoreGameplayInputMode() override;
@@ -65,6 +84,24 @@ protected:
 private:
 	UFUNCTION(Server, Reliable)
 	void Server_ReportLoaded();
+
+	/** Local: applies the replicated turn - nobody moves; everyone but the speaker watches the speaker
+	 * through TurnCamera; any open chat line of a non-speaker is closed. */
+	void UpdateSpeakTurn();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UjinzzaSpeakTurnWidget> SpeakTurnWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UjinzzaVoteWidget> VoteWidget;
+
+	/** Local-only camera the audience watches the speaker through (never replicated). */
+	UPROPERTY(Transient)
+	TObjectPtr<ACameraActor> TurnCamera;
+
+	int32 AppliedTurnSerial = 0;
+	bool bTurnMovementLocked = false;
+	bool bWatchingTurnCamera = false;
 
 	UPROPERTY()
 	TObjectPtr<UUserWidget> GameEndWidget;

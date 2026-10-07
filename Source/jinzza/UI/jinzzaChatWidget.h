@@ -33,6 +33,9 @@ public:
 
 	bool IsInputOpen() const { return bInputOpen; }
 
+	/** Closes the line without sending (lowers the board). */
+	void CancelInput();
+
 protected:
 	UFUNCTION()
 	void HandleTextChanged(const FText& Text);

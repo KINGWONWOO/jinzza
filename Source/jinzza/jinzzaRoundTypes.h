@@ -50,3 +50,14 @@ enum class EJinzzaVoiceFilter : uint8
 	Low,
 	Robot
 };
+
+/** What a spotlight speaking turn is for (AjinzzaGameGameMode's turn system, replicated via AjinzzaGameGameState). */
+UENUM(BlueprintType)
+enum class EJinzzaSpeakTurnKind : uint8
+{
+	None,
+	/** Candidates introduce themselves one at a time, User1 first. */
+	SelfIntroduction,
+	/** The vote's top candidate speaks once more before being eliminated. */
+	FinalArgument
+};

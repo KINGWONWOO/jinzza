@@ -38,6 +38,12 @@ public:
 
 	bool HasDisplayAlias() const { return !DisplayAlias.IsEmpty(); }
 
+	/** N for a "UserN" candidate alias, 0 otherwise (no alias yet, or the Judge). Used for speaking order. */
+	int32 GetAliasUserNumber() const;
+
+	/** Has a candidate alias and isn't a ghost - i.e. can take a speaking turn / be voted for. */
+	bool IsLivingCandidate() const { return GetAliasUserNumber() > 0 && !IsGhost(); }
+
 	/** Server-only. Not carried over by seamless travel (CopyProperties), so it's gone again back in the lobby. */
 	void ServerSetDisplayAlias(const FString& NewAlias);
 
