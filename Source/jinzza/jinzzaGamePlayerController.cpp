@@ -4,6 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "jinzzaGameEndWidget.h"
 #include "jinzzaGameGameState.h"
+#include "jinzzaGameGameMode.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Components/AudioComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -27,6 +28,19 @@ void AjinzzaGamePlayerController::Client_ReceiveRoleAssignment_Implementation(EJ
 	if (USoundBase* Sound = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/BasketballHoop/correctanswer.correctanswer")))
 	{
 		UGameplayStatics::PlaySound2D(this, Sound);
+	}
+}
+
+void AjinzzaGamePlayerController::ReportLoadComplete()
+{
+	Server_ReportLoaded();
+}
+
+void AjinzzaGamePlayerController::Server_ReportLoaded_Implementation()
+{
+	if (AjinzzaGameGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AjinzzaGameGameMode>() : nullptr)
+	{
+		GameMode->NotifyPlayerLoaded(this);
 	}
 }
 

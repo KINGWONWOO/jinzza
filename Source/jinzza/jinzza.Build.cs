@@ -43,7 +43,12 @@ public class jinzza : ModuleRules
 			// UMediaPlayer/UMediaSoundComponent (AjinzzaBoomboxProp streams a pasted audio link
 			// through them). Actual decoding is done by the engine's WmfMedia plugin on Windows,
 			// which is enabled by default. NEW dependency - needs a full rebuild (editor closed).
-			"MediaAssets"
+			"MediaAssets",
+			// FLoadingScreenAttributes/GetMoviePlayer (UjinzzaLoadingScreenSubsystem draws the loading
+			// screen during blocking map loads) and UDeveloperSettings (UjinzzaLoadingSettings). NEW
+			// dependencies - need a full rebuild (editor closed).
+			"MoviePlayer",
+			"DeveloperSettings"
 		});
 
 		PublicIncludePaths.AddRange(new string[] {

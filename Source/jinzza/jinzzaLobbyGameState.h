@@ -25,6 +25,14 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_TimeOfDay, BlueprintReadOnly)
 	EJinzzaLobbyTimeOfDay TimeOfDay = EJinzzaLobbyTimeOfDay::Day;
 
+	/** Lobby -> match preparation (AjinzzaLobbyGameMode::BeginMatchPreparation): how many players have
+	 * finished preloading the match, out of how many. Shown on everyone's loading screen. */
+	UPROPERTY(Replicated, BlueprintReadOnly)
+	int32 MatchPrepReadyCount = 0;
+
+	UPROPERTY(Replicated, BlueprintReadOnly)
+	int32 MatchPrepTotalCount = 0;
+
 	/** Server-only: advances TimeOfDay by one step (Day -> Sunset -> Night -> Day) and applies it. */
 	void CycleTimeOfDay();
 

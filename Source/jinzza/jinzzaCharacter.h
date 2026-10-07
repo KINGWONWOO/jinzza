@@ -58,6 +58,10 @@ class AjinzzaCharacter : public ACharacter
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UjinzzaProximityVoiceComponent> ProximityVoiceComponent;
 
+	/** Name tag over the head (UjinzzaNameplateWidget) - nickname in the lobby, "User1"/"Judge" in the match. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<class UWidgetComponent> NameplateComponent;
+
 protected:
 
 	/** Jump Input Action */

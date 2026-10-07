@@ -7,6 +7,12 @@
 #include "jinzzaPartyPlayerState.h"
 #include "GameFramework/DefaultPawn.h"
 #include "UObject/ConstructorHelpers.h"
+#include "jinzzaLoadingSettings.h"
+#include "jinzza.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
+
+const TCHAR* AjinzzaLobbyGameMode::MatchMapPath = TEXT("/Game/JINZZA/Level/Lvl_Game");
 
 AjinzzaLobbyGameMode::AjinzzaLobbyGameMode()
 {
@@ -44,4 +50,111 @@ void AjinzzaLobbyGameMode::InitGameState()
 			LobbyGameState->MatchSettings = GI->GetPendingMatchSettings();
 		}
 	}
+}
+
+void AjinzzaLobbyGameMode::BeginMatchPreparation()
+{
+	if (bPreparingMatch)
+	{
+		return;
+	}
+	bPreparingMatch = true;
+	PreloadedPlayers.Reset();
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (AjinzzaLobbyPlayerController* PC = Cast<AjinzzaLobbyPlayerController>(It->Get()))
+		{
+			PC->Client_PrepareForMatch(MatchMapPath);
+		}
+	}
+
+	GetWorldTimerManager().SetTimer(MatchPreloadTimeoutHandle, this, &AjinzzaLobbyGameMode::TravelToMatch,
+		UjinzzaLoadingSettings::Get()->MatchPreloadTimeoutSeconds, false);
+	CheckMatchPreparation();
+}
+
+void AjinzzaLobbyGameMode::NotifyMatchPreloaded(APlayerController* Player)
+{
+	if (bPreparingMatch && Player)
+	{
+		PreloadedPlayers.Add(Player);
+		CheckMatchPreparation();
+	}
+}
+
+void AjinzzaLobbyGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+
+	// Joined while the others are already preloading - preload too, and count them in.
+	if (bPreparingMatch && !bTravellingToMatch)
+	{
+		if (AjinzzaLobbyPlayerController* PC = Cast<AjinzzaLobbyPlayerController>(NewPlayer))
+		{
+			PC->Client_PrepareForMatch(MatchMapPath);
+		}
+		CheckMatchPreparation();
+	}
+}
+
+void AjinzzaLobbyGameMode::Logout(AController* Exiting)
+{
+	Super::Logout(Exiting);
+
+	if (bPreparingMatch && !bTravellingToMatch && GetWorld() && !GetWorld()->bIsTearingDown)
+	{
+		PreloadedPlayers.Remove(Cast<APlayerController>(Exiting));
+		// Still in the controller list during Logout - re-count next tick.
+		GetWorldTimerManager().SetTimerForNextTick(this, &AjinzzaLobbyGameMode::CheckMatchPreparation);
+	}
+}
+
+void AjinzzaLobbyGameMode::CheckMatchPreparation()
+{
+	if (!bPreparingMatch || bTravellingToMatch)
+	{
+		return;
+	}
+
+	int32 Total = 0;
+	int32 Ready = 0;
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (APlayerController* PC = It->Get())
+		{
+			++Total;
+			Ready += PreloadedPlayers.Contains(PC) ? 1 : 0;
+		}
+	}
+
+	if (AjinzzaLobbyGameState* LobbyGameState = GetGameState<AjinzzaLobbyGameState>())
+	{
+		LobbyGameState->MatchPrepReadyCount = Ready;
+		LobbyGameState->MatchPrepTotalCount = Total;
+	}
+
+	if (Total > 0 && Ready >= Total)
+	{
+		TravelToMatch();
+	}
+}
+
+void AjinzzaLobbyGameMode::TravelToMatch()
+{
+	if (bTravellingToMatch)
+	{
+		return;
+	}
+	bTravellingToMatch = true;
+	GetWorldTimerManager().ClearTimer(MatchPreloadTimeoutHandle);
+
+	// The match waits for this many players before it starts (AjinzzaGameGameMode).
+	if (UjinzzaGameInstance* GI = GetGameInstance<UjinzzaGameInstance>())
+	{
+		GI->SetExpectedMatchPlayers(GetWorld()->GetNumPlayerControllers());
+	}
+
+	UE_LOG(Logjinzza, Log, TEXT("All players preloaded the match (or timed out) - travelling."));
+	GetWorld()->ServerTravel(MatchMapPath);
 }

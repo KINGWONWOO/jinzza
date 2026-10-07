@@ -12,6 +12,9 @@
 #include "GameFramework/Pawn.h"
 #include "EnhancedInputComponent.h"
 #include "jinzzaInputKeys.h"
+#include "jinzzaLobbyGameMode.h"
+#include "jinzzaLoadingScreenSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "UObject/ConstructorHelpers.h"
 
 namespace
@@ -67,6 +70,33 @@ void AjinzzaLobbyPlayerController::BeginPlay()
 	}
 
 	GetWorldTimerManager().SetTimer(KioskCheckTimerHandle, this, &AjinzzaLobbyPlayerController::CheckForNearbyKiosk, KioskCheckInterval, true);
+}
+
+void AjinzzaLobbyPlayerController::Client_PrepareForMatch_Implementation(const FString& MapPath)
+{
+	UjinzzaLoadingScreenSubsystem* Loading = GetGameInstance() ? GetGameInstance()->GetSubsystem<UjinzzaLoadingScreenSubsystem>() : nullptr;
+	if (!Loading)
+	{
+		Server_ReportMatchPreloaded();
+		return;
+	}
+
+	TWeakObjectPtr<AjinzzaLobbyPlayerController> WeakThis(this);
+	Loading->BeginMatchPreload(MapPath, [WeakThis]()
+	{
+		if (AjinzzaLobbyPlayerController* PC = WeakThis.Get())
+		{
+			PC->Server_ReportMatchPreloaded();
+		}
+	});
+}
+
+void AjinzzaLobbyPlayerController::Server_ReportMatchPreloaded_Implementation()
+{
+	if (AjinzzaLobbyGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AjinzzaLobbyGameMode>() : nullptr)
+	{
+		GameMode->NotifyMatchPreloaded(this);
+	}
 }
 
 void AjinzzaLobbyPlayerController::SetupInputComponent()

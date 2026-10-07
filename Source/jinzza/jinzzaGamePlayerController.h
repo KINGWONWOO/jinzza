@@ -47,6 +47,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Party")
 	APlayerState* GetKnownRealOne() const { return KnownRealOne; }
 
+	/** Local: called once by UjinzzaLoadingScreenSubsystem when this player has loaded the match (level,
+	 * preload list, own pawn) - tells the server, which starts the round once everyone has. */
+	void ReportLoadComplete();
+
 	/** Widget class to show. Defaults to UjinzzaGameEndWidget if left unset (WBP_GameEnd if it exists, else the raw C++ class). */
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> GameEndWidgetClass;
@@ -59,6 +63,9 @@ protected:
 	virtual void RestoreGameplayInputMode() override;
 
 private:
+	UFUNCTION(Server, Reliable)
+	void Server_ReportLoaded();
+
 	UPROPERTY()
 	TObjectPtr<UUserWidget> GameEndWidget;
 

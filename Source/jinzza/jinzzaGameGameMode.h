@@ -32,6 +32,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Round")
 	void EliminateToGhost(AjinzzaPartyPlayerState* Target);
 
+	/** A player finished loading the match (AjinzzaGamePlayerController::ReportLoadComplete). Once all
+	 * players have, AjinzzaGameGameState's gate opens (everyone's loading screen hides together) and
+	 * the round starts. */
+	void NotifyPlayerLoaded(APlayerController* Player);
+
 protected:
 	virtual void StartPlay() override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
@@ -44,7 +49,16 @@ protected:
 private:
 	void OnRoundPhaseEntered(EJinzzaRoundPhase NewPhase);
 	void AssignRoles();
+
+	/** "Judge" for Judge (may be null), "User1".."UserN" for everyone else in a fresh random order - the
+	 * role shuffle puts the Real One first, so its order must not leak into the numbers. */
+	void AssignDisplayAliases(const TArray<AjinzzaPartyPlayerState*>& Players, AjinzzaPartyPlayerState* Judge);
 	void TryStartRound();
+
+	void CheckAllPlayersLoaded();
+	/** bForce: the MatchStartTimeoutSeconds safety net - start with whoever made it. */
+	void OpenMatchStartGate(bool bForce);
+	void OnMatchStartTimeout() { OpenMatchStartGate(true); }
 
 	/** Shows/hides zone geometry and teleports players for NewPhase (design doc section 8-6 /
 	 * 13-4's BP_ZoneTeleportTrigger concept, implemented centrally here instead of as per-zone
@@ -65,6 +79,17 @@ private:
 	bool bRoundStarted = false;
 	bool bReturningToLobby = false;
 	FTimerHandle RoundStartGraceTimerHandle;
+
+	/** Players the lobby sent here (UjinzzaGameInstance::ConsumeExpectedMatchPlayers); 0 when the level
+	 * was opened directly (PIE), in which case a short no-new-joins grace period stands in for it. */
+	int32 ExpectedPlayers = 0;
+	bool bAllPlayersLoaded = false;
+
+	bool bAliasesAssigned = false;
+	int32 NextUserAliasNumber = 1;
+	double LastJoinTime = 0.0;
+	TSet<TWeakObjectPtr<APlayerController>> LoadedPlayers;
+	FTimerHandle MatchStartTimeoutHandle;
 
 	TWeakObjectPtr<APawn> SeatedJudgePawn;
 	TWeakObjectPtr<APawn> SeatedCandidatePawn;

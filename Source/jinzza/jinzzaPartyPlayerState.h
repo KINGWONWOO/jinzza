@@ -28,6 +28,22 @@ public:
 	/** Server-only. Never replicated - see class comment. */
 	EJinzzaPartyRole ServerRole = EJinzzaPartyRole::None;
 
+	/**
+	 * Name for nameplates and chat. In the match every candidate (Real One and Imitators alike, in random
+	 * order) is "User1".."UserN" and the Judge is "Judge", so names never give a role away - see
+	 * AjinzzaGameGameMode::AssignDisplayAliases. Outside the match (no alias) it's the player's nickname.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Party")
+	FString GetDisplayName() const { return DisplayAlias.IsEmpty() ? GetPlayerName() : DisplayAlias; }
+
+	bool HasDisplayAlias() const { return !DisplayAlias.IsEmpty(); }
+
+	/** Server-only. Not carried over by seamless travel (CopyProperties), so it's gone again back in the lobby. */
+	void ServerSetDisplayAlias(const FString& NewAlias);
+
+	/** GetDisplayName for any PlayerState (plain APlayerState in levels that don't use this class). */
+	static FString GetDisplayNameFor(const APlayerState* PlayerState);
+
 	UFUNCTION(BlueprintPure, Category = "Party")
 	bool IsGhost() const { return bIsGhost; }
 	/** Server-only. Transitioning to true (design doc section 6: mid-evaluation elimination) also
@@ -66,6 +82,9 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_DisguiseChanged)
 	bool bIsGhost = false;
+
+	UPROPERTY(Replicated)
+	FString DisplayAlias;
 
 	UPROPERTY(ReplicatedUsing = OnRep_DisguiseChanged)
 	EJinzzaFaceType FaceType = EJinzzaFaceType::None;

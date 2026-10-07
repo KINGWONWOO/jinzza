@@ -28,6 +28,11 @@ class JINZZA_API AjinzzaLobbyPlayerController : public AjinzzaPlayerController
 public:
 	AjinzzaLobbyPlayerController();
 
+	/** Sent by AjinzzaLobbyGameMode::BeginMatchPreparation to every player: show the loading screen and
+	 * preload MapPath, then report back with Server_ReportMatchPreloaded. */
+	UFUNCTION(Client, Reliable)
+	void Client_PrepareForMatch(const FString& MapPath);
+
 	/** Widget class to show. Defaults to UjinzzaLobbyWidget if left unset (WBP_Lobby if it exists, else the raw C++ class). */
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> LobbyWidgetClass;
@@ -40,6 +45,9 @@ protected:
 	virtual bool CanOpenPauseMenu() const override { return !bShowMouseCursor; }
 
 private:
+	UFUNCTION(Server, Reliable)
+	void Server_ReportMatchPreloaded();
+
 	void CheckForNearbyKiosk();
 	void OnInteractPressed();
 

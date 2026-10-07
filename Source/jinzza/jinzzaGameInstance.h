@@ -98,6 +98,16 @@ public:
 	 */
 	void SetRichPresenceStatus(const FString& StatusText);
 
+	/** Lobby -> match hand-off (server): how many players the match should wait for before starting. */
+	void SetExpectedMatchPlayers(int32 Count) { ExpectedMatchPlayers = Count; }
+
+	/** Returns the count set by SetExpectedMatchPlayers and clears it (0 if none). */
+	int32 ConsumeExpectedMatchPlayers() { const int32 Count = ExpectedMatchPlayers; ExpectedMatchPlayers = 0; return Count; }
+
+	/** Last friends list received (preloaded on entering the lobby), so the invite panel opens filled in. */
+	const TArray<FJinzzaFriendInfo>& GetCachedFriendsList() const { return CachedFriendsList; }
+	bool HasCachedFriendsList() const { return bHasCachedFriendsList; }
+
 	/** Host-only: travels everyone back to Lvl_Lobby, keeping the session alive. */
 	void EndGameReturnToLobby();
 
@@ -140,6 +150,11 @@ private:
 	void TravelToConnectedSession();
 
 	FJinzzaMatchSettings PendingMatchSettings;
+
+	int32 ExpectedMatchPlayers = 0;
+
+	TArray<FJinzzaFriendInfo> CachedFriendsList;
+	bool bHasCachedFriendsList = false;
 
 	FDelegateHandle CreateSessionCompleteHandle;
 	FDelegateHandle JoinSessionCompleteHandle;

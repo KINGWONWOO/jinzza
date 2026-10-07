@@ -3900,3 +3900,51 @@ DONE THIS SESSION (2026-10-07, in-game ESC menu + leaving rules, by Claude)
 - NOT COMPILED IN THE EDITOR / NOT TESTED: new UCLASS (UjinzzaPauseMenuWidget) needs a full build
   with the editor CLOSED. In PIE, ESC stops PIE by default - test in Standalone, or change Editor
   Preferences > Keyboard Shortcuts > Stop (PIE) to Shift+Escape.
+
+DONE THIS SESSION (2026-10-07, loading screen + preloading + all-players-ready match start, by Claude)
+- NEW UjinzzaLoadingScreenSubsystem (GameInstanceSubsystem, not on dedicated servers) + Slate
+  SjinzzaLoadingScreen (logo, spinner + status, progress bar, random tip). Shown for every level
+  change: blocking loads (main menu <-> lobby, joining a host) through the MoviePlayer copy,
+  seamless travel (lobby -> match) and the after-load preload through a viewport copy (Z 10000).
+  The MoviePlayer is off in the editor, so in PIE the screen freezes during blocking loads.
+- After a map loads, behind the screen: that map's preload list (common UI art / fonts / UI sounds /
+  input + per-map BGM, character, props, prop sounds), user settings, rich presence ("In Menu" /
+  "In Lobby" / "In Match"), and in the lobby the Steam friends list (cached on the GameInstance;
+  the friend-invite panel now opens with it filled in). Lists live in NEW UjinzzaLoadingSettings
+  (Project Settings > Game > JINZZA Loading), defaults set in its constructor; also min/max display
+  time, tips, and the two match timeouts.
+- Main menu -> lobby / joining: nobody waits for anyone - each player's screen hides as soon as
+  their own level, preload list and pawn are ready.
+- Lobby -> match: Start Match kiosk now calls AjinzzaLobbyGameMode::BeginMatchPreparation. Every
+  player gets Client_PrepareForMatch, shows the screen and preloads Lvl_Game's dependencies (asset
+  registry hard deps under /Game, not the map package itself - seamless travel has to load that
+  one so the world gets its type) + the match preload list, then reports back. The host travels
+  only once ALL players reported (or after 30 s). Screen shows "Waiting for other players (x/y)".
+- In the match: each player reports loaded (AjinzzaGamePlayerController::ReportLoadComplete);
+  AjinzzaGameGameMode opens the gate once all expected players have (count handed over from the
+  lobby, minus anyone who left; 60 s safety net). AjinzzaGameGameState::bAllPlayersLoaded hides
+  every loading screen at the same time and the round starts then (replaces the 1.5 s PostLogin
+  debounce; that grace period is kept only when Lvl_Game is opened directly with no lobby count).
+- NEW module deps MoviePlayer + DeveloperSettings. Game target compiles; editor build needs the
+  editor CLOSED. NOT TESTED at runtime (multiplayer travel, Steam, packaged MoviePlayer).
+
+DONE THIS SESSION (2026-10-07, nameplates + match aliases + text chat, by Claude)
+- Nameplates: AjinzzaCharacter has a screen-space NameplateComponent (UjinzzaNameplateWidget, small
+  black sticker pill ~30 cm above the capsule). Hidden on your own character and past 25 m. The
+  character refreshes it every frame (a collapsed widget doesn't tick on its own).
+- Names: AjinzzaPartyPlayerState::GetDisplayName = replicated DisplayAlias, or the nickname
+  (PlayerState name = Steam persona) when there's none. Lobby: nicknames.
+  Match: AjinzzaGameGameMode::AssignDisplayAliases runs with role assignment - every candidate
+  (Real One AND Imitators) gets "User1".."UserN" in a fresh random order (the role shuffle puts the
+  Real One first, so its order isn't reused), the Judge gets "Judge". Late joiners get the next
+  User number; with < 3 players (no roles) everyone still gets User numbers. Until aliases exist,
+  match nameplates show nothing, so real names never appear in the match. Aliases aren't copied by
+  seamless travel, so back in the lobby everyone has their nickname again.
+- Chat (UjinzzaChatWidget, bottom-left, created by AjinzzaPlayerController for lobby + match):
+  Enter opens the input line (UI-only input: typing never moves/jumps/interacts), Enter sends,
+  ESC / clicking away cancels. Lines fade after ~6 s idle, last 50 kept, per level (history isn't
+  carried across travel). Server_SendChatMessage trims, caps at 120 chars, rate-limits 0.5 s, and
+  stamps the sender's display name server-side (so the match shows "User3: ..." / "Judge: ...").
+  A ghost's messages go only to other ghosts, tagged [Ghost] (same rule as voice). Not available
+  while the ESC menu or a lobby kiosk panel is open.
+- Game target compiles; needs a full editor build (editor CLOSED). NOT TESTED at runtime.

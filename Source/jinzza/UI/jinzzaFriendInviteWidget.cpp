@@ -103,6 +103,12 @@ void UjinzzaFriendInviteWidget::NativeOnInitialized()
 	}
 
 	RequestFriends();
+
+	// Preloaded on entering the lobby - show it now; the fresh request above replaces it when it lands.
+	if (UjinzzaGameInstance* GI = Cast<UjinzzaGameInstance>(UGameplayStatics::GetGameInstance(this)); GI && GI->HasCachedFriendsList())
+	{
+		HandleFriendsListReceived(GI->GetCachedFriendsList());
+	}
 }
 
 void UjinzzaFriendInviteWidget::NativeDestruct()

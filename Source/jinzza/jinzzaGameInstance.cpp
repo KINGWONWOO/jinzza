@@ -13,6 +13,7 @@
 #include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
 #include "jinzza.h"
+#include "jinzzaLoadingScreenSubsystem.h"
 
 namespace
 {
@@ -285,6 +286,8 @@ void UjinzzaGameInstance::OnReadFriendsListComplete(int32 LocalUserNum, bool bWa
 		UE_LOG(Logjinzza, Warning, TEXT("ReadFriendsList failed: %s"), *ErrorStr);
 	}
 
+	CachedFriendsList = Result;
+	bHasCachedFriendsList = true;
 	OnFriendsListReceived.Broadcast(Result);
 }
 
@@ -352,6 +355,11 @@ void UjinzzaGameInstance::TravelToConnectedSession()
 	{
 		OnSessionStatusChanged.Broadcast(EJinzzaSessionStatus::Connected, TEXT("Connecting..."));
 		SetRichPresenceStatus(TEXT("In Lobby"));
+		// Up from the moment we start connecting; the map load that follows keeps it up.
+		if (UjinzzaLoadingScreenSubsystem* Loading = GetSubsystem<UjinzzaLoadingScreenSubsystem>())
+		{
+			Loading->ShowForTravel(FText::FromString(TEXT("Connecting to the host...")));
+		}
 		PC->ClientTravel(ConnectString, ETravelType::TRAVEL_Absolute);
 	}
 	else

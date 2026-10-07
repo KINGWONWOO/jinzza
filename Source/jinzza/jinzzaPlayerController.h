@@ -4,12 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "jinzzaChatTypes.h"
 #include "jinzzaPlayerController.generated.h"
 
 class UInputAction;
 class UInputMappingContext;
 class UUserWidget;
 class UjinzzaPauseMenuWidget;
+class UjinzzaChatWidget;
+class UWidget;
 
 /**
  *  Simple first person Player Controller
@@ -43,6 +46,19 @@ public:
 	void ClosePauseMenu();
 
 	bool IsPauseMenuOpen() const { return PauseMenuWidget != nullptr; }
+
+	/** Chat: the server cleans up Text (trim, MaxMessageLength, rate limit), stamps the sender's display name
+	 * (nickname, or the match alias) and sends it to every player - a ghost's message only to other ghosts. */
+	UFUNCTION(Server, Reliable)
+	void Server_SendChatMessage(const FString& Text);
+
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveChatMessage(const FJinzzaChatMessage& Message);
+
+	/** Called by UjinzzaChatWidget when its input line opens/closes: UI-only input focused on FocusTarget, so
+	 * typing never reaches the character, then back to this level's normal input. */
+	void EnterChatInputMode(UWidget* FocusTarget);
+	void ExitChatInputMode();
 
 	/** True while this player's mic is transmitting. */
 	UFUNCTION(BlueprintPure, Category = "Voice")
@@ -112,6 +128,9 @@ private:
 
 	void OnPauseMenuPressed();
 
+	/** Enter: opens the chat input line (not while the ESC menu or a kiosk panel is up). */
+	void OnChatPressed();
+
 	void OnPushToTalkPressed();
 	void OnPushToTalkReleased();
 
@@ -123,6 +142,15 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> PauseMenuAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> ChatAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UjinzzaChatWidget> ChatWidget;
+
+	/** Server-side rate limit for Server_SendChatMessage. */
+	double LastChatMessageTime = -1000.0;
 
 	/** Created on open, destroyed on close, so its settings page always loads the current values. */
 	UPROPERTY(Transient)

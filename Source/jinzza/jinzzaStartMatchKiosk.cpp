@@ -10,6 +10,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
+#include "jinzzaLobbyGameMode.h"
 
 AjinzzaStartMatchKiosk::AjinzzaStartMatchKiosk()
 {
@@ -53,8 +54,13 @@ void AjinzzaStartMatchKiosk::Interact(APlayerController* Interactor)
 		UGameplayStatics::PlaySound2D(Interactor, ConfirmSound);
 	}
 
-	if (UWorld* World = GetWorld())
+	// Everyone preloads the match first; the lobby game mode travels once they all have.
+	if (AjinzzaLobbyGameMode* LobbyGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AjinzzaLobbyGameMode>() : nullptr)
 	{
-		World->ServerTravel(TEXT("/Game/JINZZA/Level/Lvl_Game"));
+		LobbyGameMode->BeginMatchPreparation();
+	}
+	else if (UWorld* World = GetWorld())
+	{
+		World->ServerTravel(AjinzzaLobbyGameMode::MatchMapPath);
 	}
 }

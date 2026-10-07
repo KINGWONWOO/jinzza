@@ -10,6 +10,16 @@ void AjinzzaGameGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(AjinzzaGameGameState, CurrentPhase);
 	DOREPLIFETIME(AjinzzaGameGameState, PhaseEndServerTime);
 	DOREPLIFETIME(AjinzzaGameGameState, MidEvaluationsRemaining);
+	DOREPLIFETIME(AjinzzaGameGameState, LoadedPlayerCount);
+	DOREPLIFETIME(AjinzzaGameGameState, ExpectedPlayerCount);
+	DOREPLIFETIME(AjinzzaGameGameState, bAllPlayersLoaded);
+}
+
+void AjinzzaGameGameState::ServerSetLoadProgress(int32 InLoaded, int32 InExpected, bool bInAllLoaded)
+{
+	LoadedPlayerCount = InLoaded;
+	ExpectedPlayerCount = InExpected;
+	bAllPlayersLoaded = bInAllLoaded;
 }
 
 float AjinzzaGameGameState::GetPhaseTimeRemaining() const

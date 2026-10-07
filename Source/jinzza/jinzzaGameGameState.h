@@ -35,6 +35,15 @@ public:
 	/** Server-only: called by UjinzzaRoundPhaseSubsystem when it advances the phase. */
 	void ServerSetPhase(EJinzzaRoundPhase NewPhase, float DurationSeconds, int32 InMidEvaluationsRemaining);
 
+	/** Match start gate (see AjinzzaGameGameMode::NotifyPlayerLoaded): true once every player has loaded
+	 * the level. Each player's loading screen stays up until then, so everyone sees the match together. */
+	bool AreAllPlayersLoaded() const { return bAllPlayersLoaded; }
+	int32 GetLoadedPlayerCount() const { return LoadedPlayerCount; }
+	int32 GetExpectedPlayerCount() const { return ExpectedPlayerCount; }
+
+	/** Server-only. */
+	void ServerSetLoadProgress(int32 InLoaded, int32 InExpected, bool bInAllLoaded);
+
 	/** Broadcast on both server and clients whenever CurrentPhase changes. */
 	FOnJinzzaRoundPhaseChanged OnPhaseChanged;
 
@@ -54,4 +63,13 @@ private:
 
 	UPROPERTY(Replicated)
 	int32 MidEvaluationsRemaining = 0;
+
+	UPROPERTY(Replicated)
+	int32 LoadedPlayerCount = 0;
+
+	UPROPERTY(Replicated)
+	int32 ExpectedPlayerCount = 0;
+
+	UPROPERTY(Replicated)
+	bool bAllPlayersLoaded = false;
 };

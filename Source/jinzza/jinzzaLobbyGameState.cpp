@@ -46,6 +46,8 @@ void AjinzzaLobbyGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>
 
 	DOREPLIFETIME(AjinzzaLobbyGameState, MatchSettings);
 	DOREPLIFETIME(AjinzzaLobbyGameState, TimeOfDay);
+	DOREPLIFETIME(AjinzzaLobbyGameState, MatchPrepReadyCount);
+	DOREPLIFETIME(AjinzzaLobbyGameState, MatchPrepTotalCount);
 }
 
 void AjinzzaLobbyGameState::BeginPlay()

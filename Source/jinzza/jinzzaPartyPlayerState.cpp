@@ -13,6 +13,24 @@ void AjinzzaPartyPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 	DOREPLIFETIME(AjinzzaPartyPlayerState, bIsGhost);
 	DOREPLIFETIME(AjinzzaPartyPlayerState, FaceType);
 	DOREPLIFETIME(AjinzzaPartyPlayerState, VoiceFilter);
+	DOREPLIFETIME(AjinzzaPartyPlayerState, DisplayAlias);
+}
+
+void AjinzzaPartyPlayerState::ServerSetDisplayAlias(const FString& NewAlias)
+{
+	if (HasAuthority())
+	{
+		DisplayAlias = NewAlias;
+	}
+}
+
+FString AjinzzaPartyPlayerState::GetDisplayNameFor(const APlayerState* PlayerState)
+{
+	if (const AjinzzaPartyPlayerState* PartyState = Cast<AjinzzaPartyPlayerState>(PlayerState))
+	{
+		return PartyState->GetDisplayName();
+	}
+	return PlayerState ? PlayerState->GetPlayerName() : FString();
 }
 
 void AjinzzaPartyPlayerState::ServerSetGhost(bool bNewGhost)

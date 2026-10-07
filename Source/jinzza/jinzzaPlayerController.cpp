@@ -16,6 +16,9 @@
 #include "TimerManager.h"
 #include "Blueprint/UserWidget.h"
 #include "jinzzaPauseMenuWidget.h"
+#include "jinzzaChatWidget.h"
+#include "Components/Widget.h"
+#include "Engine/World.h"
 #include "jinzza.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 #include "UObject/ConstructorHelpers.h"
@@ -54,6 +57,16 @@ void AjinzzaPlayerController::BeginPlay()
 	Super::BeginPlay();
 
 	
+	if (IsLocalPlayerController())
+	{
+		ChatWidget = CreateWidget<UjinzzaChatWidget>(this, UjinzzaChatWidget::StaticClass());
+		if (ChatWidget)
+		{
+			// Above the HUD, below the ESC menu (100) and the loading screen.
+			ChatWidget->AddToViewport(40);
+		}
+	}
+
 	// only spawn touch controls on local player controllers
 	if (IsLocalPlayerController() && ShouldUseTouchControls())
 	{
@@ -91,6 +104,7 @@ void AjinzzaPlayerController::SetupInputComponent()
 			EnhancedInputComponent->BindAction(PushToTalkAction, ETriggerEvent::Completed, this, &AjinzzaPlayerController::OnPushToTalkReleased);
 			EnhancedInputComponent->BindAction(PushToTalkAction, ETriggerEvent::Canceled, this, &AjinzzaPlayerController::OnPushToTalkReleased);
 			EnhancedInputComponent->BindAction(PauseMenuAction, ETriggerEvent::Started, this, &AjinzzaPlayerController::OnPauseMenuPressed);
+			EnhancedInputComponent->BindAction(ChatAction, ETriggerEvent::Started, this, &AjinzzaPlayerController::OnChatPressed);
 		}
 
 		GetWorldTimerManager().SetTimer(VoiceUpdateTimerHandle, this, &AjinzzaPlayerController::UpdateVoiceTransmission, 0.25f, true);
@@ -145,6 +159,10 @@ void AjinzzaPlayerController::AddRuntimeMappingContexts()
 		UInputMappingContext* PauseContext = NewObject<UInputMappingContext>(this);
 		PauseContext->MapKey(PauseMenuAction, EKeys::Escape);
 		PauseContext->MapKey(PauseMenuAction, EKeys::Gamepad_Special_Right);
+		if (ChatAction)
+		{
+			PauseContext->MapKey(ChatAction, EKeys::Enter);
+		}
 		RuntimeMappingContexts.Add(PauseContext);
 		Subsystem->AddMappingContext(PauseContext, 0);
 	}
@@ -172,6 +190,10 @@ void AjinzzaPlayerController::CreatePauseMenuAction()
 	if (!PauseMenuAction)
 	{
 		PauseMenuAction = NewObject<UInputAction>(this, TEXT("IA_PauseMenu"));
+	}
+	if (!ChatAction)
+	{
+		ChatAction = NewObject<UInputAction>(this, TEXT("IA_Chat"));
 	}
 }
 
@@ -233,6 +255,84 @@ void AjinzzaPlayerController::ClosePauseMenu()
 	SetIgnoreMoveInput(false);
 	SetIgnoreLookInput(false);
 	RestoreGameplayInputMode();
+}
+
+void AjinzzaPlayerController::OnChatPressed()
+{
+	if (ChatWidget && !ChatWidget->IsInputOpen() && !IsPauseMenuOpen() && CanOpenPauseMenu())
+	{
+		ChatWidget->OpenInput();
+	}
+}
+
+void AjinzzaPlayerController::EnterChatInputMode(UWidget* FocusTarget)
+{
+	FInputModeUIOnly InputMode;
+	if (FocusTarget)
+	{
+		InputMode.SetWidgetToFocus(FocusTarget->TakeWidget());
+	}
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	SetInputMode(InputMode);
+}
+
+void AjinzzaPlayerController::ExitChatInputMode()
+{
+	if (!IsPauseMenuOpen())
+	{
+		RestoreGameplayInputMode();
+	}
+}
+
+void AjinzzaPlayerController::Server_SendChatMessage_Implementation(const FString& Text)
+{
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	if (Now - LastChatMessageTime < JinzzaChat::MinSecondsBetweenMessages)
+	{
+		return;
+	}
+
+	FString Clean = Text.Replace(TEXT("\r"), TEXT(" ")).Replace(TEXT("\n"), TEXT(" ")).TrimStartAndEnd();
+	Clean.LeftInline(JinzzaChat::MaxMessageLength);
+	if (Clean.IsEmpty())
+	{
+		return;
+	}
+	LastChatMessageTime = Now;
+
+	const AjinzzaPartyPlayerState* SenderState = GetPlayerState<AjinzzaPartyPlayerState>();
+
+	FJinzzaChatMessage Message;
+	Message.SenderName = AjinzzaPartyPlayerState::GetDisplayNameFor(PlayerState);
+	Message.Text = Clean;
+	Message.bFromGhost = SenderState && SenderState->IsGhost();
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		AjinzzaPlayerController* Recipient = Cast<AjinzzaPlayerController>(It->Get());
+		if (!Recipient)
+		{
+			continue;
+		}
+		// Ghosts can't talk to the living (same rule as voice) - only to each other.
+		if (Message.bFromGhost)
+		{
+			const AjinzzaPartyPlayerState* RecipientState = Recipient->GetPlayerState<AjinzzaPartyPlayerState>();
+			if (!RecipientState || !RecipientState->IsGhost())
+			{
+				continue;
+			}
+		}
+		Recipient->Client_ReceiveChatMessage(Message);
+	}
+}
+
+void AjinzzaPlayerController::Client_ReceiveChatMessage_Implementation(const FJinzzaChatMessage& Message)
+{
+	if (ChatWidget)
+	{
+		ChatWidget->AddMessage(Message);
+	}
 }
 
 void AjinzzaPlayerController::RestoreGameplayInputMode()

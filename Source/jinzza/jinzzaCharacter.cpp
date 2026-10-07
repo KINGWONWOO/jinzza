@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "jinzzaCharacter.h"
+#include "jinzzaNameplateWidget.h"
+#include "Components/WidgetComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -78,6 +80,16 @@ AjinzzaCharacter::AjinzzaCharacter()
 
 	ProximityVoiceComponent = CreateDefaultSubobject<UjinzzaProximityVoiceComponent>(TEXT("ProximityVoiceComponent"));
 
+	// Screen space: always faces the camera at a constant readable size. Above the capsule top (half height 96).
+	NameplateComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("NameplateComponent"));
+	NameplateComponent->SetupAttachment(GetCapsuleComponent());
+	NameplateComponent->SetRelativeLocation(FVector(0.f, 0.f, 125.f));
+	NameplateComponent->SetWidgetSpace(EWidgetSpace::Screen);
+	NameplateComponent->SetDrawAtDesiredSize(true);
+	NameplateComponent->SetPivot(FVector2D(0.5f, 1.f));
+	NameplateComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	NameplateComponent->SetWidgetClass(UjinzzaNameplateWidget::StaticClass());
+
 	static ConstructorHelpers::FClassFinder<UjinzzaEmoteWheelWidget> EmoteWheelWidgetBPClass(TEXT("/Game/JINZZA/UI/Widgets/WBP_EmoteWheel"));
 	if (EmoteWheelWidgetBPClass.Succeeded())
 	{
@@ -151,6 +163,11 @@ void AjinzzaCharacter::BeginPlay()
 
 	ProximityVoiceComponent->SetVoiceAnchor(VoiceAnchor);
 
+	if (UjinzzaNameplateWidget* Nameplate = Cast<UjinzzaNameplateWidget>(NameplateComponent->GetUserWidgetObject()))
+	{
+		Nameplate->SetOwnerPawn(this);
+	}
+
 	if (IsLocallyControlled() && PropUsageWidgetClass)
 	{
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -172,6 +189,11 @@ void AjinzzaCharacter::Tick(float DeltaSeconds)
 	if (IsLocallyControlled())
 	{
 		UpdateInteractionFocus();
+	}
+
+	if (UjinzzaNameplateWidget* Nameplate = Cast<UjinzzaNameplateWidget>(NameplateComponent->GetUserWidgetObject()))
+	{
+		Nameplate->Refresh();
 	}
 
 	UpdateFootsteps(DeltaSeconds);
