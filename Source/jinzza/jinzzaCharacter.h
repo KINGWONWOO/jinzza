@@ -319,6 +319,9 @@ protected:
 	 * proxies never simulate the jump themselves), so both forward it to everyone else via a multicast. */
 	virtual void OnJumped_Implementation() override;
 
+	/** No jumping while seated (server-authoritative; DoJumpStart also skips it locally). */
+	virtual bool CanJumpInternal_Implementation() const override;
+
 	/** Requests the server activate whatever prop this character is currently holding */
 	void DoUseHeldProp();
 
@@ -432,9 +435,57 @@ public:
 	 * While stunned, other players also hear this character's voice robotized (UjinzzaProximityVoiceComponent reads IsStunned). */
 	void Stun(float Duration);
 
+	/**
+	 * Server-only. Seated (Question Time, Interview): no moving or jumping, the body keeps facing SeatYaw
+	 * and only the head turns - the player can still look around (up to SeatedViewYawRange either side),
+	 * and everyone sees the seal turn partway toward where they're looking (see UpdateSeatedLook).
+	 */
+	void ServerSetSeated(bool bInSeated, float InSeatYaw);
+
+	UFUNCTION(BlueprintPure, Category = "Party")
+	bool IsSeated() const { return bSeated; }
+
+	/** World yaw the seat faces (meaningful while IsSeated). */
+	float GetSeatYaw() const { return SeatYaw; }
+
 private:
 	UFUNCTION()
 	void OnRep_Stunned();
+
+	UFUNCTION()
+	void OnRep_Seated();
+
+	/** Applies bSeated/SeatYaw on this machine: body yaw decoupled from the view, the local view's yaw range. */
+	void ApplySeated();
+
+	/** Every machine, every frame: the owner reports where they're looking (relative to the seat); everyone
+	 * turns this character's SealMesh toward it, smoothed - the "head turn". */
+	void UpdateSeatedLook(float DeltaSeconds);
+
+	UFUNCTION(Server, Unreliable)
+	void Server_SetSeatedLook(int8 Yaw, int8 Pitch);
+
+	UPROPERTY(ReplicatedUsing = OnRep_Seated)
+	bool bSeated = false;
+
+	/** World yaw the seat faces (the body is held there while seated). */
+	UPROPERTY(Replicated)
+	float SeatYaw = 0.f;
+
+	/** Where the seated owner is looking, degrees relative to the seat. Not sent back to the owner. */
+	UPROPERTY(Replicated)
+	int8 SeatedLookYaw = 0;
+
+	UPROPERTY(Replicated)
+	int8 SeatedLookPitch = 0;
+
+	/** BP_FirstPersonCharacter's SealMesh (the visible body), found by name in BeginPlay, and its rest rotation. */
+	TWeakObjectPtr<USceneComponent> SealMesh;
+	FQuat SealMeshBaseRotation = FQuat::Identity;
+
+	/** Smoothed head turn currently applied to SealMesh (pitch, yaw). */
+	FRotator SealLook = FRotator::ZeroRotator;
+	float SeatedLookSendCooldown = 0.f;
 
 	UFUNCTION()
 	void ClearStun();

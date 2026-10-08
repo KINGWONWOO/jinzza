@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "jinzzaRoundTypes.h"
+#include "jinzzaQuestionTypes.h"
 #include "jinzzaGameGameMode.generated.h"
 
 class AjinzzaPartyPlayerState;
@@ -44,6 +45,24 @@ public:
 	/** Server: the turn speaker's chat line - sent to everyone as a speech bubble (no board, no log). */
 	void BroadcastTurnMessage(APlayerState* Speaker, const FString& Text);
 
+	/** Server: the Judge's question (AjinzzaGamePlayerController::Server_SubmitQuestion). Only while Asking. */
+	void HandleQuestionSubmitted(APlayerController* Asker, const FString& Text);
+
+	/** Server: an answerer's drawing (AjinzzaGamePlayerController::Server_SubmitDrawing). Only while Answering,
+	 * once per cycle. Kept here until the Showing step reveals it. */
+	void HandleDrawingSubmitted(APlayerController* Answerer, FJinzzaDrawing Drawing);
+
+	// Question Time timings (seconds), per cycle: the doc's 20 s question / 15 s answer / 30 s discussion,
+	// plus the question sign's drop-in and a short grace for the last drawings to arrive.
+	static constexpr float QuestionAskSeconds = 20.f;
+	static constexpr float QuestionRevealSeconds = 3.f;
+	static constexpr float QuestionAnswerSeconds = 15.f;
+	static constexpr float QuestionAnswerGraceSeconds = 0.75f;
+	static constexpr float QuestionShowSeconds = 30.f;
+	/** Answer boards flip round one after another, this far apart. */
+	static constexpr float QuestionBoardFlipInterval = 0.8f;
+	static constexpr float QuestionCycleSeconds = QuestionAskSeconds + QuestionRevealSeconds + QuestionAnswerSeconds + QuestionAnswerGraceSeconds + QuestionShowSeconds;
+
 	// Turn/vote timings (seconds). Self-intro matches UjinzzaRoundPhaseSubsystem's 20 s x candidates phase
 	// length; vote + final argument fit inside the 60 s MidEvaluation / FinalDecision phases.
 	static constexpr float SelfIntroSecondsPerCandidate = 20.f;
@@ -59,14 +78,24 @@ protected:
 	 * see UjinzzaGameInstance::LeaveToTitle.) */
 	virtual void Logout(AController* Exiting) override;
 
-private:
+	// Protected rather than private so AjinzzaTestGameMode (Lvl_test) can run single pieces of the match -
+	// a self-introduction, one Question Time cycle, a vote - with practice dummies, on demand.
+
 	void OnRoundPhaseEntered(EJinzzaRoundPhase NewPhase);
 	void AssignRoles();
 
-	/** "Judge" for Judge (may be null), "User1".."UserN" for everyone else in a fresh random order - the
-	 * role shuffle puts the Real One first, so its order must not leak into the numbers. */
+	/** "Judge" for Judge (may be null), "User1".."UserN" for everyone else in the order they finished
+	 * loading the match (LoadOrder) - independent of the role shuffle, which puts the Real One first. */
 	void AssignDisplayAliases(const TArray<AjinzzaPartyPlayerState*>& Players, AjinzzaPartyPlayerState* Judge);
-	void TryStartRound();
+	/** Starts the round once everyone has loaded. AjinzzaTestGameMode never does. */
+	virtual void TryStartRound();
+
+	/** Someone who can take part: a connected player, or (Lvl_test) a practice dummy run by an AI controller. */
+	static bool IsPresent(const APlayerState* PlayerState);
+
+	/** The question/drawing handlers below, by player state (the controller-based ones resolve to these). */
+	void SubmitQuestionFrom(APlayerState* Asker, const FString& Text);
+	void SubmitAnswerDrawing(APlayerState* Answerer, FJinzzaDrawing Drawing);
 
 	void CheckAllPlayersLoaded();
 	/** bForce: the MatchStartTimeoutSeconds safety net - start with whoever made it. */
@@ -105,8 +134,33 @@ private:
 	/** After the final argument: eliminate (ghost) the condemned and end the phase. */
 	void FinishFinalArgument();
 
-	/** Stops any turn/vote left over from the previous phase. */
+	/** Stops any turn/vote/question cycle left over from the previous phase. */
 	void CancelTurnsAndVote();
+
+	// --- Question Time ----------------------------------------------------------------------------------
+	// Everyone is seated in Zone.Question (on "Zone.Question.Seat"-tagged markers if placed, else in a row at
+	// the zone's PlayerStart) and can't move; each seat gets a camera in front of it for the split screen
+	// (UjinzzaQuestionWidget renders them on every machine). Voice stays open throughout. Per cycle:
+	// Asking -> Revealing -> Answering -> Showing (see EJinzzaQuestionStep), QuestionTimeCycles times.
+
+	void StartQuestionTime();
+	void BeginQuestionCycle();
+	void RevealQuestion();
+	void BeginAnswering();
+	void FinishAnswering();
+	void RevealNextAnswerBoard();
+	void FinishQuestionCycle();
+	/** Lowers the boards, frees the seated players and clears the replicated state. Safe to call any time. */
+	void EndQuestionTime();
+	void SetQuestionStep(EJinzzaQuestionStep Step, float VisibleSeconds);
+	void PushQuestionState();
+	/** A seated player left: drop their seat and move on if they were holding things up. */
+	void HandleQuestionSeatLeft(APlayerState* Leaving);
+	bool AllAnswersIn() const;
+	void SetAnswerBoardsUp(bool bUp);
+	FString PickFallbackQuestion();
+	/** Builds Seats (+ teleports and freezes everyone in them). */
+	void SeatQuestionParticipants();
 
 	TArray<AjinzzaPartyPlayerState*> GetLivingCandidates() const;
 	int32 CountConnectedJudges() const;
@@ -144,7 +198,19 @@ private:
 	int32 NextUserAliasNumber = 1;
 	double LastJoinTime = 0.0;
 	TSet<TWeakObjectPtr<APlayerController>> LoadedPlayers;
+	/** Players in the order they reported loading this level - the basis of the UserN numbers. */
+	TArray<TWeakObjectPtr<APlayerController>> LoadOrder;
 	FTimerHandle MatchStartTimeoutHandle;
+
+	FJinzzaQuestionState QuestionState;
+	/** > 0: run this many Question Time cycles instead of the lobby's QuestionTimeCycles setting. */
+	int32 QuestionCyclesOverride = 0;
+	TMap<TWeakObjectPtr<APlayerState>, FJinzzaDrawing> SubmittedDrawings;
+	TArray<TWeakObjectPtr<APawn>> QuestionSeatedPawns;
+	TArray<int32> UsedFallbackQuestions;
+	int32 NextAnswerBoardToFlip = 0;
+	FTimerHandle QuestionTimerHandle;
+	FTimerHandle QuestionFlipTimerHandle;
 
 	TWeakObjectPtr<APawn> SeatedJudgePawn;
 	TWeakObjectPtr<APawn> SeatedCandidatePawn;

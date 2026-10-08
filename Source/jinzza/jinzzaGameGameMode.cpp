@@ -3,6 +3,7 @@
 #include "jinzzaGameGameMode.h"
 #include "jinzzaGamePlayerController.h"
 #include "jinzzaGameGameState.h"
+#include "jinzzaCharacter.h"
 #include "jinzzaPartyPlayerState.h"
 #include "jinzzaRoundPhaseSubsystem.h"
 #include "jinzzaAuditionCurtain.h"
@@ -106,10 +107,17 @@ void AjinzzaGameGameMode::AssignDisplayAliases(const TArray<AjinzzaPartyPlayerSt
 			Candidates.Add(PartyPS);
 		}
 	}
-	for (int32 i = Candidates.Num() - 1; i > 0; --i)
+	// Numbered by who finished loading the match first (User1 = fastest); self-introductions go in this
+	// order too (GetLivingCandidates sorts by it). Anyone who never reported loaded goes last.
+	auto LoadRank = [this](const AjinzzaPartyPlayerState* PartyPS)
 	{
-		Candidates.Swap(i, FMath::RandRange(0, i));
-	}
+		const int32 Index = LoadOrder.IndexOfByKey(PartyPS->GetPlayerController());
+		return Index == INDEX_NONE ? MAX_int32 : Index;
+	};
+	Candidates.StableSort([&LoadRank](const AjinzzaPartyPlayerState& A, const AjinzzaPartyPlayerState& B)
+	{
+		return LoadRank(&A) < LoadRank(&B);
+	});
 
 	NextUserAliasNumber = 1;
 	for (AjinzzaPartyPlayerState* Candidate : Candidates)
@@ -125,7 +133,20 @@ void AjinzzaGameGameMode::AssignDisplayAliases(const TArray<AjinzzaPartyPlayerSt
 
 void AjinzzaGameGameMode::NotifyPlayerLoaded(APlayerController* Player)
 {
-	if (!Player || bAllPlayersLoaded)
+	if (!Player)
+	{
+		return;
+	}
+	// Recorded even after the start gate opened, so a late loader still ranks behind everyone else.
+	if (!LoadOrder.Contains(Player))
+	{
+		LoadOrder.Add(Player);
+		if (AjinzzaGamePlayerController* GamePC = Cast<AjinzzaGamePlayerController>(Player))
+		{
+			GamePC->Client_ReceiveLoadRank(LoadOrder.Num());
+		}
+	}
+	if (bAllPlayersLoaded)
 	{
 		return;
 	}
@@ -208,6 +229,11 @@ void AjinzzaGameGameMode::Logout(AController* Exiting)
 
 	if (World && !World->bIsTearingDown)
 	{
+		if (PartyState && QuestionState.IsActive())
+		{
+			HandleQuestionSeatLeft(const_cast<AjinzzaPartyPlayerState*>(PartyState));
+		}
+
 		if (bSpeakerLeft)
 		{
 			// Their spotlight turn is over - move on next tick (they're still mid-removal here).
@@ -241,6 +267,7 @@ void AjinzzaGameGameMode::Logout(AController* Exiting)
 	if (!bAllPlayersLoaded && World && !World->bIsTearingDown)
 	{
 		LoadedPlayers.Remove(Cast<APlayerController>(Exiting));
+		LoadOrder.Remove(Cast<APlayerController>(Exiting));
 		ExpectedPlayers = FMath::Max(0, ExpectedPlayers - 1);
 		GetWorldTimerManager().SetTimerForNextTick(this, &AjinzzaGameGameMode::CheckAllPlayersLoaded);
 	}
@@ -294,6 +321,10 @@ void AjinzzaGameGameMode::OnRoundPhaseEntered(EJinzzaRoundPhase NewPhase)
 	{
 		StartSelfIntroductions();
 	}
+	else if (NewPhase == EJinzzaRoundPhase::QuestionTime)
+	{
+		StartQuestionTime();
+	}
 	else if (NewPhase == EJinzzaRoundPhase::MidEvaluation || NewPhase == EJinzzaRoundPhase::FinalDecision)
 	{
 		OpenVote(NewPhase);
@@ -337,6 +368,11 @@ int32 AjinzzaGameGameMode::CountConnectedJudges() const
 	return Count;
 }
 
+bool AjinzzaGameGameMode::IsPresent(const APlayerState* PlayerState)
+{
+	return PlayerState && PlayerState->GetOwningController() != nullptr;
+}
+
 void AjinzzaGameGameMode::StartSelfIntroductions()
 {
 	SelfIntroOrder.Reset();
@@ -358,7 +394,7 @@ void AjinzzaGameGameMode::AdvanceSelfIntroduction()
 	while (++SelfIntroIndex < SelfIntroOrder.Num())
 	{
 		AjinzzaPartyPlayerState* Speaker = SelfIntroOrder[SelfIntroIndex].Get();
-		if (Speaker && Speaker->GetPlayerController())
+		if (IsPresent(Speaker))
 		{
 			BeginSpeakTurn(EJinzzaSpeakTurnKind::SelfIntroduction, Speaker, SelfIntroSecondsPerCandidate,
 				SelfIntroIndex + 1, SelfIntroOrder.Num(), TEXT("Zone.SelfIntro"));
@@ -402,8 +438,8 @@ void AjinzzaGameGameMode::BeginSpeakTurn(EJinzzaSpeakTurnKind Kind, AjinzzaParty
 		}
 	}
 
-	APlayerController* SpeakerPC = Speaker->GetPlayerController();
-	APawn* Pawn = SpeakerPC ? SpeakerPC->GetPawn() : nullptr;
+	AController* SpeakerController = Speaker->GetOwningController();
+	APawn* Pawn = Speaker->GetPawn();
 	if (AActor* Spotlight = FindTagged(ZoneTag + TEXT(".Spotlight")); Spotlight && Pawn)
 	{
 		SpotlightPawn = Pawn;
@@ -411,7 +447,14 @@ void AjinzzaGameGameMode::BeginSpeakTurn(EJinzzaSpeakTurnKind Kind, AjinzzaParty
 		SpotlightReturnRotation = Pawn->GetActorRotation();
 		Pawn->TeleportTo(Spotlight->GetActorLocation(), Spotlight->GetActorRotation());
 		// Control rotation is the owning client's - turn them to face the audience there.
-		SpeakerPC->ClientSetRotation(Spotlight->GetActorRotation());
+		if (SpeakerController)
+		{
+			SpeakerController->SetControlRotation(Spotlight->GetActorRotation());
+		}
+		if (APlayerController* SpeakerPC = Cast<APlayerController>(SpeakerController))
+		{
+			SpeakerPC->ClientSetRotation(Spotlight->GetActorRotation());
+		}
 	}
 	else if (!Spotlight)
 	{
@@ -612,10 +655,532 @@ void AjinzzaGameGameMode::CancelTurnsAndVote()
 	Votes.Reset();
 	CondemnedPlayer.Reset();
 	VotePhase = EJinzzaRoundPhase::None;
+	EndQuestionTime();
 	if (AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>(); MatchState && MatchState->IsVoteOpen())
 	{
 		MatchState->ServerSetVote(false, EJinzzaRoundPhase::None, 0.0);
 	}
+}
+
+// --- Question Time --------------------------------------------------------------------------------
+
+namespace
+{
+	/** Asked when the Judge doesn't type anything in time (or there's no Judge, e.g. a < 3 player test). */
+	const TCHAR* const JinzzaFallbackQuestions[] = {
+		TEXT("Draw what you had for breakfast today."),
+		TEXT("Draw your dream vacation."),
+		TEXT("Draw the animal you'd be in another life."),
+		TEXT("Draw your favorite food."),
+		TEXT("Draw what's in your fridge right now."),
+		TEXT("Draw your first pet (or the pet you always wanted)."),
+		TEXT("Draw the view from your window."),
+		TEXT("Draw your favorite place in your hometown."),
+		TEXT("Draw what you'd buy with a million dollars."),
+		TEXT("Draw your hobby."),
+		TEXT("Draw the scariest thing you can think of."),
+		TEXT("Draw your morning routine."),
+	};
+
+	constexpr int32 MaxQuestionLength = 100;
+	/** Fallback row (no seat markers placed): gap between neighbours, enough that each camera only sees its own player. */
+	constexpr float QuestionSeatSpacing = 230.f;
+	/** Camera in front of each seat: distance and the height (above the capsule center) it aims at - face + board. */
+	constexpr float QuestionCameraDistance = 190.f;
+	constexpr float QuestionCameraAimHeight = 32.f;
+}
+
+void AjinzzaGameGameMode::StartQuestionTime()
+{
+	EndQuestionTime();
+
+	int32 Cycles = 2;
+	if (const UjinzzaGameInstance* JinzzaGI = GetGameInstance<UjinzzaGameInstance>())
+	{
+		Cycles = JinzzaGI->GetPendingMatchSettings().QuestionTimeCycles;
+	}
+	if (QuestionCyclesOverride > 0)
+	{
+		Cycles = QuestionCyclesOverride;
+	}
+
+	const int32 Serial = QuestionState.Serial;
+	QuestionState = FJinzzaQuestionState();
+	QuestionState.Serial = Serial;
+	QuestionState.TotalCycles = FMath::Clamp(Cycles, 1, 3);
+	UsedFallbackQuestions.Reset();
+	SeatQuestionParticipants();
+
+	if (QuestionState.CountAnswerers() == 0)
+	{
+		UE_LOG(Logjinzza, Warning, TEXT("Question Time: nobody to answer - skipping the phase."));
+		EndQuestionTime();
+		if (UjinzzaRoundPhaseSubsystem* RoundPhase = GetGameInstance() ? GetGameInstance()->GetSubsystem<UjinzzaRoundPhaseSubsystem>() : nullptr)
+		{
+			RoundPhase->NotifyPhaseConditionMet(EJinzzaRoundPhase::QuestionTime);
+		}
+		return;
+	}
+
+	UE_LOG(Logjinzza, Log, TEXT("Question Time: %d seats, %d cycle(s)."), QuestionState.Seats.Num(), QuestionState.TotalCycles);
+	BeginQuestionCycle();
+}
+
+void AjinzzaGameGameMode::SeatQuestionParticipants()
+{
+	// The Judge first (asks), then the candidates in User order (answer). Ghosts just watch.
+	TArray<AjinzzaPartyPlayerState*> Participants;
+	TArray<bool> IsAnswerer;
+	if (const AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>())
+	{
+		for (APlayerState* PS : MatchState->PlayerArray)
+		{
+			AjinzzaPartyPlayerState* PartyPS = Cast<AjinzzaPartyPlayerState>(PS);
+			if (PartyPS && PartyPS->ServerRole == EJinzzaPartyRole::Judge && !PartyPS->IsGhost() && IsPresent(PartyPS))
+			{
+				Participants.Add(PartyPS);
+				IsAnswerer.Add(false);
+			}
+		}
+	}
+	for (AjinzzaPartyPlayerState* Candidate : GetLivingCandidates())
+	{
+		if (IsPresent(Candidate))
+		{
+			Participants.Add(Candidate);
+			IsAnswerer.Add(true);
+		}
+	}
+
+	// Seat markers placed in the level win; otherwise a row centered on the zone's PlayerStart, facing its way.
+	// Markers are filled in the order of their "Zone.Question.Seat.<N>" tag (seat 1 = the Judge's), so the
+	// level decides where the first few players go however many there are.
+	TArray<AActor*> Markers;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("Zone.Question.Seat"), Markers);
+	Markers.RemoveAll([](const AActor* A) { return A == nullptr; });
+	auto SeatOrder = [](const AActor& Marker)
+	{
+		static const FString Prefix = TEXT("Zone.Question.Seat.");
+		for (const FName& Tag : Marker.Tags)
+		{
+			const FString TagString = Tag.ToString();
+			if (TagString.StartsWith(Prefix) && TagString.Len() > Prefix.Len())
+			{
+				return FCString::Atoi(*TagString.Mid(Prefix.Len()));
+			}
+		}
+		return MAX_int32;
+	};
+	Markers.Sort([&SeatOrder](const AActor& A, const AActor& B)
+	{
+		const int32 OrderA = SeatOrder(A);
+		const int32 OrderB = SeatOrder(B);
+		return OrderA != OrderB ? OrderA < OrderB : A.GetName() < B.GetName();
+	});
+
+	FTransform RowAnchor = FTransform::Identity;
+	if (Markers.Num() < Participants.Num())
+	{
+		TArray<AActor*> ZoneActors;
+		UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("Zone.Question"), ZoneActors);
+		AActor* Anchor = nullptr;
+		for (AActor* Actor : ZoneActors)
+		{
+			if (Actor && (!Anchor || Actor->IsA<APlayerStart>()))
+			{
+				Anchor = Actor;
+				if (Actor->IsA<APlayerStart>())
+				{
+					break;
+				}
+			}
+		}
+		if (Anchor)
+		{
+			RowAnchor = FTransform(FRotator(0.f, Anchor->GetActorRotation().Yaw, 0.f), Anchor->GetActorLocation());
+		}
+		else
+		{
+			UE_LOG(Logjinzza, Warning, TEXT("Question Time: no 'Zone.Question.Seat' markers and no 'Zone.Question' actor - seating at the world origin."));
+		}
+		if (Markers.Num() > 0)
+		{
+			UE_LOG(Logjinzza, Warning, TEXT("Question Time: %d seat markers for %d players - using a row instead."), Markers.Num(), Participants.Num());
+		}
+	}
+
+	FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(QuestionCamera), false);
+	for (const AjinzzaPartyPlayerState* Participant : Participants)
+	{
+		if (APawn* ParticipantPawn = Participant->GetPawn())
+		{
+			TraceParams.AddIgnoredActor(ParticipantPawn);
+		}
+	}
+
+	const int32 Count = Participants.Num();
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		AjinzzaPartyPlayerState* PartyPS = Participants[Index];
+		FVector SeatLocation;
+		FRotator SeatRotation;
+		if (Markers.Num() >= Count)
+		{
+			SeatLocation = Markers[Index]->GetActorLocation();
+			SeatRotation = FRotator(0.f, Markers[Index]->GetActorRotation().Yaw, 0.f);
+		}
+		else
+		{
+			const float Side = (Index - (Count - 1) * 0.5f) * QuestionSeatSpacing;
+			SeatLocation = RowAnchor.TransformPosition(FVector(0.f, Side, 0.f));
+			SeatRotation = RowAnchor.Rotator();
+		}
+
+		AController* Controller = PartyPS->GetOwningController();
+		ACharacter* Character = Cast<ACharacter>(PartyPS->GetPawn());
+		if (Character)
+		{
+			Character->TeleportTo(SeatLocation, SeatRotation);
+			if (Controller)
+			{
+				Controller->SetControlRotation(SeatRotation);
+			}
+			if (APlayerController* PC = Cast<APlayerController>(Controller))
+			{
+				PC->ClientSetRotation(SeatRotation);
+			}
+			if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+			{
+				Move->StopMovementImmediately();
+				Move->DisableMovement();
+			}
+			if (AjinzzaCharacter* JinzzaCharacter = Cast<AjinzzaCharacter>(Character))
+			{
+				// No jumping; only the head turns.
+				JinzzaCharacter->ServerSetSeated(true, SeatRotation.Yaw);
+			}
+			QuestionSeatedPawns.Add(Character);
+			SeatLocation = Character->GetActorLocation();
+		}
+
+		// The camera in front of the seat, pulled in if a wall is in the way.
+		const FVector Forward = SeatRotation.Vector();
+		const FVector Aim = SeatLocation + FVector(0.f, 0.f, QuestionCameraAimHeight);
+		FVector CameraLocation = Aim + Forward * QuestionCameraDistance + FVector(0.f, 0.f, 12.f);
+		FHitResult Hit;
+		if (GetWorld()->LineTraceSingleByChannel(Hit, Aim, CameraLocation, ECC_Visibility, TraceParams))
+		{
+			CameraLocation = Aim + (CameraLocation - Aim).GetSafeNormal() * FMath::Max(60.f, Hit.Distance - 15.f);
+		}
+
+		FJinzzaQuestionSeat& Seat = QuestionState.Seats.AddDefaulted_GetRef();
+		Seat.Player = PartyPS;
+		Seat.bAnswerer = IsAnswerer[Index];
+		Seat.CameraLocation = CameraLocation;
+		Seat.CameraRotation = (Aim - CameraLocation).Rotation();
+	}
+}
+
+void AjinzzaGameGameMode::PushQuestionState()
+{
+	if (AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>())
+	{
+		MatchState->ServerSetQuestionState(QuestionState);
+	}
+}
+
+void AjinzzaGameGameMode::SetQuestionStep(EJinzzaQuestionStep Step, float VisibleSeconds)
+{
+	const AjinzzaGameGameState* MatchState = GetGameState<AjinzzaGameGameState>();
+	const double Now = MatchState ? MatchState->GetServerWorldTimeSeconds() : 0.0;
+	QuestionState.Step = Step;
+	QuestionState.StepEndServerTime = Now + VisibleSeconds;
+	if (Step == EJinzzaQuestionStep::Revealing)
+	{
+		QuestionState.RevealServerTime = Now;
+	}
+	++QuestionState.Serial;
+	PushQuestionState();
+}
+
+FString AjinzzaGameGameMode::PickFallbackQuestion()
+{
+	constexpr int32 Num = UE_ARRAY_COUNT(JinzzaFallbackQuestions);
+	if (UsedFallbackQuestions.Num() >= Num)
+	{
+		UsedFallbackQuestions.Reset();
+	}
+	int32 Index;
+	do
+	{
+		Index = FMath::RandRange(0, Num - 1);
+	}
+	while (UsedFallbackQuestions.Contains(Index));
+	UsedFallbackQuestions.Add(Index);
+	return JinzzaFallbackQuestions[Index];
+}
+
+void AjinzzaGameGameMode::SetAnswerBoardsUp(bool bUp)
+{
+	for (const FJinzzaQuestionSeat& Seat : QuestionState.Seats)
+	{
+		const APawn* SeatPawn = Seat.Player ? Seat.Player->GetPawn() : nullptr;
+		UjinzzaChatBoardComponent* Board = SeatPawn ? SeatPawn->FindComponentByClass<UjinzzaChatBoardComponent>() : nullptr;
+		if (!Board)
+		{
+			continue;
+		}
+		if (bUp && Seat.bAnswerer)
+		{
+			Board->ServerHoldUpAnswer();
+		}
+		else
+		{
+			Board->ServerHideNow();
+		}
+	}
+}
+
+void AjinzzaGameGameMode::BeginQuestionCycle()
+{
+	GetWorldTimerManager().ClearTimer(QuestionFlipTimerHandle);
+	SetAnswerBoardsUp(false);
+	SubmittedDrawings.Reset();
+	QuestionState.Submitted.Reset();
+	QuestionState.Question.Reset();
+	++QuestionState.Cycle;
+
+	const bool bHasAsker = QuestionState.Seats.ContainsByPredicate([](const FJinzzaQuestionSeat& Seat) { return !Seat.bAnswerer && Seat.Player; });
+	if (!bHasAsker)
+	{
+		// Nobody to ask - straight to a stock question.
+		RevealQuestion();
+		return;
+	}
+
+	SetQuestionStep(EJinzzaQuestionStep::Asking, QuestionAskSeconds);
+	GetWorldTimerManager().SetTimer(QuestionTimerHandle, this, &AjinzzaGameGameMode::RevealQuestion, QuestionAskSeconds, false);
+}
+
+void AjinzzaGameGameMode::HandleQuestionSubmitted(APlayerController* Asker, const FString& Text)
+{
+	SubmitQuestionFrom(Asker ? Asker->PlayerState.Get() : nullptr, Text);
+}
+
+void AjinzzaGameGameMode::SubmitQuestionFrom(APlayerState* Asker, const FString& Text)
+{
+	if (QuestionState.Step != EJinzzaQuestionStep::Asking || !Asker)
+	{
+		return;
+	}
+	const FJinzzaQuestionSeat* Seat = QuestionState.FindSeat(Asker);
+	if (!Seat || Seat->bAnswerer)
+	{
+		return;
+	}
+
+	FString Clean = Text.Replace(TEXT("\r"), TEXT(" ")).Replace(TEXT("\n"), TEXT(" ")).TrimStartAndEnd();
+	Clean.LeftInline(MaxQuestionLength);
+	if (Clean.IsEmpty())
+	{
+		return;
+	}
+	QuestionState.Question = Clean;
+	RevealQuestion();
+}
+
+void AjinzzaGameGameMode::RevealQuestion()
+{
+	GetWorldTimerManager().ClearTimer(QuestionTimerHandle);
+	if (QuestionState.Question.IsEmpty())
+	{
+		QuestionState.Question = PickFallbackQuestion();
+	}
+	UE_LOG(Logjinzza, Log, TEXT("Question Time %d/%d: \"%s\""), QuestionState.Cycle, QuestionState.TotalCycles, *QuestionState.Question);
+
+	SetQuestionStep(EJinzzaQuestionStep::Revealing, QuestionRevealSeconds);
+	GetWorldTimerManager().SetTimer(QuestionTimerHandle, this, &AjinzzaGameGameMode::BeginAnswering, QuestionRevealSeconds, false);
+}
+
+void AjinzzaGameGameMode::BeginAnswering()
+{
+	SetAnswerBoardsUp(true);
+	// Clients count down to the visible deadline and hand in what they have just before it; the grace
+	// covers the trip to the server.
+	SetQuestionStep(EJinzzaQuestionStep::Answering, QuestionAnswerSeconds);
+	GetWorldTimerManager().SetTimer(QuestionTimerHandle, this, &AjinzzaGameGameMode::FinishAnswering,
+		QuestionAnswerSeconds + QuestionAnswerGraceSeconds, false);
+}
+
+void AjinzzaGameGameMode::HandleDrawingSubmitted(APlayerController* Answerer, FJinzzaDrawing Drawing)
+{
+	SubmitAnswerDrawing(Answerer ? Answerer->PlayerState.Get() : nullptr, MoveTemp(Drawing));
+}
+
+void AjinzzaGameGameMode::SubmitAnswerDrawing(APlayerState* PS, FJinzzaDrawing Drawing)
+{
+	if (QuestionState.Step != EJinzzaQuestionStep::Answering || !QuestionState.IsAnswerer(PS) || QuestionState.HasSubmitted(PS))
+	{
+		return;
+	}
+
+	JinzzaSketch::Sanitize(Drawing);
+	SubmittedDrawings.Add(PS, MoveTemp(Drawing));
+	QuestionState.Submitted.Add(PS);
+	PushQuestionState();
+
+	// Everyone's in - reveal now instead of waiting out the timer.
+	if (AllAnswersIn())
+	{
+		FinishAnswering();
+	}
+}
+
+bool AjinzzaGameGameMode::AllAnswersIn() const
+{
+	for (const FJinzzaQuestionSeat& Seat : QuestionState.Seats)
+	{
+		if (Seat.bAnswerer && Seat.Player && !QuestionState.HasSubmitted(Seat.Player))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+void AjinzzaGameGameMode::FinishAnswering()
+{
+	if (QuestionState.Step != EJinzzaQuestionStep::Answering)
+	{
+		return;
+	}
+	GetWorldTimerManager().ClearTimer(QuestionTimerHandle);
+
+	SetQuestionStep(EJinzzaQuestionStep::Showing, QuestionShowSeconds);
+	NextAnswerBoardToFlip = 0;
+	RevealNextAnswerBoard();
+	GetWorldTimerManager().SetTimer(QuestionFlipTimerHandle, this, &AjinzzaGameGameMode::RevealNextAnswerBoard, QuestionBoardFlipInterval, true);
+	GetWorldTimerManager().SetTimer(QuestionTimerHandle, this, &AjinzzaGameGameMode::FinishQuestionCycle, QuestionShowSeconds, false);
+}
+
+void AjinzzaGameGameMode::RevealNextAnswerBoard()
+{
+	// Next answerer in seat order. Their drawing goes out to everyone right as their board flips (one at a
+	// time also spreads the traffic out).
+	while (QuestionState.Seats.IsValidIndex(NextAnswerBoardToFlip))
+	{
+		const FJinzzaQuestionSeat& Seat = QuestionState.Seats[NextAnswerBoardToFlip++];
+		APlayerState* Answerer = Seat.Player;
+		if (!Seat.bAnswerer || !Answerer)
+		{
+			continue;
+		}
+
+		const FJinzzaDrawing* Found = SubmittedDrawings.Find(Answerer);
+		const FJinzzaDrawing Drawing = Found ? *Found : FJinzzaDrawing();
+		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (AjinzzaGamePlayerController* PC = Cast<AjinzzaGamePlayerController>(It->Get()))
+			{
+				PC->Client_ReceiveAnswer(Answerer, Drawing);
+			}
+		}
+
+		const APawn* AnswererPawn = Answerer->GetPawn();
+		if (UjinzzaChatBoardComponent* Board = AnswererPawn ? AnswererPawn->FindComponentByClass<UjinzzaChatBoardComponent>() : nullptr)
+		{
+			Board->ServerRevealAnswer();
+		}
+		return;
+	}
+	GetWorldTimerManager().ClearTimer(QuestionFlipTimerHandle);
+}
+
+void AjinzzaGameGameMode::FinishQuestionCycle()
+{
+	if (QuestionState.Cycle < QuestionState.TotalCycles && QuestionState.CountAnswerers() > 0)
+	{
+		BeginQuestionCycle();
+		return;
+	}
+
+	EndQuestionTime();
+	if (UjinzzaRoundPhaseSubsystem* RoundPhase = GetGameInstance() ? GetGameInstance()->GetSubsystem<UjinzzaRoundPhaseSubsystem>() : nullptr)
+	{
+		RoundPhase->NotifyPhaseConditionMet(EJinzzaRoundPhase::QuestionTime);
+	}
+}
+
+void AjinzzaGameGameMode::EndQuestionTime()
+{
+	GetWorldTimerManager().ClearTimer(QuestionTimerHandle);
+	GetWorldTimerManager().ClearTimer(QuestionFlipTimerHandle);
+
+	if (QuestionState.IsActive())
+	{
+		SetAnswerBoardsUp(false);
+	}
+	for (const TWeakObjectPtr<APawn>& SeatedPawn : QuestionSeatedPawns)
+	{
+		if (ACharacter* Character = Cast<ACharacter>(SeatedPawn.Get()))
+		{
+			if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
+			{
+				Move->SetMovementMode(MOVE_Walking);
+			}
+			if (AjinzzaCharacter* JinzzaCharacter = Cast<AjinzzaCharacter>(Character))
+			{
+				JinzzaCharacter->ServerSetSeated(false, 0.f);
+			}
+		}
+	}
+	QuestionSeatedPawns.Reset();
+	SubmittedDrawings.Reset();
+
+	const bool bWasActive = QuestionState.IsActive();
+	const int32 Serial = QuestionState.Serial;
+	QuestionState = FJinzzaQuestionState();
+	QuestionState.Serial = Serial + 1;
+	if (bWasActive)
+	{
+		PushQuestionState();
+	}
+}
+
+void AjinzzaGameGameMode::HandleQuestionSeatLeft(APlayerState* Leaving)
+{
+	const int32 Removed = QuestionState.Seats.RemoveAll([Leaving](const FJinzzaQuestionSeat& Seat) { return Seat.Player == Leaving; });
+	if (Removed == 0)
+	{
+		return;
+	}
+	QuestionState.Submitted.Remove(Leaving);
+	SubmittedDrawings.Remove(Leaving);
+	PushQuestionState();
+
+	// Next tick - the leaving connection is still being torn down.
+	GetWorldTimerManager().SetTimerForNextTick(FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		if (!QuestionState.IsActive())
+		{
+			return;
+		}
+		if (QuestionState.CountAnswerers() == 0)
+		{
+			QuestionState.Cycle = QuestionState.TotalCycles;
+			FinishQuestionCycle();
+			return;
+		}
+		const bool bHasAsker = QuestionState.Seats.ContainsByPredicate([](const FJinzzaQuestionSeat& Seat) { return !Seat.bAnswerer && Seat.Player; });
+		if (QuestionState.Step == EJinzzaQuestionStep::Asking && !bHasAsker)
+		{
+			RevealQuestion();
+		}
+		else if (QuestionState.Step == EJinzzaQuestionStep::Answering && AllAnswersIn())
+		{
+			FinishAnswering();
+		}
+	}));
 }
 
 FName AjinzzaGameGameMode::GetZoneTagForPhase(EJinzzaRoundPhase Phase)
@@ -782,9 +1347,16 @@ void AjinzzaGameGameMode::EnterInterviewZone()
 			return nullptr;
 		}
 		Character->TeleportTo(Seat->GetActorLocation(), Seat->GetActorRotation());
+		PC->SetControlRotation(Seat->GetActorRotation());
+		PC->ClientSetRotation(Seat->GetActorRotation());
 		if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
 		{
 			Move->DisableMovement();
+		}
+		if (AjinzzaCharacter* JinzzaCharacter = Cast<AjinzzaCharacter>(Character))
+		{
+			// No jumping; only the head turns.
+			JinzzaCharacter->ServerSetSeated(true, Seat->GetActorRotation().Yaw);
 		}
 		return Character;
 	};
@@ -802,6 +1374,10 @@ void AjinzzaGameGameMode::ExitInterviewZone()
 			if (UCharacterMovementComponent* Move = Character->GetCharacterMovement())
 			{
 				Move->SetMovementMode(MOVE_Walking);
+			}
+			if (AjinzzaCharacter* JinzzaCharacter = Cast<AjinzzaCharacter>(Character))
+			{
+				JinzzaCharacter->ServerSetSeated(false, 0.f);
 			}
 		}
 		SeatedPawn = nullptr;

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "jinzzaPlayerController.h"
 #include "jinzzaRoundTypes.h"
+#include "jinzzaQuestionTypes.h"
 #include "jinzzaGamePlayerController.generated.h"
 
 class UUserWidget;
@@ -13,6 +14,7 @@ class UAudioComponent;
 class ACameraActor;
 class UjinzzaSpeakTurnWidget;
 class UjinzzaVoteWidget;
+class UjinzzaQuestionWidget;
 
 /**
  * Spawns the minimal in-round overlay (host-only End Game button) for Lvl_Game, and receives
@@ -54,6 +56,19 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_ReceiveTurnMessage(APlayerState* Speaker, const FString& Text);
 
+	/** Question Time: the Judge's question (UjinzzaQuestionWidget) -> AjinzzaGameGameMode::HandleQuestionSubmitted. */
+	UFUNCTION(Server, Reliable)
+	void Server_SubmitQuestion(const FString& Text);
+
+	/** Question Time: this answerer's drawing (UjinzzaQuestionWidget) -> AjinzzaGameGameMode::HandleDrawingSubmitted. */
+	UFUNCTION(Server, Reliable)
+	void Server_SubmitDrawing(const FJinzzaDrawing& Drawing);
+
+	/** Question Time reveal: Answerer's drawing, sent to everyone as their board flips round. Stored on their
+	 * AjinzzaPartyPlayerState, where the in-world board picks it up. */
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveAnswer(APlayerState* Answerer, const FJinzzaDrawing& Drawing);
+
 	/** Judge ballot (UjinzzaVoteWidget) -> AjinzzaGameGameMode::HandleVote. */
 	UFUNCTION(Server, Reliable)
 	void Server_CastVote(APlayerState* Candidate);
@@ -61,6 +76,14 @@ public:
 	/** Local: called once by UjinzzaLoadingScreenSubsystem when this player has loaded the match (level,
 	 * preload list, own pawn) - tells the server, which starts the round once everyone has. */
 	void ReportLoadComplete();
+
+	/** Server -> this player only: they were the Rank-th (1-based) to finish loading the match. Never
+	 * broadcast - UserN numbers follow load order, so others' ranks would give the aliases away. */
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveLoadRank(int32 Rank);
+
+	/** Local: this player's load rank for the loading screen, 0 until the server has answered. */
+	int32 GetLoadRank() const { return LoadRank; }
 
 	/** Widget class to show. Defaults to UjinzzaGameEndWidget if left unset (WBP_GameEnd if it exists, else the raw C++ class). */
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -81,6 +104,10 @@ protected:
 	/** Back to the cursor-visible game-and-UI mode BeginPlay sets up for the End Game overlay. */
 	virtual void RestoreGameplayInputMode() override;
 
+	/** The real match's extras: the host's End Game overlay and the match music. AjinzzaTestPlayerController
+	 * (Lvl_test) turns them off - it plays like the rest of the test level, no cursor. */
+	virtual bool UsesMatchExtras() const { return true; }
+
 private:
 	UFUNCTION(Server, Reliable)
 	void Server_ReportLoaded();
@@ -89,11 +116,24 @@ private:
 	 * through TurnCamera; any open chat line of a non-speaker is closed. */
 	void UpdateSpeakTurn();
 
+	/** Local: nobody moves during a speaking turn or Question Time (seated players can still look around -
+	 * AjinzzaCharacter keeps their body facing the seat). Re-asserted every frame - a possession
+	 * (ClientRestart) resets the engine's ignore-input counters. */
+	void UpdateInputLocks();
+
+	/** Local: shows the cursor while the ask box / drawing screen / ballot needs it, and puts input back the
+	 * way this level plays afterwards. (In the match the cursor is always on, so this only matters in Lvl_test.) */
+	void UpdateUICursor();
+	bool bUICursorWanted = false;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UjinzzaSpeakTurnWidget> SpeakTurnWidget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UjinzzaVoteWidget> VoteWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UjinzzaQuestionWidget> QuestionWidget;
 
 	/** Local-only camera the audience watches the speaker through (never replicated). */
 	UPROPERTY(Transient)
@@ -102,7 +142,9 @@ private:
 	int32 AppliedTurnSerial = 0;
 	bool bAppliedAsSpeaker = false;
 	bool bLoadReported = false;
+	int32 LoadRank = 0;
 	bool bTurnMovementLocked = false;
+	bool bWasQuestionTime = false;
 	bool bWatchingTurnCamera = false;
 
 	UPROPERTY()

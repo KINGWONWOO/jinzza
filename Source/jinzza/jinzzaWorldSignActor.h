@@ -31,9 +31,8 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Sign")
 	FText SignText;
 
-	/** Widget class to use - see UjinzzaWorldSignWidget. Left unset until a Widget Blueprint (e.g.
-	 * WBP_WorldSign) exists, same "wire content later" pattern as AjinzzaInteractableProp's
-	 * InteractionPromptWidgetClass. */
+	/** Widget class to use - see UjinzzaWorldSignWidget. Defaults to the C++ class itself, which builds its
+	 * own sticker-style sign; point it at a Widget Blueprint subclass for a hand-made layout. */
 	UPROPERTY(EditAnywhere, Category = "Sign")
 	TSubclassOf<UjinzzaWorldSignWidget> SignWidgetClass;
 

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
 #include "jinzzaRoundTypes.h"
+#include "jinzzaQuestionTypes.h"
 #include "jinzzaPartyPlayerState.generated.h"
 
 DECLARE_MULTICAST_DELEGATE(FOnJinzzaDisguiseChanged);
@@ -29,8 +30,8 @@ public:
 	EJinzzaPartyRole ServerRole = EJinzzaPartyRole::None;
 
 	/**
-	 * Name for nameplates and chat. In the match every candidate (Real One and Imitators alike, in random
-	 * order) is "User1".."UserN" and the Judge is "Judge", so names never give a role away - see
+	 * Name for nameplates and chat. In the match every candidate (Real One and Imitators alike, numbered
+	 * by who finished loading the match first) is "User1".."UserN" and the Judge is "Judge", so names never give a role away - see
 	 * AjinzzaGameGameMode::AssignDisplayAliases. Outside the match (no alias) it's the player's nickname.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Party")
@@ -79,6 +80,28 @@ public:
 	 */
 	FOnJinzzaDisguiseChanged OnDisguiseChanged;
 
+	/**
+	 * Local (every machine): this player's Question Time answer, once the server has revealed it
+	 * (AjinzzaGamePlayerController::Client_ReceiveAnswer). Not replicated - the drawing only ever travels
+	 * at reveal time. The revision changes with every new drawing so the in-world board can redraw.
+	 */
+	const FJinzzaDrawing& GetLocalRevealedDrawing() const { return LocalRevealedDrawing; }
+	bool HasLocalRevealedDrawing() const { return bHasLocalRevealedDrawing; }
+	int32 GetLocalRevealedDrawingRevision() const { return LocalRevealedDrawingRevision; }
+	void SetLocalRevealedDrawing(const FJinzzaDrawing& Drawing)
+	{
+		LocalRevealedDrawing = Drawing;
+		bHasLocalRevealedDrawing = true;
+		++LocalRevealedDrawingRevision;
+	}
+	/** Forget last cycle's answer, so a board that flips before the new one arrives shows blank paper, not the old drawing. */
+	void ClearLocalRevealedDrawing()
+	{
+		LocalRevealedDrawing = FJinzzaDrawing();
+		bHasLocalRevealedDrawing = false;
+		++LocalRevealedDrawingRevision;
+	}
+
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -97,4 +120,8 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_DisguiseChanged)
 	EJinzzaVoiceFilter VoiceFilter = EJinzzaVoiceFilter::None;
+
+	FJinzzaDrawing LocalRevealedDrawing;
+	bool bHasLocalRevealedDrawing = false;
+	int32 LocalRevealedDrawingRevision = 0;
 };

@@ -78,7 +78,8 @@ void UjinzzaVoteWidget::RebuildButtons(const TArray<APlayerState*>& Candidates)
 
 	for (APlayerState* Candidate : Candidates)
 	{
-		UButton* Button = JinzzaUI::MakeStickerButton(WidgetTree, NAME_None,
+		// Unique name: MakeStickerButton names the label "<Name>_Label", so NAME_None would collide on "None_Label".
+		UButton* Button = JinzzaUI::MakeStickerButton(WidgetTree, MakeUniqueObjectName(WidgetTree, UButton::StaticClass(), TEXT("VoteButton")),
 			FText::FromString(AjinzzaPartyPlayerState::GetDisplayNameFor(Candidate)), JinzzaUI::Sticker_Coral, 22.f);
 		JinzzaUI::AddSpaced(ButtonList, Button, ShownCandidates.Num() == 0 ? 0.f : 8.f);
 

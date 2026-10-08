@@ -3974,7 +3974,10 @@ spotlight teleport (everyone just went to Zone.SelfIntro PlayerStarts round-robi
 no mic/movement restrictions. No vote, no final argument; EliminateToGhost had no caller.
 NEW (AjinzzaGameGameMode turn + vote system, replicated through AjinzzaGameGameState):
 - Speaking turns (FJinzzaSpeakTurn: kind, speaker, end time, n/N, camera transform, serial):
-  * Self-introduction: living candidates in User1..UserN order, 20 s each; phase ends right after
+  * Self-introduction: living candidates in User1..UserN order, 20 s each (2026-10-08: UserN numbers
+    = order players finished loading Lvl_Game, fastest = User1, was random);
+    Loading screen shows ONLY your own rank ("Waiting for other players (4/6) - you finished
+    loading 3rd of 6", via owner-only Client_ReceiveLoadRank) - a full list would expose who is UserN. phase ends right after
     the last one. Speaker who leaves -> next speaker immediately.
   * Speaker is teleported to an actor tagged "Zone.SelfIntro.Spotlight" (final argument:
     "Zone.Evaluation.Spotlight") and turned with it; put back where they stood afterwards.
@@ -3985,8 +3988,8 @@ NEW (AjinzzaGameGameMode turn + vote system, replicated through AjinzzaGameGameS
   * Nobody can move during a turn (SetIgnoreMoveInput). Only the speaker can talk: non-speakers
     stop transmitting AND every listener mutes non-speakers (UjinzzaProximityVoiceComponent).
     Only the speaker can chat; their lines go to everyone as speech bubbles
-    (UjinzzaSpeakTurnWidget: speaker's lines on the LEFT for everyone else, your own on the RIGHT,
-    cleared when the turn ends) instead of the hand-held board. Top banner shows whose turn,
+    (UjinzzaSpeakTurnWidget: lines ALTERNATE left/right screen edges for everyone - changed
+    2026-10-08 on user request; own lines yellow, others white + name; cleared when the turn ends) instead of the hand-held board. Top banner shows whose turn,
     n/N and seconds left.
 - Judge vote, in BOTH MidEvaluation and FinalDecision (user decision 2026-10-07: Judges only vote):
   UjinzzaVoteWidget (Judge only, right side) lists living candidates; Server_CastVote ->
@@ -4018,3 +4021,63 @@ REVIEW OF TODAY'S CHANGES (2026-10-07, by Claude) - fixed:
 Known, not changed: Real One can be eliminated at mid-evaluation (the round goes on - win/lose rules
 not designed); the Real One quitting while already a ghost still sends everyone back to the lobby;
 held push-to-talk while opening chat can leave the mic on until PTT is pressed again.
+
+DONE THIS SESSION (2026-10-08, Question Time: drawn answers + split screen, by Claude)
+Question Time was only a timer before. Now AjinzzaGameGameMode runs it (state replicated as
+FJinzzaQuestionState on AjinzzaGameGameState, types in jinzzaQuestionTypes.h). User decisions: the JUDGE
+asks (typed); candidates answer by DRAWING, not text.
+- Seating: Judge first, then User1..N. Uses actors tagged "Zone.Question.Seat" if there are enough,
+  filled in the order of their "Zone.Question.Seat.<N>" tag; else a row 230 cm apart centered on the
+  Zone.Question PlayerStart, facing its way.
+  PLACED (2026-10-08) in Lvl_Game: 12 TargetPoints Z03_QuestionSeat_01..12 (folder
+  GameZones/Zone_03_Question). Seat 1 = Judge behind the podium (5000,880) facing the room; seats
+  2-12 = a 9 m arc around the Judge, 2 m apart, facing the Judge, numbered from the middle outward
+  (2 center, 3 right, 4 left, ...) so any player count stays centered. All 12 checked: clear floor,
+  no overlaps, camera line unblocked.
+  Movement off (server DisableMovement + client move input ignored), voice open the whole phase,
+  SEATED (2026-10-08, also used by the Interview seats): AjinzzaCharacter::ServerSetSeated - no jumping
+  (CanJumpInternal + DoJumpStart), body held facing the seat (bUseControllerRotationYaw off), the view
+  can still turn +/-100 deg (PlayerCameraManager yaw limits) and everyone sees the SealMesh turn half
+  of it (max 45 deg yaw / 12 deg pitch) - the "head turn", replicated via Server_SetSeatedLook,
+  chat off (the hand-held board is the answer board). A camera spot 1.9 m in front of each seat
+  (pulled in if a wall blocks it) is computed on the server and replicated.
+- Per cycle (QuestionTimeCycles, 1-3): Asking 20 s (Judge types; no Judge / nothing typed -> a stock
+  "Draw ..." question) -> Revealing 3 s (question sign drops from the top, bounces, swings, shrinks)
+  -> Answering 15 s (+0.75 s grace; ends early once everyone handed in) -> Showing 30 s (answer
+  boards flip round one by one, 0.8 s apart, then discussion). Phase cap = 68.75 s x cycles + 5 s.
+- UjinzzaQuestionWidget (every client): split screen = one live SceneCapture2D panel per seat (local
+  transient rig, captures only render while the split screen is on screen); question sign + countdown;
+  Judge's ask box; candidates get a single-person answer screen during Answering: UjinzzaSketchPad
+  (800x600 canvas, 8 markers + eraser, 3 sizes, undo, clear), countdown (red + tick last 5 s),
+  answered x/N dots, ink meter, SUBMITTED / TIME'S UP stamp, auto hand-in at 0.5 s left.
+- Drawings: client -> Server_SubmitDrawing (sanitized: <=400 strokes, <=3000 points, <=1000 points per
+  stroke because of net.MaxRepArraySize 2048); revealed with Client_ReceiveAnswer to everyone as each
+  board flips; stored client-side on AjinzzaPartyPlayerState; UjinzzaChatBoardComponent got an
+  answer-board mode (bAnswer) that shows it on the in-world board (white sketchbook page, "?" if blank).
+- Also fixed: UjinzzaVoteWidget built every candidate button with NAME_None, so their labels all got
+  the same name ("None_Label") - unique names now.
+- Sounds are TEMP placeholders (UISounds/correctanswer/WrongAnswerSound).
+- Game target compiles; needs a FULL editor build (new classes/headers, editor CLOSED). NOT TESTED at
+  runtime (needs 3+ players for a Judge). Things to check first: capture feeds look right in the
+  panels (color/alpha of SCS_FinalColorLDR into the default render target), the in-world board's
+  drawing is readable in a panel, the seat row fits the Question room, and the camera framing
+  (QuestionCameraDistance / QuestionCameraAimHeight in jinzzaGameGameMode.cpp).
+
+DONE THIS SESSION (2026-10-08, Lvl_test: solo testing of the match features, by Claude)
+- Lvl_test -> AjinzzaTestGameMode (map-prefix rule in DefaultEngine.ini, World Settings untouched):
+  the match game mode without the round + AI practice dummies (AjinzzaTestDummyController, own
+  AjinzzaPartyPlayerState) + drills started from walk-up stations (AjinzzaTestDrillKiosk):
+  self-introduction, Question Time as Judge / as Candidate, Judge vote -> final argument -> ghost, Reset.
+  Dummies talk in bubbles, ask, draw doodles (sometimes nothing), look around (head only when seated).
+- AjinzzaTestPlayerController: kiosks open in Lvl_test now (they never did - only the lobby PC polled
+  them; polling moved to AjinzzaInteractableKiosk::FindNearby, shared with the lobby) + UjinzzaTestHudWidget
+  (prompt + badge). No End Game button / match music there (AjinzzaGamePlayerController::UsesMatchExtras);
+  the cursor appears only for the drawing screen / ask box / ballot (UpdateUICursor) - also fine in the match.
+- Match game mode generalized: participants = anyone with a controller (IsPresent), not just players;
+  question/drawing submit by player state; QuestionCyclesOverride; private -> protected for the test mode.
+- AjinzzaCharacter: the prop-interaction trace only runs for human players (AI dummies are "locally
+  controlled" on the host and would pop prop prompts).
+- UjinzzaWorldSignWidget builds its own sticker look; AjinzzaWorldSignActor defaults to it (per-sign text).
+- Level (saved): corridor extended to X=14400, Section F (zones 16-18 + Reset) with TargetPoint markers
+  (folder MatchDrills), two stage discs, 5 signs, target dummies by the Bat/Stun Gun. README updated.
+- Game target compiles; needs a FULL editor build (new classes; editor CLOSED). NOT TESTED at runtime.

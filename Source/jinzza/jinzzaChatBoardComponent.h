@@ -31,6 +31,11 @@ struct FJinzzaChatBoardReplicated
 	/** Only set while Showing - nobody gets the text before it's revealed. */
 	UPROPERTY()
 	FString Text;
+
+	/** Question Time answer board: shows the owner's drawing (AjinzzaPartyPlayerState::GetLocalRevealedDrawing)
+	 * instead of text, and stays up until lowered. */
+	UPROPERTY()
+	bool bAnswer = false;
 };
 
 /**
@@ -70,6 +75,11 @@ public:
 	/** Text must already be cleaned/length-limited (AjinzzaPlayerController::Server_SendChatMessage). */
 	void ServerReveal(const FString& Text);
 
+	/** Question Time: raise the board as a sketchbook, blank side out, while its owner draws an answer. */
+	void ServerHoldUpAnswer();
+	/** Question Time: flip it round to show the answer drawing - stays up until ServerHideNow. */
+	void ServerRevealAnswer();
+
 	/** Local owner only: what they're typing, drawn on their own side of the board while Writing. */
 	void SetLocalPreviewText(const FString& Text);
 
@@ -82,7 +92,7 @@ private:
 	UFUNCTION()
 	void OnRep_Board();
 
-	void SetBoard(EJinzzaChatBoardState NewState, const FString& NewText);
+	void SetBoard(EJinzzaChatBoardState NewState, const FString& NewText, bool bInAnswer = false);
 	void ServerHide();
 	void RefreshText();
 	bool CanLocalViewerSee() const;
@@ -105,4 +115,7 @@ private:
 	float Yaw = 180.f;
 
 	FTimerHandle HideTimerHandle;
+
+	/** Last AjinzzaPartyPlayerState drawing revision pushed into the board widget (-1 = none). */
+	int32 ShownDrawingRevision = -1;
 };

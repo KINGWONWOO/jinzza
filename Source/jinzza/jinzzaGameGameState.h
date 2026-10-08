@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
 #include "jinzzaRoundTypes.h"
+#include "jinzzaQuestionTypes.h"
 #include "jinzzaGameGameState.generated.h"
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnJinzzaRoundPhaseChanged, EJinzzaRoundPhase /*NewPhase*/);
@@ -87,6 +88,14 @@ public:
 	void ServerSetSpeakTurn(const FJinzzaSpeakTurn& NewTurn);
 	void ServerSetVote(bool bOpen, EJinzzaRoundPhase Phase, double EndServerTime);
 
+	/** Question Time cycle (see FJinzzaQuestionState / AjinzzaGameGameMode's question flow). Step is None outside it. */
+	const FJinzzaQuestionState& GetQuestionState() const { return QuestionState; }
+	bool IsQuestionTimeActive() const { return QuestionState.IsActive(); }
+	float GetQuestionStepTimeRemaining() const;
+
+	/** Server-only. */
+	void ServerSetQuestionState(const FJinzzaQuestionState& NewState);
+
 	/** Match start gate (see AjinzzaGameGameMode::NotifyPlayerLoaded): true once every player has loaded
 	 * the level. Each player's loading screen stays up until then, so everyone sees the match together. */
 	bool AreAllPlayersLoaded() const { return bAllPlayersLoaded; }
@@ -136,4 +145,7 @@ private:
 
 	UPROPERTY(Replicated)
 	double VoteEndServerTime = 0.0;
+
+	UPROPERTY(Replicated)
+	FJinzzaQuestionState QuestionState;
 };

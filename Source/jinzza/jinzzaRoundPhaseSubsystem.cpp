@@ -2,6 +2,7 @@
 
 #include "jinzzaRoundPhaseSubsystem.h"
 #include "jinzzaGameGameState.h"
+#include "jinzzaGameGameMode.h"
 #include "jinzzaGameInstance.h"
 #include "jinzzaMatchSettings.h"
 #include "Engine/World.h"
@@ -137,9 +138,10 @@ float UjinzzaRoundPhaseSubsystem::GetPhaseDurationSeconds(EJinzzaRoundPhase Phas
 	case EJinzzaRoundPhase::FreeTime1:
 		return 120.f * FreeTimeMultiplier;
 	case EJinzzaRoundPhase::QuestionTime:
-		// Each cycle is (작성 20s + 답변 15s + 토론 30s) = 65s; QuestionTimeCycles (1-3, doc section 9)
-		// is now a real lobby setting - defaults to the doc's own 2-cycle (130s) example.
-		return 65.f * FMath::Clamp(GetMatchSettings().QuestionTimeCycles, 1, 3);
+		// Each cycle is (작성 20s + 답변 15s + 토론 30s) plus the question sign's drop-in and a submit grace
+		// (AjinzzaGameGameMode::QuestionCycleSeconds); QuestionTimeCycles (1-3, doc section 9) is a lobby
+		// setting. The game mode ends the phase right after the last cycle, so this is only a cap.
+		return AjinzzaGameGameMode::QuestionCycleSeconds * FMath::Clamp(GetMatchSettings().QuestionTimeCycles, 1, 3) + 5.f;
 	case EJinzzaRoundPhase::MidEvaluation:
 		return 60.f;
 	case EJinzzaRoundPhase::FreeTime2:

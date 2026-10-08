@@ -24,6 +24,15 @@
 
 namespace
 {
+	/** 1 -> "1st", 2 -> "2nd", 11 -> "11th", 23 -> "23rd". */
+	FString LoadingRankOrdinal(int32 N)
+	{
+		const int32 Tens = N % 100;
+		const TCHAR* Suffix = (Tens >= 11 && Tens <= 13) ? TEXT("th")
+			: N % 10 == 1 ? TEXT("st") : N % 10 == 2 ? TEXT("nd") : N % 10 == 3 ? TEXT("rd") : TEXT("th");
+		return FString::Printf(TEXT("%d%s"), N, Suffix);
+	}
+
 	constexpr int32 LoadingScreenZOrder = 10000;
 	constexpr double PawnWaitSeconds = 10.0;
 
@@ -400,17 +409,27 @@ void UjinzzaLoadingScreenSubsystem::TickArriving(double Now)
 	// The match waits for everybody; every other level only for this player.
 	if (const AjinzzaGameGameState* MatchState = World->GetGameState<AjinzzaGameGameState>())
 	{
+		// Only this player's own place - see AjinzzaGamePlayerController::Client_ReceiveLoadRank.
+		const AjinzzaGamePlayerController* GamePC = Cast<AjinzzaGamePlayerController>(GetGameInstance()->GetFirstLocalPlayerController(World));
+		const int32 Rank = GamePC ? GamePC->GetLoadRank() : 0;
+		const int32 Total = MatchState->GetExpectedPlayerCount();
+		const FString RankLine = Rank > 0
+			? FString::Printf(TEXT(" - you finished loading %s of %d"), *LoadingRankOrdinal(Rank), FMath::Max(Total, Rank))
+			: FString();
+
 		if (!MatchState->AreAllPlayersLoaded())
 		{
-			const int32 Total = MatchState->GetExpectedPlayerCount();
 			const int32 Loaded = FMath::Min(MatchState->GetLoadedPlayerCount(), Total);
-			StatusText = FText::FromString(FString::Printf(TEXT("Waiting for other players (%d/%d)"), Loaded, Total));
+			StatusText = FText::FromString(FString::Printf(TEXT("Waiting for other players (%d/%d)"), Loaded, Total) + RankLine);
 			Progress = Total > 0 ? TOptional<float>(float(Loaded) / float(Total)) : TOptional<float>();
 			return;
 		}
+		StatusText = FText::FromString(TEXT("Ready!") + RankLine);
 	}
-
-	StatusText = FText::FromString(TEXT("Ready!"));
+	else
+	{
+		StatusText = FText::FromString(TEXT("Ready!"));
+	}
 	Progress = 1.f;
 	if (Now - ShownTime >= UjinzzaLoadingSettings::Get()->MinimumDisplaySeconds)
 	{

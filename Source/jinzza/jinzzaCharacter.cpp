@@ -17,6 +17,7 @@
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
 #include "jinzzaGameUserSettings.h"
 #include "jinzzaDisguiseComponent.h"
 #include "jinzzaCharacterCustomizationComponent.h"
@@ -214,6 +215,19 @@ void AjinzzaCharacter::BeginPlay()
 		BoardMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(0.03f, 0.12f, 0.07f));
 	}
 
+	// The visible seal body is a Blueprint component (BP_FirstPersonCharacter's SealMesh) - turned as the
+	// "head" while seated.
+	TInlineComponentArray<UStaticMeshComponent*> MeshComponents(this);
+	for (UStaticMeshComponent* MeshComponent : MeshComponents)
+	{
+		if (MeshComponent && MeshComponent->GetFName() == TEXT("SealMesh"))
+		{
+			SealMesh = MeshComponent;
+			SealMeshBaseRotation = MeshComponent->GetRelativeRotation().Quaternion();
+			break;
+		}
+	}
+
 	if (IsLocallyControlled() && PropUsageWidgetClass)
 	{
 		if (APlayerController* PC = Cast<APlayerController>(GetController()))
@@ -232,7 +246,9 @@ void AjinzzaCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
-	if (IsLocallyControlled())
+	// Human players only - an AI pawn (Lvl_test's practice dummies) is "locally controlled" on the server too,
+	// and would pop up prop prompts on the host's screen.
+	if (IsLocallyControlled() && IsPlayerControlled())
 	{
 		UpdateInteractionFocus();
 	}
@@ -243,6 +259,7 @@ void AjinzzaCharacter::Tick(float DeltaSeconds)
 	}
 
 	UpdateFootsteps(DeltaSeconds);
+	UpdateSeatedLook(DeltaSeconds);
 }
 
 void AjinzzaCharacter::UpdateFootsteps(float DeltaSeconds)
@@ -428,7 +445,7 @@ void AjinzzaCharacter::DoAim(float Yaw, float Pitch)
 
 void AjinzzaCharacter::DoMove(float Right, float Forward)
 {
-	if (bStunned)
+	if (bStunned || bSeated)
 	{
 		return;
 	}
@@ -443,7 +460,7 @@ void AjinzzaCharacter::DoMove(float Right, float Forward)
 
 void AjinzzaCharacter::DoJumpStart()
 {
-	if (bStunned)
+	if (bStunned || bSeated)
 	{
 		return;
 	}
@@ -773,6 +790,126 @@ void AjinzzaCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 
 	DOREPLIFETIME(AjinzzaCharacter, bStunned);
 	DOREPLIFETIME(AjinzzaCharacter, bIsSprinting);
+	DOREPLIFETIME(AjinzzaCharacter, bSeated);
+	DOREPLIFETIME(AjinzzaCharacter, SeatYaw);
+	DOREPLIFETIME_CONDITION(AjinzzaCharacter, SeatedLookYaw, COND_SkipOwner);
+	DOREPLIFETIME_CONDITION(AjinzzaCharacter, SeatedLookPitch, COND_SkipOwner);
+}
+
+// --- Seated ---------------------------------------------------------------------------------------
+
+namespace
+{
+	/** How far a seated player can turn their view either side of the seat's facing. */
+	constexpr float SeatedViewYawRange = 100.f;
+	/** How much of the view turn the seal body shows (it has no neck), and the most it ever turns. */
+	constexpr float SeatedBodyYawShare = 0.5f;
+	constexpr float SeatedBodyYawMax = 45.f;
+	constexpr float SeatedBodyPitchShare = 0.25f;
+	constexpr float SeatedBodyPitchMax = 12.f;
+	constexpr float SeatedLookSendInterval = 0.1f;
+}
+
+bool AjinzzaCharacter::CanJumpInternal_Implementation() const
+{
+	return !bSeated && Super::CanJumpInternal_Implementation();
+}
+
+void AjinzzaCharacter::ServerSetSeated(bool bInSeated, float InSeatYaw)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+	bSeated = bInSeated;
+	SeatYaw = FRotator::NormalizeAxis(InSeatYaw);
+	SeatedLookYaw = 0;
+	SeatedLookPitch = 0;
+	if (bSeated)
+	{
+		StopJumping();
+	}
+	// The listen server's own copy never gets a RepNotify.
+	ApplySeated();
+}
+
+void AjinzzaCharacter::OnRep_Seated()
+{
+	ApplySeated();
+}
+
+void AjinzzaCharacter::ApplySeated()
+{
+	// Seated: the body stays put facing the seat, the view (camera = control rotation) turns on its own.
+	bUseControllerRotationYaw = !bSeated;
+	if (bSeated)
+	{
+		SetActorRotation(FRotator(0.f, SeatYaw, 0.f));
+	}
+
+	if (IsLocallyControlled())
+	{
+		if (const APlayerController* PC = Cast<APlayerController>(GetController()); PC && PC->PlayerCameraManager)
+		{
+			// Back to the engine defaults (no limit) once standing again.
+			PC->PlayerCameraManager->ViewYawMin = bSeated ? SeatYaw - SeatedViewYawRange : 0.f;
+			PC->PlayerCameraManager->ViewYawMax = bSeated ? SeatYaw + SeatedViewYawRange : 359.999f;
+		}
+	}
+}
+
+void AjinzzaCharacter::UpdateSeatedLook(float DeltaSeconds)
+{
+	if (!bSeated && SealLook.IsNearlyZero(0.05f))
+	{
+		return;
+	}
+
+	FRotator Target = FRotator::ZeroRotator;
+	if (bSeated)
+	{
+		if (IsLocallyControlled() && GetController())
+		{
+			// Owner: where am I looking, relative to the seat? Report it (throttled) for everyone else.
+			const FRotator View = GetController()->GetControlRotation();
+			const int8 Yaw = static_cast<int8>(FMath::Clamp(FMath::RoundToInt(FRotator::NormalizeAxis(View.Yaw - SeatYaw)), -127, 127));
+			const int8 Pitch = static_cast<int8>(FMath::Clamp(FMath::RoundToInt(FRotator::NormalizeAxis(View.Pitch)), -90, 90));
+			SeatedLookSendCooldown -= DeltaSeconds;
+			if ((Yaw != SeatedLookYaw || Pitch != SeatedLookPitch) && SeatedLookSendCooldown <= 0.f)
+			{
+				SeatedLookYaw = Yaw;
+				SeatedLookPitch = Pitch;
+				SeatedLookSendCooldown = SeatedLookSendInterval;
+				if (!HasAuthority())
+				{
+					Server_SetSeatedLook(Yaw, Pitch);
+				}
+			}
+			Target = FRotator(Pitch, Yaw, 0.f);
+		}
+		else
+		{
+			Target = FRotator(SeatedLookPitch, SeatedLookYaw, 0.f);
+		}
+		Target.Yaw = FMath::Clamp(Target.Yaw * SeatedBodyYawShare, -SeatedBodyYawMax, SeatedBodyYawMax);
+		Target.Pitch = FMath::Clamp(Target.Pitch * SeatedBodyPitchShare, -SeatedBodyPitchMax, SeatedBodyPitchMax);
+	}
+
+	SealLook = FMath::RInterpTo(SealLook, Target, DeltaSeconds, 8.f);
+	if (USceneComponent* Body = SealMesh.Get())
+	{
+		// Turn in capsule space on top of the mesh's own rest rotation (its pivot sits at the capsule's feet).
+		Body->SetRelativeRotation(SealLook.Quaternion() * SealMeshBaseRotation);
+	}
+}
+
+void AjinzzaCharacter::Server_SetSeatedLook_Implementation(int8 Yaw, int8 Pitch)
+{
+	if (bSeated)
+	{
+		SeatedLookYaw = static_cast<int8>(FMath::Clamp<int32>(Yaw, -127, 127));
+		SeatedLookPitch = static_cast<int8>(FMath::Clamp<int32>(Pitch, -90, 90));
+	}
 }
 
 void AjinzzaCharacter::Stun(float Duration)

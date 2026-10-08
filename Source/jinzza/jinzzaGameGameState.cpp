@@ -17,6 +17,7 @@ void AjinzzaGameGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME(AjinzzaGameGameState, bVoteOpen);
 	DOREPLIFETIME(AjinzzaGameGameState, VotePhase);
 	DOREPLIFETIME(AjinzzaGameGameState, VoteEndServerTime);
+	DOREPLIFETIME(AjinzzaGameGameState, QuestionState);
 }
 
 float AjinzzaGameGameState::GetSpeakTurnTimeRemaining() const
@@ -27,6 +28,17 @@ float AjinzzaGameGameState::GetSpeakTurnTimeRemaining() const
 float AjinzzaGameGameState::GetVoteTimeRemaining() const
 {
 	return bVoteOpen ? FMath::Max(0.f, static_cast<float>(VoteEndServerTime - GetServerWorldTimeSeconds())) : 0.f;
+}
+
+float AjinzzaGameGameState::GetQuestionStepTimeRemaining() const
+{
+	return IsQuestionTimeActive() ? FMath::Max(0.f, static_cast<float>(QuestionState.StepEndServerTime - GetServerWorldTimeSeconds())) : 0.f;
+}
+
+void AjinzzaGameGameState::ServerSetQuestionState(const FJinzzaQuestionState& NewState)
+{
+	QuestionState = NewState;
+	ForceNetUpdate();
 }
 
 void AjinzzaGameGameState::ServerSetSpeakTurn(const FJinzzaSpeakTurn& NewTurn)

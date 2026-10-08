@@ -7,6 +7,7 @@
 #include "jinzzaInteractableKiosk.generated.h"
 
 class APlayerController;
+class APawn;
 class UUserWidget;
 class UjinzzaFaceCameraComponent;
 
@@ -36,6 +37,10 @@ public:
 
 	/** Opens this kiosk's panel locally for Interactor (a no-op for anything but the interactor's own client). */
 	virtual void Interact(APlayerController* Interactor) PURE_VIRTUAL(AjinzzaInteractableKiosk::Interact, );
+
+	/** The kiosk Pawn is close enough to use (closest one wins), or null. Shared by every controller that lets
+	 * players walk up to kiosks (AjinzzaLobbyPlayerController, AjinzzaTestPlayerController). */
+	static AjinzzaInteractableKiosk* FindNearby(const APawn* Pawn);
 
 protected:
 	/**

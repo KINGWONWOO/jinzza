@@ -15,6 +15,9 @@ AjinzzaWorldSignActor::AjinzzaWorldSignActor()
 	SignWidgetComponent->SetPivot(FVector2D(0.5f, 0.5f));
 	SignWidgetComponent->SetTwoSided(false);
 	SignWidgetComponent->SetBlendMode(EWidgetBlendMode::Transparent);
+	SignWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	SignWidgetClass = UjinzzaWorldSignWidget::StaticClass();
 }
 
 void AjinzzaWorldSignActor::OnConstruction(const FTransform& Transform)

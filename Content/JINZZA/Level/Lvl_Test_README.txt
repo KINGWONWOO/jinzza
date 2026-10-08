@@ -6,6 +6,50 @@ Walk forward from the PlayerStart through the numbered zones; each one is self-c
 and has an in-world sign explaining what to try and which key does what. All in-level
 signage is now in Korean (2026-09-08).
 
+UPDATE 2026-10-08 - solo testing of match features (read this first)
+--------------------------------------------------------------------
+Game mode: Lvl_test now runs on AjinzzaTestGameMode (C++), chosen by a map-prefix rule in
+Config/DefaultEngine.ini (+GameModeMapPrefixes Name="Lvl_test") - the level's World Settings
+override is still None. It is the match game mode (AjinzzaGameGameMode) without the round, so
+the match HUD works here: speaking turns + speech bubbles, Question Time, the Judge's ballot.
+Player controller: AjinzzaTestPlayerController - kiosks finally open here (zones 9-13 used to be
+dead in this level: only the lobby's controller looked for nearby kiosks). Walk up to any kiosk
+or station, the key prompt appears bottom-center, press it. A "TEST MAP" badge sits top-left.
+No cursor in normal play; it appears by itself for panels, the drawing screen and the ballot.
+
+Practice dummies (AjinzzaTestDummyController): seals run by AI, each with its own player state,
+so the match code treats them as players (name tag, board, seat, speaking turn, vote target).
+They glance around on their own (standing: body turns a little; seated: head only). Spawned at
+play time on TargetPoints tagged "Test.Dummy" + "Test.Dummy.<N>" (4, the audience row in
+Section F) and "Test.TargetDummy" (2, in the corridor by the Bat (X=300) and Stun Gun (X=3800)
+zones - something to hit/zap without a second player).
+
+Section F - 매치 기능 체험 (Match drills), X 10450-14400 (the corridor was extended 4200 east):
+Each station is a pedestal with a colored button and a floating title (AjinzzaTestDrillKiosk,
+spawned on TargetPoints tagged "Test.Drill.<DrillName>" - folder MatchDrills/Stations). Press
+it to start; press again to restart. When a drill ends the dummies teleport back to their row.
+ 16. 자기소개 (Self-introduction, yellow, X=10800) - Dummy A takes the spotlight on the stage
+     disc and talks (bubbles on alternating sides), your view switches to the turn camera; then
+     it's your turn on the spotlight: press Enter and type - your lines become bubbles.
+ 17. 질문 타임 (Question Time, X=11800 blue = as Judge, X=12800 green = as Candidate) - everyone is
+     seated (7 seat markers, Judge behind the arc's center), can't move or jump, mouse turns the
+     head only. Split screen of every seat's camera. Judge: type the question (Enter). Candidate:
+     Dummy A is the Judge and asks after a few seconds. The question sign drops in, candidates
+     draw (dummies hand in doodles at random times, sometimes nothing -> "?"), then the boards
+     flip round one by one in the split screen. One cycle per drill.
+ 18. 투표 (Judge Vote, pink, X=13150) - you're the Judge: pick a dummy on the ballot (right side),
+     it gives a final argument on the evaluation stage (bubbles), then turns into a ghost. Ghosts
+     stay ghosts until the next drill / Reset.
+     초기화 (Reset, red, X=14050) - stops whatever is running, revives ghosts, dummies go home.
+Markers used (same tags as Lvl_Game): Zone.SelfIntro.Spotlight/.Camera,
+Zone.Evaluation.Spotlight/.Camera, Zone.Question.Seat + Zone.Question.Seat.<N>.
+New signs (Sign_16..20) are AjinzzaWorldSignActor instances: per-sign text in the SignText
+property (no per-sign widget class needed any more - the C++ widget builds its own look).
+
+Not testable solo here: the loading-screen load order / UserN numbering (needs a real match
+with several players), and the Lvl_Game seat layout itself.
+NEEDS a full editor build (editor closed) before any of this exists in the editor/PIE.
+
 The level is divided into 5 sections, each with its own header sign on the corridor
 centerline (Y=0, facing back toward -X like the welcome sign):
 
@@ -141,6 +185,7 @@ text until either re-imported as an Offline bitmap font or their C++ Label compo
 swapped for a WidgetComponent (deferred - see [[deferred-features]]).
 
 Convention going forward: whenever a new testable feature is added to the project, add a
-new numbered zone here for it (prop/actor + a TextRenderActor sign in Korean, same pattern
-as above), assign it to one of the 5 sections (or add a new section), and keep this file in
-sync - rather than leaving it untested outside of code review.
+new numbered zone here for it (prop/actor + an AjinzzaWorldSignActor sign in Korean), assign it
+to a section (A-F, or add one), and keep this file in sync - rather than leaving it untested
+outside of code review. A match-only feature gets a drill in AjinzzaTestGameMode + a station
+marker in Section F, so it can be tried alone with the practice dummies.

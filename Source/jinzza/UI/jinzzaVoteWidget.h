@@ -44,6 +44,9 @@ public:
 
 	void Refresh();
 
+	/** The ballot is on screen (a vote is open and this player is a Judge). */
+	bool IsShowing() const { return bWasOpen; }
+
 	void Vote(APlayerState* Candidate);
 
 private:

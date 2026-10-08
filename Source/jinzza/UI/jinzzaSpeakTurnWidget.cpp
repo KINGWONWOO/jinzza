@@ -18,7 +18,7 @@
 
 namespace
 {
-	constexpr int32 MaxBubblesPerSide = 5;
+	constexpr int32 MaxBubbles = 8;
 	constexpr float BubbleMaxWidth = 440.f;
 }
 
@@ -47,20 +47,14 @@ void UjinzzaSpeakTurnWidget::BuildWidgetTree()
 		BannerSlot->SetPadding(FMargin(0.f, 28.f, 0.f, 0.f));
 	}
 
-	// Bubble columns on the left and right edges, vertically centered.
-	auto MakeColumn = [&](FName Name, EHorizontalAlignment Side) -> UVerticalBox*
+	// Bubble feed spanning the screen, vertically centered; bubbles alternate between its edges.
+	Bubbles = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Bubbles"));
+	if (UOverlaySlot* FeedSlot = Root->AddChildToOverlay(Bubbles))
 	{
-		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), Name);
-		if (UOverlaySlot* ColumnSlot = Root->AddChildToOverlay(Column))
-		{
-			ColumnSlot->SetHorizontalAlignment(Side);
-			ColumnSlot->SetVerticalAlignment(VAlign_Center);
-			ColumnSlot->SetPadding(FMargin(40.f, 0.f));
-		}
-		return Column;
-	};
-	LeftBubbles = MakeColumn(TEXT("LeftBubbles"), HAlign_Left);
-	RightBubbles = MakeColumn(TEXT("RightBubbles"), HAlign_Right);
+		FeedSlot->SetHorizontalAlignment(HAlign_Fill);
+		FeedSlot->SetVerticalAlignment(VAlign_Center);
+		FeedSlot->SetPadding(FMargin(40.f, 0.f));
+	}
 }
 
 void UjinzzaSpeakTurnWidget::NativeOnInitialized()
@@ -75,7 +69,7 @@ void UjinzzaSpeakTurnWidget::NativeOnInitialized()
 	}
 }
 
-UWidget* UjinzzaSpeakTurnWidget::MakeBubble(const FString& SpeakerName, const FString& Text, bool bOwn)
+UWidget* UjinzzaSpeakTurnWidget::MakeBubble(const FString& SpeakerName, const FString& Text, bool bOwn, bool bLeft)
 {
 	// Rounded bubble: white for the speaker as others see them, yellow for your own lines.
 	UVerticalBox* Bubble = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
@@ -87,7 +81,8 @@ UWidget* UjinzzaSpeakTurnWidget::MakeBubble(const FString& SpeakerName, const FS
 		Name->SetShadowColorAndOpacity(FLinearColor(0.f, 0.f, 0.f, 0.85f));
 		if (UVerticalBoxSlot* NameSlot = Bubble->AddChildToVerticalBox(Name))
 		{
-			NameSlot->SetPadding(FMargin(14.f, 0.f, 0.f, 4.f));
+			NameSlot->SetHorizontalAlignment(bLeft ? HAlign_Left : HAlign_Right);
+			NameSlot->SetPadding(FMargin(14.f, 0.f, 14.f, 4.f));
 		}
 	}
 
@@ -108,40 +103,38 @@ UWidget* UjinzzaSpeakTurnWidget::MakeBubble(const FString& SpeakerName, const FS
 
 	if (UVerticalBoxSlot* BodySlot = Bubble->AddChildToVerticalBox(Body))
 	{
-		BodySlot->SetHorizontalAlignment(bOwn ? HAlign_Right : HAlign_Left);
+		BodySlot->SetHorizontalAlignment(bLeft ? HAlign_Left : HAlign_Right);
 	}
 	return Bubble;
 }
 
 void UjinzzaSpeakTurnWidget::AddBubble(const FString& SpeakerName, const FString& Text, bool bOwn)
 {
-	UVerticalBox* Column = bOwn ? RightBubbles : LeftBubbles;
-	if (!Column || !WidgetTree)
+	if (!Bubbles || !WidgetTree)
 	{
 		return;
 	}
 
-	if (UVerticalBoxSlot* BubbleSlot = Column->AddChildToVerticalBox(MakeBubble(SpeakerName, Text, bOwn)))
+	const bool bLeft = bNextBubbleLeft;
+	bNextBubbleLeft = !bNextBubbleLeft;
+	if (UVerticalBoxSlot* BubbleSlot = Bubbles->AddChildToVerticalBox(MakeBubble(SpeakerName, Text, bOwn, bLeft)))
 	{
-		BubbleSlot->SetHorizontalAlignment(bOwn ? HAlign_Right : HAlign_Left);
+		BubbleSlot->SetHorizontalAlignment(bLeft ? HAlign_Left : HAlign_Right);
 		BubbleSlot->SetPadding(FMargin(0.f, 6.f));
 	}
-	while (Column->GetChildrenCount() > MaxBubblesPerSide)
+	while (Bubbles->GetChildrenCount() > MaxBubbles)
 	{
-		Column->RemoveChildAt(0);
+		Bubbles->RemoveChildAt(0);
 	}
 }
 
 void UjinzzaSpeakTurnWidget::ClearBubbles()
 {
-	if (LeftBubbles)
+	if (Bubbles)
 	{
-		LeftBubbles->ClearChildren();
+		Bubbles->ClearChildren();
 	}
-	if (RightBubbles)
-	{
-		RightBubbles->ClearChildren();
-	}
+	bNextBubbleLeft = true;
 }
 
 void UjinzzaSpeakTurnWidget::Refresh()

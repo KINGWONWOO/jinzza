@@ -22,7 +22,8 @@ class UTextBlock;
  * UMG-authored: add a single UTextBlock named exactly "SignText" to the Widget Blueprint (e.g.
  * WBP_WorldSign) that subclasses this, with its Font set to SacheonUju-Regular_Font and
  * Justification centered. SignText is BindWidgetOptional so this class still compiles before
- * that layout exists.
+ * that layout exists. Used as-is (no Widget Blueprint), it builds its own sticker-style sign: white
+ * Korean-capable text on a black rounded panel with a white outline (see BuildWidgetTree).
  */
 UCLASS()
 class JINZZA_API UjinzzaWorldSignWidget : public UUserWidget
@@ -30,10 +31,14 @@ class JINZZA_API UjinzzaWorldSignWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	virtual void NativeOnInitialized() override;
+
 	UFUNCTION(BlueprintCallable, Category = "Sign")
 	void SetSignText(const FText& Text);
 
 private:
+	void BuildWidgetTree();
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> SignText;
 };

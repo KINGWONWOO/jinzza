@@ -57,10 +57,11 @@ void UjinzzaChatBoardComponent::GetLifetimeReplicatedProps(TArray<FLifetimePrope
 
 // --- Server ---------------------------------------------------------------------------------------
 
-void UjinzzaChatBoardComponent::SetBoard(EJinzzaChatBoardState NewState, const FString& NewText)
+void UjinzzaChatBoardComponent::SetBoard(EJinzzaChatBoardState NewState, const FString& NewText, bool bInAnswer)
 {
 	Board.State = NewState;
 	Board.Text = NewText;
+	Board.bAnswer = bInAnswer;
 	// The listen server's own copy never gets a RepNotify.
 	OnRep_Board();
 }
@@ -100,6 +101,26 @@ void UjinzzaChatBoardComponent::ServerReveal(const FString& Text)
 	}
 	SetBoard(EJinzzaChatBoardState::Showing, Text);
 	GetWorld()->GetTimerManager().SetTimer(HideTimerHandle, this, &UjinzzaChatBoardComponent::ServerHide, DisplaySecondsFor(Text), false);
+}
+
+void UjinzzaChatBoardComponent::ServerHoldUpAnswer()
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	GetWorld()->GetTimerManager().ClearTimer(HideTimerHandle);
+	SetBoard(EJinzzaChatBoardState::Writing, FString(), true);
+}
+
+void UjinzzaChatBoardComponent::ServerRevealAnswer()
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	GetWorld()->GetTimerManager().ClearTimer(HideTimerHandle);
+	SetBoard(EJinzzaChatBoardState::Showing, FString(), true);
 }
 
 void UjinzzaChatBoardComponent::ServerHide()
@@ -142,6 +163,20 @@ void UjinzzaChatBoardComponent::RefreshText()
 
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
 	const bool bOwnerView = OwnerPawn && OwnerPawn->IsLocallyControlled();
+
+	// Answer board: a sketchbook page - the drawing once revealed, blank paper while it's being drawn.
+	if (Board.bAnswer)
+	{
+		const AjinzzaPartyPlayerState* OwnerState = OwnerPawn ? OwnerPawn->GetPlayerState<AjinzzaPartyPlayerState>() : nullptr;
+		const bool bShowDrawing = Board.State == EJinzzaChatBoardState::Showing && OwnerState && OwnerState->HasLocalRevealedDrawing();
+		Widget->SetBoardText(FString());
+		Widget->SetSketch(true, bShowDrawing ? &OwnerState->GetLocalRevealedDrawing() : nullptr);
+		ShownDrawingRevision = bShowDrawing ? OwnerState->GetLocalRevealedDrawingRevision() : -1;
+		return;
+	}
+	Widget->SetSketch(false, nullptr);
+	ShownDrawingRevision = -1;
+
 	if (Board.State == EJinzzaChatBoardState::Showing)
 	{
 		Widget->SetBoardText(Board.Text);
@@ -177,6 +212,17 @@ void UjinzzaChatBoardComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	if (!Pivot)
 	{
 		return;
+	}
+
+	// The answer drawing arrives by RPC, possibly after the board flipped - pick it up when it does.
+	if (Board.bAnswer && Board.State == EJinzzaChatBoardState::Showing)
+	{
+		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+		const AjinzzaPartyPlayerState* OwnerState = OwnerPawn ? OwnerPawn->GetPlayerState<AjinzzaPartyPlayerState>() : nullptr;
+		if (OwnerState && OwnerState->GetLocalRevealedDrawingRevision() != ShownDrawingRevision)
+		{
+			RefreshText();
+		}
 	}
 
 	const bool bWantUp = Board.State != EJinzzaChatBoardState::Hidden;

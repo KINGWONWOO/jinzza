@@ -8,6 +8,7 @@
 #include "jinzzaPartyPlayerState.h"
 #include "jinzzaSpeakTurnWidget.h"
 #include "jinzzaVoteWidget.h"
+#include "jinzzaQuestionWidget.h"
 #include "Camera/CameraActor.h"
 #include "jinzzaLoadingScreenSubsystem.h"
 #include "Engine/GameInstance.h"
@@ -46,6 +47,30 @@ void AjinzzaGamePlayerController::Client_ReceiveTurnMessage_Implementation(APlay
 	}
 }
 
+void AjinzzaGamePlayerController::Server_SubmitQuestion_Implementation(const FString& Text)
+{
+	if (AjinzzaGameGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AjinzzaGameGameMode>() : nullptr)
+	{
+		GameMode->HandleQuestionSubmitted(this, Text);
+	}
+}
+
+void AjinzzaGamePlayerController::Server_SubmitDrawing_Implementation(const FJinzzaDrawing& Drawing)
+{
+	if (AjinzzaGameGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AjinzzaGameGameMode>() : nullptr)
+	{
+		GameMode->HandleDrawingSubmitted(this, Drawing);
+	}
+}
+
+void AjinzzaGamePlayerController::Client_ReceiveAnswer_Implementation(APlayerState* Answerer, const FJinzzaDrawing& Drawing)
+{
+	if (AjinzzaPartyPlayerState* PartyState = Cast<AjinzzaPartyPlayerState>(Answerer))
+	{
+		PartyState->SetLocalRevealedDrawing(Drawing);
+	}
+}
+
 void AjinzzaGamePlayerController::Server_CastVote_Implementation(APlayerState* Candidate)
 {
 	if (AjinzzaGameGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<AjinzzaGameGameMode>() : nullptr)
@@ -62,7 +87,9 @@ bool AjinzzaGamePlayerController::IsVoiceBlocked() const
 
 bool AjinzzaGamePlayerController::CanUseChat() const
 {
-	return !IsVoiceBlocked();
+	// Question Time: the hand-held board is the answer board, and everyone can just talk.
+	const AjinzzaGameGameState* MatchState = GetWorld() ? GetWorld()->GetGameState<AjinzzaGameGameState>() : nullptr;
+	return !IsVoiceBlocked() && !(MatchState && MatchState->IsQuestionTimeActive());
 }
 
 bool AjinzzaGamePlayerController::ShouldUseChatBoard() const
@@ -107,10 +134,16 @@ void AjinzzaGamePlayerController::PlayerTick(float DeltaTime)
 	}
 
 	UpdateSpeakTurn();
+	UpdateInputLocks();
 	if (SpeakTurnWidget)
 	{
 		SpeakTurnWidget->Refresh();
 	}
+	if (QuestionWidget)
+	{
+		QuestionWidget->Refresh(DeltaTime);
+	}
+	UpdateUICursor();
 	if (VoteWidget)
 	{
 		VoteWidget->Refresh();
@@ -128,18 +161,6 @@ void AjinzzaGamePlayerController::UpdateSpeakTurn()
 	const FJinzzaSpeakTurn& Turn = MatchState->GetSpeakTurn();
 	const bool bActive = MatchState->IsSpeakTurnActive();
 	const bool bSpeaker = MatchState->IsTurnSpeaker(PlayerState);
-
-	// Nobody moves during a turn (the speaker stays on the spotlight). Re-asserted every frame: a possession
-	// (ClientRestart) resets the engine's ignore-input counters.
-	if (bActive != bTurnMovementLocked)
-	{
-		bTurnMovementLocked = bActive;
-		SetIgnoreMoveInput(bActive);
-	}
-	else if (bActive && !IsMoveInputIgnored())
-	{
-		SetIgnoreMoveInput(true);
-	}
 
 	// Also re-applied if we turn out to be the speaker after all (speaker reference resolved late).
 	if (Turn.Serial == AppliedTurnSerial && bSpeaker == bAppliedAsSpeaker)
@@ -179,6 +200,54 @@ void AjinzzaGamePlayerController::UpdateSpeakTurn()
 	}
 }
 
+void AjinzzaGamePlayerController::UpdateInputLocks()
+{
+	const AjinzzaGameGameState* MatchState = GetWorld() ? GetWorld()->GetGameState<AjinzzaGameGameState>() : nullptr;
+	const bool bQuestion = MatchState && MatchState->IsQuestionTimeActive();
+	const bool bLockMove = bQuestion || (MatchState && MatchState->IsSpeakTurnActive());
+
+	if (bLockMove != bTurnMovementLocked)
+	{
+		bTurnMovementLocked = bLockMove;
+		SetIgnoreMoveInput(bLockMove);
+	}
+	else if (bLockMove && !IsMoveInputIgnored())
+	{
+		SetIgnoreMoveInput(true);
+	}
+
+	if (bQuestion && !bWasQuestionTime)
+	{
+		// The board is the answer board now.
+		CancelChatInput();
+	}
+	bWasQuestionTime = bQuestion;
+}
+
+void AjinzzaGamePlayerController::UpdateUICursor()
+{
+	const bool bWant = (QuestionWidget && QuestionWidget->WantsCursor()) || (VoteWidget && VoteWidget->IsShowing());
+	if (bWant == bUICursorWanted)
+	{
+		return;
+	}
+	bUICursorWanted = bWant;
+
+	if (!bWant)
+	{
+		RestoreGameplayInputMode();
+	}
+	else if (!bShowMouseCursor)
+	{
+		// Keep whatever already has keyboard focus (the ask box focuses itself).
+		FInputModeGameAndUI InputMode;
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetHideCursorDuringCapture(false);
+		SetInputMode(InputMode);
+		bShowMouseCursor = true;
+	}
+}
+
 void AjinzzaGamePlayerController::ReportLoadComplete()
 {
 	if (!bLoadReported)
@@ -186,6 +255,11 @@ void AjinzzaGamePlayerController::ReportLoadComplete()
 		bLoadReported = true;
 		Server_ReportLoaded();
 	}
+}
+
+void AjinzzaGamePlayerController::Client_ReceiveLoadRank_Implementation(int32 Rank)
+{
+	LoadRank = Rank;
 }
 
 void AjinzzaGamePlayerController::Server_ReportLoaded_Implementation()
@@ -211,13 +285,13 @@ void AjinzzaGamePlayerController::BeginPlay()
 		WidgetClass = UjinzzaGameEndWidget::StaticClass();
 	}
 
-	GameEndWidget = CreateWidget<UUserWidget>(this, WidgetClass);
+	GameEndWidget = UsesMatchExtras() ? CreateWidget<UUserWidget>(this, WidgetClass) : nullptr;
 	if (GameEndWidget)
 	{
 		GameEndWidget->AddToViewport();
 		GameEndWidget->SetIsFocusable(true);
-		RestoreGameplayInputMode();
 	}
+	RestoreGameplayInputMode();
 
 	// Turn banner + speech bubbles (everyone) and the Judge's ballot (shows itself only for the Judge).
 	SpeakTurnWidget = CreateWidget<UjinzzaSpeakTurnWidget>(this, UjinzzaSpeakTurnWidget::StaticClass());
@@ -230,10 +304,17 @@ void AjinzzaGamePlayerController::BeginPlay()
 	{
 		VoteWidget->AddToViewport(35);
 	}
+	// Question Time: split screen of every seat, the question sign, and the drawing screen. Below everything
+	// else, so the host's End Game button and the turn banner/ballot stay on top.
+	QuestionWidget = CreateWidget<UjinzzaQuestionWidget>(this, UjinzzaQuestionWidget::StaticClass());
+	if (QuestionWidget)
+	{
+		QuestionWidget->AddToViewport(-1);
+	}
 
 	// TEMP placeholder in-round BGM (see UjinzzaMainMenuWidget/UjinzzaLobbyWidget for the same
 	// pattern) - swap QuizGameBgm for a real match theme later.
-	if (USoundBase* Bgm = LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/Game/QuizGameBgm.QuizGameBgm")))
+	if (USoundBase* Bgm = UsesMatchExtras() ? LoadObject<USoundBase>(nullptr, TEXT("/Game/JINZZA/Audio/Sounds/Game/QuizGameBgm.QuizGameBgm")) : nullptr)
 	{
 		MusicComponent = UGameplayStatics::SpawnSound2D(this, Bgm, 1.f, 1.f, 0.f, nullptr, true, false);
 	}
